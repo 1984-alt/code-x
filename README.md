@@ -60,7 +60,7 @@ I'm an Indonesian vibe-coder who can't read a single line of code. I didn't buil
 
 **If you're a vibe-coder or non-coder:** here's a way of working you can try today. Install, read `START-HERE.md`, build something. The checker runs on your machine with Python 3.
 
-**If you're a professional engineer:** this was built by AI, directed by someone who can't read code well — *please tear it apart.* Where is it naive, unsafe, or reinventing a wheel? Issues and PRs that challenge the design are the most welcome contribution. The explicit aim is for the community to make it better. See [CONTRIBUTING.md](CONTRIBUTING.md).
+**If you're a professional engineer:** this was built by AI, directed by someone who can't read a single line of code — *please tear it apart.* Where is it naive, unsafe, or reinventing a wheel? Issues and PRs that challenge the design are the most welcome contribution. The explicit aim is for the community to make it better. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
