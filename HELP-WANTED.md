@@ -46,3 +46,18 @@ Autonomous ≠ safe to leave fully unwatched. A loop can run *confidently in the
 ## Why this is a good first or intermediate contribution
 
 It's additive (a policy + re-entry layer over existing host primitives), it has a crisp done-definition (the stop-condition list above), and it has built-in safety rails the protocol already defines. A capable contributor can land it without touching the core gate logic.
+
+---
+
+# Help Wanted — Trust-Boundary Hardening / Forge-Parity
+
+## The gap
+
+`cx` is deterministic, but it reads artefacts the AI itself authored (the state file, cards, receipts). The protection today is the *stack* — deterministic check + opposite-family review + a fresh cold-reader + the human — not a hard wall inside the checker. Two concrete pieces are open:
+
+- **Forge-parity recompute (`/cx-accept`).** A few acceptance-receipt fields (`state_sha_before`, `quality_card_hash`) are currently presence-asserted, not recomputed from source. A runner that recomputes them end-to-end would make the acceptance wall machine-forged rather than partly ceremonial.
+- **Boundary probing.** An explicit map of which artefacts the agent can author vs which the checker independently controls — plus adversarial tests that *try* to forge a green, to find where the stack actually holds and where it doesn't.
+
+## Why this is a good contribution
+
+It targets the deepest, most-cited critique of the whole design. It's additive (a recompute runner + tests; no change to existing gate logic), and a passing/failing adversarial test is a crisp done-definition.

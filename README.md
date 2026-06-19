@@ -12,7 +12,7 @@
 
 You hand the AI one small, checkable work-order at a time. A tiny program (`cx`) mechanically catches when the AI claims "done" on work that's broken or half-finished — so a non-coder can't be fooled. A second, *different* AI family then reviews what the first one built, to catch blind spots one family can't see in itself.
 
-The name = **Claude Code + Codex**, the two AI coding harnesses Code-X is built for.
+The name = **Claude Code + Codex** — the two AI coding harnesses Code-X is built for, and the two families that review each other's work (that cross-family idea is the core of Code-X, baked right into the name). Yes, it brushes OpenAI's "Codex"; the overlap is intentional. To find the repo, search **"Code-X 1984-alt"** or go straight to [github.com/1984-alt/code-x](https://github.com/1984-alt/code-x).
 
 Code-X is a framework — a methodology plus the `cx` checker. It is not a plugin that writes code for you. It is a way of directing AI agents so the output is trustworthy even when you can't read the code yourself.
 
@@ -56,6 +56,53 @@ I'm an Indonesian vibe-coder who can't read a single line of code. I didn't buil
 1. **Capability — what it reaches for.** This is one non-coder's attempt at a way of working with AI: you direct an engineering system, it directs the AI, and the hope is software that genuinely works without you debugging it. It's worked well on my own projects — but with a single user and tester (me), so treat it as personally proven, not independently proven: a work-in-progress shared openly, not a finished method.
 2. **Efficiency — because the meter is running.** The AI subscriptions that power this are metered and priced in USD, which is genuinely expensive from Indonesia — so the protocol tries hard not to waste reads, reviews, or loops. Less optimization theater; more "make the waste visible and cut the biggest piece first."
 3. **Kaizen — it tries to improve itself.** Every mistake — and every review — is meant to become a lesson, and every new kind of failure becomes a check that stops it recurring. Borrowed from the Toyota Way; whether it fully holds up is part of what's being tested.
+
+---
+
+## Relation to Spec-Driven Development (SDD)
+
+I built Code-X independently, from hands-on pain with AI coding agents — I didn't know Spec-Driven Development existed. I later discovered Code-X converges with it (Spec Kit, Kiro, BMAD). This isn't a precedence claim — SDD has been public since 2025 — it's independent invention. And honestly, the convergence is a good sign the shape is right: arriving at the same architecture as a large, established movement, alone and from pure trial-and-error, is evidence the design instinct holds.
+
+The spine is the same idea arrived at twice:
+
+| Code-X | Spec-Driven Development |
+|---|---|
+| packet (frozen, hashed requirements + decisions + security baseline) | constitution → specify |
+| technical plan (TRD, data/API contracts) | plan |
+| card deck (each card traces to a frozen packet slice) | tasks |
+| build stage, one card at a time | implement |
+| `cx check deck` (deterministic reverse coverage) | analyze (AI-driven) |
+
+The spine is the commodity part. What Code-X adds on top — pressure-tested against *current* Spec Kit:
+
+- **Deterministic checker.** `cx` is mechanical Python, not an AI checking an AI. For someone who can't read the code, a gate that *can't be talked around* is worth more than another model's opinion. This is the core difference.
+- **Built-App Audit.** Verifies the finished app is actually wired and running, not just that requirements and tests look right — "built + green ≠ wired and running."
+- **Non-coder framing.** Built for someone who *directs* the AI and can't read the code, not for a developer driver.
+- **Enforced security baseline + mandatory cross-family review.** Spec Kit has lighter, AI-generated versions of both; in Code-X they're always-on and mandatory, with escalation. (An honest narrowing, not "they have nothing.")
+
+In one line: **Spec Kit's spine, with a deterministic checker and a non-coder framing — arrived at independently.**
+
+---
+
+## What `cx` can and can't verify
+
+`cx` is deterministic, but it's honest about its scope.
+
+**It proves:** the required artefacts exist, fields are present, hashes match, file paths are safe, statuses are typed, and reverse coverage holds — every requirement marked `BUILDING` appears in a card, so nothing was dropped at compile and nothing open was frozen over.
+
+**It does NOT prove:** that the requirement was *right*, that the build meets real intent, that the security model is sound, or that a test is *meaningful* rather than tautological. Those are judged by a **fresh cold-reader** (a reviewer who didn't write the artefact) plus **cross-family review** — `cx` never replaces them. "Green ≠ enforcing" applies to `cx` itself: it checks form and existence, not meaning.
+
+---
+
+## Trust boundary & test circularity
+
+A fair, sharp question: the AI authors the state file and many of the artefacts `cx` reads — so what stops a *drifting* agent from writing a state file that simply passes?
+
+The honest answer: no single layer is forge-proof. The protection is the **stack**, not any one gate — a deterministic checker the agent can't argue with, an **opposite-family** reviewer (a *different* vendor, not the agent grading itself), a fresh cold-reader who didn't write the artefact, and a human holding the decisions. Each layer covers a way the others can be fooled.
+
+Test circularity is the same shape: the same AI can write both the code and its tests, so passing tests can be tautological. Cross-family review reads the tests, deck-coverage is mechanical, and the Built-App Audit checks the app actually runs — but residual risk remains, and it's named here on purpose rather than hidden.
+
+One known-open gap: a couple of acceptance-receipt fields are currently presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this). If you want to probe the agent↔checker boundary or build that runner, see [HELP-WANTED.md](HELP-WANTED.md) — it's exactly the kind of contribution this project wants.
 
 ---
 
