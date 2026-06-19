@@ -1,0 +1,11 @@
+# deck_bad_hash_mismatch fixture card — locked_packet_hash is deliberately wrong
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-DECK-HASH
+  locked_packet_hash: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-001]

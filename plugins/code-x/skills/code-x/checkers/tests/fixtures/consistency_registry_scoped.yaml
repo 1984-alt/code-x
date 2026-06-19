@@ -1,0 +1,17 @@
+# Scoped-sweep fixture (PROP-005/012): proves the SHRUNK sweep still BITES in scope.
+# KERNEL.md is in scan_scope, carries the rule's key phrases AND full canonical,
+# but is NOT in appears_in and has no pointer → normal mode: WARN with the D4
+# "register it in appears_in" message; --strict: P1 FAIL.
+# Out-of-scope files (STATUS.md, handoffs/, design-history/) stay silent.
+scan_scope:
+  rule_bearing:
+    - KERNEL.md
+
+rules:
+  - id: review-per-module
+    canonical:
+      - "review per MODULE, not per card"
+      - "deterministic checks run on every card"
+    key_phrases: ["per MODULE, not per card", "deterministic checks"]
+    appears_in:
+      - GATES.md

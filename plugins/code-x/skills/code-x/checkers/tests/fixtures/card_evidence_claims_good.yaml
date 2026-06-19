@@ -1,0 +1,54 @@
+# PROP-022 GOOD: fully-bound evidence claims — green logs re-readable, scoped
+# positive controls demonstrated, modality matched, baseline pinned to the lock.
+mode: PROOF
+objective: Prove module-1 acceptance with honest, re-readable evidence.
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: unit_suite
+    claimed_verdict: PASS
+    command: python3 -m pytest tests/
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["10 passed"]
+    fail_markers: ["FAILED"]
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5
+  - claim_id: CLM-002
+    claim_type: design_fidelity
+    claimed_verdict: PASS
+    command: cx check design-fidelity --manifest lock.yaml --dom dom.html --screenshot s.png
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["ALL CHECKS PASS"]
+    fail_markers: ["FIX-FIRST"]
+    produced_at: 2026-06-12T08:01:00+07:00
+    produced_by: builder gpt-5.5
+    positive_control:
+      command: cx check design-fidelity --manifest lock.yaml --dom dom_perturbed.html --screenshot s.png
+      exit_code: 1
+      log_path: log_proof_red_expected.txt
+      expected_failure_marker: FIDELITY-VIOLATION-DETECTED
+    baseline:
+      baseline_ref: design-golden-master/income-screen-lock.yaml
+      baseline_hash: 9b5aa88f58ab
+      baseline_source: frozen_lock
+  - claim_id: CLM-003
+    claim_type: swipe
+    claimed_verdict: PASS
+    command: python3 tests/ui/test_swipe.py
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["ALL CHECKS PASS"]
+    fail_markers: ["FAILED"]
+    produced_at: 2026-06-12T08:02:00+07:00
+    produced_by: builder gpt-5.5
+    modality:
+      handler_event_family: touch
+      dispatched_event_family: touch
+      modality_source: read-set src/ui/swipe.js ontouchstart
+      event_reaches_handler_evidence: log_proof_green.txt
+    positive_control:
+      command: python3 tests/ui/test_swipe.py --perturb
+      exit_code: 1
+      log_path: log_proof_red_expected.txt
+      expected_failure_marker: FIDELITY-VIOLATION-DETECTED

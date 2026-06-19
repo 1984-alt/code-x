@@ -1,0 +1,16 @@
+# MODULE-CAPSULE — the tiny frozen summary of an APPROVED module.
+# Written when the CEO approves a module. Module N reads its dependency capsules ONLY — never full prior modules.
+# This is what keeps per-module building cheap (no re-reading modules 1…N-1).
+# Anti-staleness (GATES G3): if a later wave TOUCHES this module, refresh this capsule in the SAME wave AND
+# its commands_to_regression_test must still pass — or the wave cannot clear.
+
+module_id:                    # e.g. M-03-accounts
+status: APPROVED              # only APPROVED modules get a capsule
+ceo_approved_commit:          # sha at CEO approval
+public_contract: []           # the STABLE surface other modules may rely on (functions / routes / events)
+routes_added: []
+data_tables_added: []
+commands_to_regression_test: []   # exact commands that prove this module still works (the anti-staleness check)
+visual_screens_approved: []       # screen ids the CEO accepted, each with its golden-screenshot path
+known_invariants: []              # rules this module guarantees to keep true
+do_not_break: []                  # things a later module must never violate

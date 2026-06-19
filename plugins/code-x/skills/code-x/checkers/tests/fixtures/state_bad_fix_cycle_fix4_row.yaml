@@ -1,0 +1,53 @@
+# GOOD state file — should FAIL cx check state
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: codex / gpt-5.5
+next_actor: claude-sonnet (cross-review)
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 1
+    p2: 0
+    p3: 0
+  items:
+    - id: F-001
+      severity: P1
+      source_card: BUILD-001
+      finding: test coverage for scope subcommand is thin
+      owner_card: BUILD-002
+      status: OPEN
+      evidence_ref:
+      ceo_acceptance_ref:
+
+last_commit: abc123def456
+next_action: Claude cross-review BUILD-001 output
+stop_status: NONE
+
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+
+# PROP-021 BAD: attempt_n=4 — fix-3 failure feeds the 4-failure cross-family rule, never fix-4
+fix_cycles:
+  - finding_id: F-001
+    source_review_ref: reviews/module-1-self-review.md
+    attempt_n: 4
+    seat_ref: claude-opus-4-8 xhigh
+    result: FAIL
+    review_ref: reviews/module-1-fix4-verify.md

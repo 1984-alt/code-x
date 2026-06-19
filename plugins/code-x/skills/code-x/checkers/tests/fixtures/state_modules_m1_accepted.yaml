@@ -1,0 +1,8 @@
+# State fixture: module m1 VALIDLY accepted (bound receipt), m2/m3 NOT yet (order-wall tests).
+project: cx-module-start-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: module_acceptance_good.yaml
+    acceptance_sha12: "a80690d1fff6"

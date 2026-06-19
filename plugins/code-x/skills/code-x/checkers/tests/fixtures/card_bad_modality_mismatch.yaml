@@ -1,0 +1,23 @@
+# PROP-022 BAD: mouse-event swipe test never touches the touch handler
+mode: PROOF
+objective: x
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: swipe
+    claimed_verdict: PASS
+    command: python3 tests/ui/test_swipe.py
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["ALL CHECKS PASS"]
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5
+    modality:
+      handler_event_family: touch
+      dispatched_event_family: mouse
+      modality_source: read-set src/ui/swipe.js ontouchstart
+      event_reaches_handler_evidence: log_proof_green.txt
+    positive_control:
+      command: python3 tests/ui/test_swipe.py --perturb
+      exit_code: 1
+      log_path: log_proof_red_expected.txt
+      expected_failure_marker: FIDELITY-VIOLATION-DETECTED

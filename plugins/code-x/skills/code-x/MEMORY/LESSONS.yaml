@@ -1,0 +1,51 @@
+# Code-X — MEMORY/LESSONS.yaml
+#
+# This is your project's lessons ledger. It ships EMPTY: a fresh install starts
+# with zero lessons and you grow the list from your own postmortems over time.
+# Structure resets between projects; the lessons you record are yours to keep.
+#
+# WHAT IT IS FOR
+#   A small, slow-growing record of failure-classes you have hit and the
+#   prevention that now guards against each one. It is read in three places:
+#     1. the Card Compiler — relevant lesson IDs are injected per build card;
+#     2. a PLANNING session — ACTIVE planning-stage lessons are read ONCE at
+#        session start and acknowledged in state (session_start.lessons_preload);
+#     3. the review-dispatch composer — ACTIVE lesson IDs travel as recurrence
+#        context (independent review first, recurrence mapping second).
+#   It is NOT read per build card.
+#
+# ENTRY SCHEMA (one mapping per lesson under the `lessons:` list)
+#   id          unique string, kebab/UPPER-case (e.g. LESSON-AUTH-001)
+#   stage       planning | building | protocol
+#   source      short slug for where the failure happened (your own label)
+#   root_cause  what actually went wrong, in one line
+#   prevention  the guard that now stops it from recurring
+#   eval        optional — the EVAL id, when the failure-class has a self-test
+#   status      CANDIDATE | ACTIVE | CONSOLIDATED | RETIRED
+#
+# LIFECYCLE (this file never auto-mutates)
+#   A review synthesis may propose a CANDIDATE — one per failure-CLASS,
+#   project-agnostic. Promotion to ACTIVE requires explicit CEO approval.
+#   Soft cap: keep ACTIVE lessons per stage small; consolidate overlap before
+#   adding more. A lesson that changes the protocol itself still goes through
+#   the full Kaizen path.
+#
+# GROWTH PATH
+#   new failure -> postmortem -> a lesson recorded here -> (if it is a NEW
+#   failure-class) a new eval. Lessons are never auto-applied; the CEO approves
+#   any protocol change a lesson implies.
+#
+# RULE POINTERS (consistency-registry contract — keep these intact when you edit)
+#   This ledger participates in the cx consistency check for the rules below.
+#   The pointers stand in for the full rule text so a new, empty ledger stays
+#   consistent. Preserve them; the rules themselves live in their source docs.
+#   [RULE:cross-family-substitution]  cross-family review uses the opposite
+#       model family; a stand-in must reopen the recheck (the recheck stays
+#       mandatory; see GATES / ROUTING for the canonical text).
+#   [RULE:source-map-required]  every build card carries a source_map bound to
+#       the frozen packet hash; this field is mandatory (see GATES).
+#   [RULE:fix-card-test-edit]  a fix card may add a NEW regression test only
+#       with explicit card authorisation, and a fix must never weaken a test
+#       (see the cx check spec).
+
+lessons: []

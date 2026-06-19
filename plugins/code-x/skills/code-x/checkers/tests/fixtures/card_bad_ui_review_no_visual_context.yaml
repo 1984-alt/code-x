@@ -1,0 +1,136 @@
+# BAD: UI review dispatch without visual_contract_context -> P1 (PROP-019)
+
+id: REVIEW-UI-001
+mode: REVIEW
+actor: claude-sonnet / claude
+model_tier: standard
+objective: Cross-family module review of the cx check CLI against CX-CHECK-SPEC.md.
+source_map:
+  locked_packet_id: PKT-CXCHECK-001
+  locked_packet_hash: abc123def456
+  source_sections:
+  - file: CX-CHECK-SPEC.md
+    section: Subcommands
+    requirement_ids:
+    - REQ-001
+    - REQ-002
+  dependency_capsules: []
+card_compilation:
+  compiled_by:
+    actor: claude-opus
+    family: claude
+    model: claude-opus-4
+    date: '2026-06-10'
+  audited_by:
+    actor: gpt-5.5-pro
+    family: gpt
+    model: gpt-5.5
+    date: '2026-06-10'
+  audit_status: PASS
+actor_record:
+  executor:
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  self_review:
+    required: true
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  cross_review:
+    required: true
+    actor: claude-sonnet
+    family: claude
+    model: claude-sonnet-4-6
+    family_substituted: false
+    ceo_authorization_ref: null
+    recheck_when_opposite_family_available: false
+  fixer:
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  final_reviewer:
+    required: true
+    actor: claude-opus
+    family: claude
+    model: claude-opus-4
+review_dispatch:
+  required: true
+  review_kind: CROSS_FAMILY
+  prompt_ref: handoffs/review-prompt-REVIEW-001.md
+  three_leg_ask:
+    continuity: "CONTINUITY \u2014 prior review arc supplied (rounds 1-2 synthesis);\
+      \ does this fit, contradict, or drift from the architecture?"
+    problems: "PROBLEMS \u2014 new findings, by severity (P0-P3)."
+    approach_improvement: "APPROACH/IMPROVEMENT \u2014 how would YOU do this? What\
+      \ would you do differently and WHY? What are we not seeing?"
+family_note:
+  known_quirk: gpt family tends toward verbose output and defensive fallbacks
+  leash: keep the review lean; three explicit sections only
+read:
+  required:
+  - CX-CHECK-SPEC.md
+  - checkers/cx
+  - docs/design/PRODUCT-TASTE-LOCK.md
+  - docs/design/DESIGN-GOLDEN-MASTER.md
+  forbidden: []
+allowed_files:
+- templates/income.html
+forbidden_files:
+- .env
+- secrets/
+allowed_operations:
+- write-review-findings
+forbidden_operations:
+- edit-code
+- edit-scoring-config
+relevant_invariants:
+- real-data-only
+- secrets-by-name-never-value
+acceptance:
+- review returns three explicit sections (CONTINUITY / PROBLEMS / APPROACH-IMPROVEMENT)
+- findings carry P0-P3 severities
+evidence_required:
+- checkers/EVIDENCE-review-001.md
+security_tripwire:
+  touches_auth: false
+  touches_secrets: false
+  touches_money_or_balances: false
+  touches_bank_or_pii: false
+  touches_upload_restore_import: false
+  touches_network_or_public_surface: false
+  touches_logs_or_error_output: false
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts:
+    codex: 3
+    claude_cross_family: 4 + final synthesis
+stop_conditions:
+- ambiguous CEO/product/money decision surfaced by the review
+cost_budget: 20000 tokens estimated
+state_update: set current_card=null, next_actor=CEO after PASS
+execution:
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code:
+    subagent: general-purpose
+    model: sonnet
+    effort: standard
+  codex_app:
+    agent: worker
+    model: gpt-5.5
+    effort: medium
+  limits:
+    max_parallel_subagents: 4
+    max_depth: 1
+ui_contract:
+  taste_lock: docs/design/PRODUCT-TASTE-LOCK.md
+  design_golden_master: docs/design/DESIGN-GOLDEN-MASTER.md
+  mode_a_ceo_accept: docs/design/mode-a-ceo-accept-2026-06-01.md
+  screenshots: docs/design/screens/
+  route_map: docs/design/route-map.yaml
+  click_path_contract: docs/design/click-path-contract.md
+  preservation_rule: replace fixture data, preserve approved shell and controls

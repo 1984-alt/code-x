@@ -1,0 +1,10 @@
+# BAD: a sha-bound receipt whose fields are MALFORMED non-scalars (a list, a mapping) instead of
+# strings. str(x or "")-coercion used to turn [null]/dicts into non-empty strings, satisfying the
+# presence checks. The Andon wall must treat non-string fields as absent → fail closed (GPT R12 P0).
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  generated_by: [null]
+  state_sha_before: [null]
+  quality_card_hash:
+    x: y

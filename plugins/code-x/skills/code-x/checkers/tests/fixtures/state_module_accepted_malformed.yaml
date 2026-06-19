@@ -1,0 +1,10 @@
+# State referencing a sha-bound receipt whose fields are malformed non-scalars (GPT R12 P0 bite).
+# acceptance_sha12 = sha12(module_acceptance_malformed_fields.yaml) — file<->state binding intact;
+# the defect is that the receipt's typed fields are not strings.
+project: cx-module-acceptance-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: module_acceptance_malformed_fields.yaml
+    acceptance_sha12: "1d10f4b9ab5c"

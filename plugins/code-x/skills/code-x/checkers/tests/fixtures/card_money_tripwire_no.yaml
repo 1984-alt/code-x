@@ -1,0 +1,80 @@
+# Fixture for P1-03: card claiming touches_money_or_balances: no
+# When used with diff_bad_money.txt (touches balance.py), should FAIL
+
+id: MONEY-TRIP-001
+mode: MODULE_BUILD
+actor: codex
+model_tier: standard
+objective: Test money tripwire enforcement.
+
+source_map:
+  locked_packet_id: PKT-001
+  locked_packet_hash: abc123
+  source_sections:
+    - file: SPEC.md
+      section: Requirements
+      requirement_ids: [REQ-001]
+  dependency_capsules: []
+
+card_compilation:
+  compiled_by: { actor: claude-opus, family: claude, model: claude-opus-4, date: "2026-06-09" }
+  audited_by:  { actor: gpt-5.5, family: gpt, model: gpt-5.5, date: "2026-06-09" }
+  audit_status: PASS
+
+actor_record:
+  executor:    { actor: codex, family: gpt, model: gpt-5.5 }
+  self_review: { required: yes, actor: codex, family: gpt, model: gpt-5.5 }
+  cross_review:
+    required: yes
+    actor: claude-sonnet
+    family: claude
+    model: claude-sonnet-4-6
+    family_substituted: no
+    ceo_authorization_ref:
+    recheck_when_opposite_family_available: no
+  fixer:          { actor: codex, family: gpt, model: gpt-5.5 }
+  final_reviewer: { required: yes, actor: claude-opus, family: claude, model: claude-opus-4 }
+
+family_note:
+  known_quirk: gpt tends toward verbosity
+  leash: keep output lean
+
+read:
+  required: [SPEC.md]
+  forbidden: []
+
+allowed_files: [src/balance.py]
+forbidden_files: [.env]
+allowed_operations: [write-python]
+forbidden_operations: [broad-refactor]
+
+relevant_invariants: [real-data-only]
+acceptance: [tests pass]
+evidence_required: []
+
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no   # WRONG — diff touches balance.py, should fire
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no
+
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts: { codex: 3, claude_cross_family: "4 + final synthesis" }
+
+stop_conditions: [out-of-scope change detected]
+cost_budget: 5000 tokens
+state_update: set current_card=null after PASS
+
+execution:                                  # injected from BUILD-ENGINE-PROFILES (pinned test mirror: profiles_test.yaml)
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
+  codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
+  limits: { max_parallel_subagents: 4, max_depth: 1 }

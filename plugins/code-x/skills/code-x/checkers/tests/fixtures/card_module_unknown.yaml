@@ -1,0 +1,9 @@
+# BAD: module_id not in the frozen registry → out-of-registry FAIL.
+id: BUILD-099
+mode: MODULE_BUILD
+module_id: mX
+objective: Build a module that was never registered.
+source_map:
+  # = sha256 over module_start_good_packet/ (V1.10 R4); content check PASSES so the
+  # out-of-registry bite (module_id mX) is what fires.
+  locked_packet_hash: b295c33dcd55a019c583bb8797a00e0fab4217aa000e079cbb4211b51bb2ed1c

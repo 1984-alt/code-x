@@ -1,0 +1,23 @@
+# Locked ui_marker_manifest for the income screen (PROP-019, authored at design lock)
+
+ui_marker_manifest:
+  screen_id: income
+  route: /income
+  required_regions:
+  - id: top_tabs
+  - id: bottom_nav
+  - id: primary_content
+  required_controls:
+  - data_fn: add_income
+    label: Add income
+    role: button
+  - data_fn: month_picker
+    label: Month
+    role: combobox
+  required_shell:
+  - selector: '#app-shell'
+    purpose: approved page chrome
+  forbidden_missing:
+  - top_tabs
+  - bottom_nav
+  - add_income

@@ -1,0 +1,4 @@
+requirements:
+  - id: REQ-001
+    disposition: NOT_BUILDING
+    ceo_decision_ref: CEO-D-099

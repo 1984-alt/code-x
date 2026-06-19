@@ -1,0 +1,13 @@
+# Frozen requirements manifest — packet fixture for the module-start order wall (V1.10).
+# The packet dir CONTAINS this manifest + module-registry.yaml; the deck/order-wall
+# content hash (cx_deck._compute_packet_hash) is taken over the WHOLE dir, so editing
+# the registry inside it changes the hash.
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+  - id: REQ-002
+    disposition: BUILDING
+  - id: REQ-003
+    disposition: BUILDING
+  - id: REQ-004
+    disposition: BUILDING

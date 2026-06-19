@@ -1,0 +1,40 @@
+# State with FOUND-001 in foundation_checkpoints_passed
+# Used for F1 P1-01 test — met checkpoint case
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: codex / gpt-5.5
+next_actor: claude-sonnet (cross-review)
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+foundation_checkpoints_passed:
+  - FOUND-001
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: abc123def456
+next_action: Claude cross-review BUILD-001 output
+stop_status: NONE
+
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max

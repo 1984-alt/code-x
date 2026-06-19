@@ -1,0 +1,9 @@
+# BAD: a sha-bound acceptance receipt that OMITS module_id — verdict accepted, generator-stamped,
+# binding fields present, but it does not IDENTIFY the module it accepts. A module-less bound blob
+# would 'accept' ANY module → the Andon wall must reject it (GPT R10 P0, acceptance identity).
+module_acceptance:
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0011223344
+  ts: "2026-06-13T16:00:00+00:00"

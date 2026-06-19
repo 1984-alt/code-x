@@ -1,0 +1,42 @@
+# BAD: zero findings, stop_status NONE, BUT protocol_incident OPEN -> final-ready forbidden (P0, PROP-020)
+# stop_status stays NONE on purpose: isolates the NEW incident clause from the old stop_status!=NONE rule (GPT cross-review P1)
+
+project: sample
+protocol_stamp: Code-X V1
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card: null
+current_actor: claude-opus
+next_actor: CEO
+build_authorized: true
+mode_a_status: NOT_APPLICABLE
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+last_commit: deadbeef1234
+next_action: CEO review final-ready certificate
+stop_status: NONE
+module_capsules_current: PASS
+module_regressions_pass: PASS
+ceo_module_approvals_complete: PASS
+security_closeout: PASS
+recovery_proof: PASS
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+protocol_incident:
+  id: INC-002
+  status: OPEN
+  cause: stale state discovered at close-turn (false zero findings)
+  repair: re-run current-stage checklist; reconcile findings_delta
+  repair_card: FIX-010

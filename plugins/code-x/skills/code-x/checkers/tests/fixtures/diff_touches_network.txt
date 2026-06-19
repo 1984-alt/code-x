@@ -1,0 +1,12 @@
+--- a/app/routes/api_handler.py
++++ b/app/routes/api_handler.py
+@@ -1,3 +1,8 @@
++from flask import Blueprint, request, jsonify
++
++api = Blueprint('api', __name__)
++
++@api.route('/webhook/ingest', methods=['POST'])
++def handle_webhook():
++    data = request.json
++    return jsonify({"status": "ok"})
+ import os

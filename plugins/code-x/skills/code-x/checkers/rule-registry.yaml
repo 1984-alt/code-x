@@ -1,0 +1,330 @@
+# Code-X V1 — Consistency Rule Registry
+# Single source of truth for rules that must remain consistent across multiple protocol files.
+# Seeded 2026-06-09 from real file content (cx check consistency PASSES on today's tree).
+# Grows slowly — one entry per rule-class, CEO approval required for additions.
+#
+# Schema per entry:
+#   id: unique string (kebab-case)
+#   canonical: string OR list of strings — ALL must appear (whitespace-normalised) in each
+#              appears_in file. String = 1-element list (backward-compat).
+#              A [RULE:<id>] pointer in the file is always a full PASS.
+#   key_phrases: 2+ phrases whose co-presence in a NON-appears_in file triggers a soft WARN
+#               (or a FAIL under `cx check consistency --strict`, except design-history/).
+#   banned_negations: phrases that, if present in an appears_in file, signal a likely meaning-FLIP
+#               → FAIL. A CHEAP tripwire for OBVIOUS reversals only (see honest limit below).
+#   appears_in: list of paths (relative to Code-X-V1 root) that must each satisfy canonical
+#
+# HONEST LIMIT (corrected 2026-06-09 after GPT 5.5 Pro cross-family review — do NOT over-claim):
+#   Multi-phrase canonical catches a copy where a required phrase went MISSING/stale.
+#   It does NOT catch a meaning-FLIP that keeps ALL phrases but negates them, e.g.:
+#     "... CROSS_FAMILY_RECHECK_PENDING is historical only, not required."
+#   `banned_negations` is a cheap tripwire for the obvious reversals — it is NOT complete.
+#   Meaning-flip-sensitive rules STILL require a model review when changed. The lint reduces
+#   drift risk; it does not eliminate semantic review.
+#
+# SWEEP SCOPE (PROP-005/012, folded 2026-06-11):
+#   The key-phrase sweep (unlisted-file scan + --strict) covers RULE-BEARING CANON ONLY:
+#   scan_scope.rule_bearing below ∪ every appears_in path (registering a rule auto-pulls
+#   its files into the sweep). Out-of-scope narrative/history (design-history/, handoffs/,
+#   MEMORY/ history docs, STATUS.md, checker meta-docs) is SILENT in both modes — narrative
+#   cites rules, canon defines them; a stale copy there goes undetected BY DESIGN.
+#   Structural exemptions (never swept): this registry itself + checkers/tests/.
+#   GUARD (GPT P2-01, 2026-06-11): sweep silence never exempts an ACTIVE dispatch artifact —
+#   the current card/deck/state are checked by their own cx commands (G1/G7 path), which is
+#   where operational drift bites.
+
+scan_scope:
+  # rule-bearing canon — the sweep + --strict universe (trailing / = directory prefix)
+  rule_bearing:
+    - GATES.md
+    - KERNEL.md
+    - ROUTING.md
+    - SEVERITY.md
+    - START-HERE.md
+    - CHARTER.md
+    - EVALS.md
+    - KAIZEN.md
+    - PACKET-CONTENTS.md
+    - BUILDER-STANDARD.md
+    - BUILD-ENGINE-PROFILES.yaml
+    - templates/
+    - checkers/CX-CHECK-SPEC.md
+    - VOICE.md
+    - BUILT-APP-AUDIT.md
+
+rules:
+  - id: cross-family-substitution
+    # Exception condition: family_substituted (the field that allows a stand-in)
+    # Consequence: CROSS_FAMILY_RECHECK_PENDING (the blocking finding it opens)
+    canonical:
+      - "family_substituted"
+      - "CROSS_FAMILY_RECHECK_PENDING"
+    key_phrases: ["family_substituted", "CROSS_FAMILY_RECHECK_PENDING"]
+    banned_negations: ["historical only", "no recheck needed", "does not require", "optional recheck", "recheck is optional"]
+    appears_in:
+      - GATES.md
+      - ROUTING.md
+      - checkers/CX-CHECK-SPEC.md
+      - EVALS.md
+      - templates/WORK-ORDER.template.yaml
+      - MEMORY/LESSONS.yaml
+
+  - id: source-map-required
+    # Core: source_map field is mandatory. Distinctive: frozen packet hash (traceability mechanism).
+    # templates/WORK-ORDER.template.yaml carries [RULE:source-map-required] pointer — full pass.
+    canonical:
+      - "source_map"
+      - "frozen packet hash"
+    key_phrases: ["source_map", "frozen packet"]
+    banned_negations: ["source_map is optional", "source_map may be omitted", "no longer required"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/WORK-ORDER.template.yaml
+      - MEMORY/LESSONS.yaml
+
+  - id: fix-card-test-edit
+    # Core assertion: NEW regression tests require explicit card authorisation.
+    # Consequence guard: fix cards may not weaken tests.
+    canonical:
+      - "a NEW regression test is allowed only"
+      - "weaken"
+    key_phrases: ["regression test", "weaken"]
+    banned_negations: ["may freely edit tests", "without authorisation", "tests may be weakened", "freely delete"]
+    appears_in:
+      - checkers/CX-CHECK-SPEC.md
+      - MEMORY/LESSONS.yaml
+
+  - id: eval-count
+    # Core: evals grow slowly (anti-bloat ceiling). Mechanism: protocol self-tests.
+    canonical:
+      - "grows slowly"
+      - "protocol self-test"
+    key_phrases: ["protocol self-test", "grows slowly"]
+    banned_negations: ["grows quickly", "an eval for every lesson", "add one eval per lesson", "unbounded evals"]
+    appears_in:
+      - EVALS.md
+      - CHARTER.md
+
+  - id: foundation-checkpoint
+    # Assertion (GATES G5 carve-out): a HIGH-RISK foundation card (money/auth/shared-data-shape/secrets)
+    # MUST get one checkpoint before dependent cards run; dependents are blocked until it passes.
+    # History note: PROP-003's original queue text said "MAY" — superseded; the queue keeps the old
+    # wording as append-only history with a correction note (history files are NOT in appears_in).
+    canonical:
+      - "foundation_checkpoint_required"
+      - "foundation_checkpoint_reason"
+    key_phrases: ["foundation_checkpoint_required", "foundation checkpoint"]
+    banned_negations: ["may get one cheap checkpoint", "optional checkpoint", "risk-tiered, not default"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/WORK-ORDER.template.yaml
+
+  - id: deck-reverse-coverage
+    # Assertion (PROP-007): cx check deck proves packet→deck coverage against requirements-manifest.yaml
+    # (inside the frozen packet hash); BUILDING must land in >=1 card; NOT_BUILDING/CEO_DEFERRED need ceo_decision_ref.
+    canonical:
+      - "cx check deck"
+      - "requirements-manifest.yaml"
+    key_phrases: ["reverse coverage", "requirements-manifest"]
+    banned_negations: ["deck check is optional", "coverage is advisory", "manifest may live outside"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: cost-effective-by-default
+    # Assertion (PROP-013, CEO 2026-06-10): the default for every seat is COST-EFFECTIVE —
+    # the cheapest model that reliably succeeds first pass — never cheapest-absolute;
+    # mini/spark/haiku-class never writes app code. Exact seats: BUILD-ENGINE-PROFILES.yaml
+    # (carries a [RULE:cost-effective-by-default] pointer; case differs there).
+    # "ost-effective" = case-fold trick: matches 'Cost-effective' (ROUTING/KERNEL)
+    # and 'cost-effective' (START-HERE) under the case-sensitive canonical match.
+    canonical:
+      - "ost-effective"
+      - "by default"
+    key_phrases: ["cost-effective", "first pass"]
+    banned_negations: ["cheap by default", "cheapest, not cost-effective", "cheapest model always"]
+    appears_in:
+      - ROUTING.md
+      - KERNEL.md
+      - START-HERE.md
+      - BUILD-ENGINE-PROFILES.yaml
+
+  - id: packet-contents-floor
+    # Assertion (PROP-014): the frozen packet must pass `cx check packet` BEFORE CEO validation
+    # and freeze — coverage map (20 categories), decision ledger (asks+decisions), completeness
+    # audit, readiness triggers, builder standard named. A thin packet must not pass green.
+    canonical:
+      - "cx check packet"
+      - "coverage-map.yaml"
+    key_phrases: ["packet floor", "cx check packet"]
+    banned_negations: ["packet floor is optional", "thin packet may pass", "floor is advisory", "packet check skipped"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+      - PACKET-CONTENTS.md
+
+  - id: builder-standard-session-read
+    # Assertion (PROP-014 Piece 5): BUILDER-STANDARD.md is SESSION-level reading (once at session
+    # start, never per card); the session records the ack in state (file+hash) and
+    # cx check state --session-start enforces it for build modes (P2).
+    canonical:
+      - "BUILDER-STANDARD.md"
+      - "session_start.builder_standard_read"
+    key_phrases: ["builder_standard_read", "session start"]
+    banned_negations: ["per-card reading of the standard", "no acknowledgment needed", "standard read is optional"]
+    appears_in:
+      - PACKET-CONTENTS.md
+      - BUILDER-STANDARD.md
+      - checkers/CX-CHECK-SPEC.md
+      - START-HERE.md
+      - templates/STATE.template.yaml
+
+  - id: review-backflow
+    # Assertion (PROP-014, GPT P2-02): a self/cross-family review fix that changes intent,
+    # money/business logic, security/privacy tradeoffs, requirements, or CEO decisions must
+    # return to the affected CEO validation/decision step before freeze.
+    canonical:
+      - "return to the affected CEO validation"
+    key_phrases: ["backflow", "before freeze"]
+    banned_negations: ["proceed to freeze anyway", "review may overwrite validated intent", "no return to CEO"]
+    appears_in:
+      - GATES.md
+      - PACKET-CONTENTS.md
+
+  - id: review-three-leg-ask
+    # Assertion (PROP-015, folded 2026-06-10): EVERY model review dispatch — self-review AND
+    # cross-family alike, from the first review — asks all three legs: CONTINUITY (all reviews,
+    # not re-reviews only) + PROBLEMS + APPROACH/IMPROVEMENT; the paste-ready stanza is copied
+    # verbatim, never re-composed from memory.
+    # HONEST SCOPE: cx check card enforces on review-dispatch work-orders (review_dispatch.required: yes
+    # + mode REVIEW/FINAL_READY); planning-stage free-text prompts are process-enforced via the stanza.
+    canonical:
+      - "CONTINUITY"
+      - "APPROACH/IMPROVEMENT"
+      - "three_leg_ask"
+    key_phrases: ["three_leg_ask", "review_dispatch"]
+    banned_negations: ["re-reviews only", "scoped to cross-family only", "not required on first review", "approach leg is optional", "three-leg ask is optional"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/WORK-ORDER.template.yaml
+
+  - id: self-review-escalation-cap
+    # Assertion (V1.10, folded 2026-06-13): a SELF_REVIEW card may run the bounded
+    # model-escalation loop up to 3 (builder → stronger → strongest); CodeRabbit and
+    # cross-family stay one-shot (review_fix_cycles <= 1). This is the ONE deliberate
+    # v1.09→v1.10 clause change (the cap, not the seat ladder). cx check card enforces:
+    # cap 3 for review_kind SELF_REVIEW only, cap 1 for every other card.
+    canonical:
+      - "SELF_REVIEW"
+      - "review_fix_cycles"
+    key_phrases: ["SELF_REVIEW", "review_fix_cycles", "escalation"]
+    banned_negations: ["self_review stays one-and-done", "cross-family may re-review", "every card may use the escalation loop", "review_fix_cycles must be <= 1 for self-review"]
+    appears_in:
+      - GATES.md
+      - KERNEL.md
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: module-registry
+    # Assertion (V1.10, folded 2026-06-13): the build's modules are a FROZEN, ordered
+    # module_registry (compiled at G1, inside the packet hash); every build card carries a
+    # module_id. Without it there is no "module N+1" to gate. Foundation of the module_acceptance
+    # gate family (module-start order wall + module-acceptance Andon receipt wall).
+    canonical:
+      - "module_registry"
+      - "module_id"
+    key_phrases: ["module_registry", "frozen_packet_hash", "expected_acceptance_artifacts"]
+    banned_negations: ["modules may start in any order", "module order is advisory", "registry may be edited after freeze"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/WORK-ORDER.template.yaml
+      - templates/MODULE-REGISTRY.template.yaml
+
+  - id: module-start-order-wall
+    # Assertion (V1.10, folded 2026-06-13): cx check module-start blocks a module-advancing
+    # card unless its module_id is in the frozen registry AND every prior required module
+    # (dependency_modules + every earlier-ordered module) is accepted. P0 order wall — closes
+    # the omit-a-module / start-an-unknown-card holes.
+    canonical:
+      - "module-start"
+      - "prior required"
+    key_phrases: ["module-start", "order wall", "prior required module"]
+    banned_negations: ["modules may start out of order", "order wall is advisory", "skipping an earlier module is allowed"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: module-acceptance-receipt
+    # Assertion (V1.10, folded 2026-06-13): cx check module-acceptance refuses to unlock module
+    # N+1 unless module N carries a machine-generated MODULE-ACCEPTANCE receipt — verdict accepted,
+    # forge-bound (state_sha_before + quality_card_hash), bound to state by sha. The builder's word
+    # is never the wall; the bound receipt is.
+    canonical:
+      - "module-acceptance"
+      - "acceptance receipt"
+    key_phrases: ["module-acceptance", "acceptance receipt", "state_sha_before"]
+    banned_negations: ["accepted in state is enough", "acceptance receipt is optional", "model-authored acceptance is the wall"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: locked-style-direction
+    # Assertion (PROP-016, folded 2026-06-11): the PRODUCT-TASTE-LOCK must carry a complete
+    # locked_style_direction (the Style-Select outcome) for user-facing apps — without it the
+    # taste lock is incomplete and G7 blocks. Mechanical: cx check packet fires when coverage
+    # category 14 is DONE (LOCKED-STYLE-DIRECTION-REQUIRED).
+    canonical:
+      - "locked_style_direction"
+      - "G7 blocks"
+    key_phrases: ["locked_style_direction", "Style-Select"]
+    banned_negations: ["style direction is optional", "G7 no longer blocks", "style lock may be skipped", "variants are optional"]
+    appears_in:
+      - GATES.md
+      - templates/PRODUCT-TASTE-LOCK.template.md
+      - templates/DESIGN-GOLDEN-MASTER.template.md
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: lessons-preload-ack
+    # Assertion (PROP-017, folded 2026-06-11): a PLANNING session reads the ACTIVE stage-planning
+    # lessons from MEMORY/LESSONS.yaml ONCE at session start and acks session_start.lessons_preload
+    # (status+file+hash) in state; cx check state --session-start enforces it (P2,
+    # STATE-LESSONS-PRELOAD-ACK). Build read path untouched.
+    canonical:
+      - "session_start.lessons_preload"
+      - "LESSONS.yaml"
+    key_phrases: ["lessons_preload", "stage-planning lessons"]
+    banned_negations: ["preload is optional", "no lessons ack needed", "lessons are a checklist ceiling"]
+    appears_in:
+      - GATES.md
+      - templates/STATE.template.yaml
+      - checkers/CX-CHECK-SPEC.md
+
+  - id: review-per-module
+    # Assertion (PROP-003): the costly MODEL review (self + cross-family) fires ONCE per MODULE, not per card.
+    # Anti-flip: deterministic checks STILL run on every card (free) so catch-rate holds between reviews.
+    canonical:
+      - "review per MODULE, not per card"
+      - "deterministic checks run on every card"
+    key_phrases: ["per MODULE, not per card", "deterministic checks"]
+    banned_negations: ["review every card", "re-review each card", "model review per card", "review after every step"]
+    appears_in:
+      - GATES.md
+      - KERNEL.md
+
+  - id: voice-status-markers
+    # Assertion (v1.12, VOICE.md): exactly 3 status markers used sparingly (not every line).
+    # Canonical phrase appears verbatim in both VOICE.md and KERNEL.md so the marker set
+    # cannot silently drift between the standard and the always-on house rules.
+    canonical:
+      - "✅ / ⚠️ / ❌ only, sparingly (not every line)"
+    # Distinctive phrases only — bare emoji + the lone word "sparingly" were latently fragile
+    # (any in-scope doc/template that legitimately uses two markers would strict-fail for no real
+    # drift; the shipped audit template already uses ✅). [v1.12 FIX]
+    key_phrases: ["status markers", "not every line", "✅ / ⚠️ / ❌ only"]
+    banned_negations: ["any emoji is allowed", "markers on every line", "more than 3 markers"]
+    appears_in:
+      - VOICE.md
+      - KERNEL.md

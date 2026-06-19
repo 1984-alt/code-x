@@ -1,0 +1,9 @@
+# Card for module m2, frozen against module_start_dup_module_packet/ (a registry with a DUPLICATE
+# m2). content + canonical + no-symlink all pass; the DUPLICATE-module_id check is what must bite.
+id: BUILD-002
+mode: MODULE_BUILD
+module_id: m2
+objective: Build the income reconciliation screen module.
+source_map:
+  # = sha256 over module_start_dup_module_packet/
+  locked_packet_hash: 597218c1d674bf352343b940300d0060432b826a7088542edefb4bc31a0058ff

@@ -1,0 +1,11 @@
+# deck_good fixture card — covers REQ-001 (BUILDING)
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-DECK-GOOD
+  locked_packet_hash: 9b01f771e04fc141928957209a012ea66ffd4f7ad45df7e34568c20638d6f752
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-001]

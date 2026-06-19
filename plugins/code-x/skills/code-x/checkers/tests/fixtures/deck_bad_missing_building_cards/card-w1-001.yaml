@@ -1,0 +1,11 @@
+# deck_bad_missing_building fixture card — covers REQ-001 only; REQ-002 BUILDING is uncovered
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-DECK-BAD
+  locked_packet_hash: 286ab580003c083a217ced01d30ca1c7dd31c1879b2d2d868df992235744a9ef
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-001]

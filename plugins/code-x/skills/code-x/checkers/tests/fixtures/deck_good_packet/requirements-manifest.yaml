@@ -1,0 +1,9 @@
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+  - id: REQ-002
+    disposition: NOT_APPLICABLE
+    reason: Not needed for MVP; no UI component for this wave.
+  - id: REQ-003
+    disposition: CEO_DEFERRED
+    ceo_decision_ref: CEO-D-001

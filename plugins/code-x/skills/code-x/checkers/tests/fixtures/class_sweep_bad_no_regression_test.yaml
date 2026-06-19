@@ -1,0 +1,9 @@
+# BAD — no pinning regression test (trust must be the test, not a re-review).
+class_sweep:
+  class: "unredacted account-number in log lines"
+  scope_boundary: "app/parsers/*.py"
+  detection_command: "rg -n pattern app/parsers/"
+  pre_fix_hits: ["app/parsers/parser_a.py:212"]
+  post_fix_count: 0
+  positive_control:
+    planted_instance_detected: yes

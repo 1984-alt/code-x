@@ -1,0 +1,3 @@
+== proof run ==
+10 passed, 0 failed
+ALL CHECKS PASS

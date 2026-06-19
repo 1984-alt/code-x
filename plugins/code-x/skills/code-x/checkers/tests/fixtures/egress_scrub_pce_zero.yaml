@@ -1,0 +1,7 @@
+# BAD — positive control did not catch a planted secret (exit 0) => scrub unproven.
+egress_scrub:
+  target: coderabbit
+  diff_hash: "343748fc6ae2"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 0
+  produced_at: "2026-06-18T09:00:00Z"

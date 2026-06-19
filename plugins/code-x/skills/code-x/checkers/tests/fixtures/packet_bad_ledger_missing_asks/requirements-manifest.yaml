@@ -1,0 +1,6 @@
+# requirements-manifest.yaml — inside the frozen packet hash (PROP-007).
+# Dispositions: BUILDING | NOT_BUILDING | NOT_APPLICABLE | CEO_DEFERRED.
+# NOT_BUILDING / CEO_DEFERRED rows need a ceo_decision_ref resolving to a ledger row.
+requirements:
+  - id: REQ-001
+    disposition: BUILDING

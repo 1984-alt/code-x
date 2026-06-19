@@ -1,0 +1,109 @@
+# CODE-X-STATE.yaml — "you are here". The ONLY state file. Read EVERY turn (with the kernel).
+# Keep it tiny (target < 600 tokens). One project = one state file. Copy this template per project.
+
+project:              # project slug (e.g. my-app)
+protocol_stamp:       # Code-X V1   (must match this protocol — NEVER mix with v0.13 in one project)
+
+current_stage:        # PLANNING_STUDIO | BUILD_FACTORY
+current_mode:         # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY
+current_card:         # id of the ONE work-order in play (e.g. BUILD-003) — or null
+current_module:       # (V1.10) module_id in play — or null
+current_actor:        # model+family doing it now (e.g. codex / gpt-5.5 medium)
+next_actor:           # who holds the baton next (model+family, or CEO)
+
+active_build_engine:  # CLAUDE_CODE | CODEX_APP — the app the CEO drives THIS session; switching = flip this + add an engine_switch_log row
+orchestrator_model:   # alias+effort actually launched (e.g. opus xhigh) — must match the BUILD-ENGINE-PROFILES seat for the stage
+engine_switch_log: [] # append-only rows: {date, from, to, reason}   (e.g. weekly limit hit)
+
+build_authorized:     no        # yes only AFTER planning + card-compilation gate PASS
+mode_a_status:        NOT_STARTED   # NOT_STARTED | IN_PROGRESS | CEO_APPROVED | NOT_APPLICABLE
+
+session_start:        # PROP-014: a BUILD-mode session acknowledges the coding standard at start [RULE:builder-standard-session-read]
+  protocol_boot_ack:  # PROP-018: REFERENCE to the cx-generated boot receipt (`cx check boot` prints this block verbatim) — checked by cx check state --session-start (P1 when missing/stale in a build mode); the model never authors hashes
+    receipt:          # path to protocol-boot-receipt.yaml (cx wrote it)
+    receipt_hash:     # sha256-12 of the receipt file (cx printed it)
+    acked_by:         # model+family
+    timestamp:        # ISO datetime
+  builder_standard_read:    # checked by cx check state --session-start (P2 when missing in a build mode)
+    status:           # PASS
+    file:             # BUILDER-STANDARD.md (path relative to repo root)
+    hash:             # sha256-12 of the file as read — drift since ack = re-read + re-acknowledge
+    read_by:          # model+family (e.g. codex / gpt-5.5 medium)
+    timestamp:        # ISO datetime
+  lessons_preload:    # PROP-017: PLANNING session acks the lessons preload — checked by cx check state --session-start (P2) [RULE:lessons-preload-ack]
+    status:           # PASS
+    file:             # Code-X-V1/MEMORY/LESSONS.yaml
+    hash:             # sha256-12 of the file as read
+    read_by:          # model+family
+    timestamp:        # ISO datetime
+    active_lesson_count:   # ACTIVE stage:planning lessons counted at read
+
+review_boundary:      # PROP-020: reviewer taxonomy/timing as TYPED state (required in build modes at session-start; partial prose rejected by cx check state)
+  deterministic_checks_each_card: yes   # always yes — G5, no opt-out
+  coderabbit_before_self_review:        # yes | no | not_applicable
+  self_review_boundary:                 # card | module | foundation_checkpoint | final
+  cross_family_boundary:                # module | foundation_checkpoint | final | ceo_deferred
+  ceo_decision_ref:                     # REQUIRED when cross_family_boundary = ceo_deferred
+  deferred_review_blocks: []            # REQUIRED when ceo_deferred — what the debt blocks (e.g. [ship, final_ready])
+
+protocol_deviations: []   # PROP-020: CEO-authorized departures from canonical timing — TYPED rows, never blended into state as if normal
+  # - id:
+  #   ceo_authorized: yes
+  #   ceo_decision_ref:
+  #   canonical_rule:
+  #   temporary_rule:
+  #   blocks:               # next_card | ship | final_ready | none
+  #   review_debt_items: [] # stays visible until repaid
+
+protocol_incident:    # PROP-020: set (with stop_status: PROTOCOL_INCIDENT) on a missed gate / skipped check / false state — PROTOCOL corrections only, never a mere product rejection
+  # id:
+  # status:           # OPEN | REPAIRED
+  # cause:
+  # repair:
+  # repair_card:      # the ONLY card allowed to build while OPEN (cx check card --state blocks the rest; cross-family + final-ready forbidden)
+
+packet_dir:           # (V1.10 R4) path (relative to repo root) to the FROZEN packet dir (contains the manifest + the MODULE-REGISTRY) — build-turn's order wall re-hashes it (content-deep binding) and passes it to cx check module-start as --packet-dir; absent on a module build = fail-closed
+module_registry_ref:  # (V1.10) path (relative to repo root) to the CANONICAL <packet_dir>/MODULE-REGISTRY.yaml — build-turn's order wall (cx check module-start) reads order ONLY from that canonical file for every MODULE_BUILD/MODE_A_UI card; must equal packet_dir + "/MODULE-REGISTRY.yaml"; absent on a module build = fail-closed
+accepted_modules: []  # (V1.10) compact refs [{module_id, acceptance_ref, acceptance_sha12}] — never the blob (tiny-state)
+
+open_findings:        # final-ready requires ALL zero (counts AND items empty)
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []           # the actual open findings — the folded P3-closure-queue lives HERE (no separate file)
+    # - id:
+    #   severity:           P0 | P1 | P2 | P3
+    #   source_card:
+    #   finding:            one plain line
+    #   owner_card:         the fix card that will close it
+    #   status:             OPEN | FIXED | DISCONFIRMED | RECLASSIFIED_OUT_OF_SCOPE
+    #   evidence_ref:
+    #   ceo_acceptance_ref:
+    #   caught_by:          deterministic | model_self | model_cross | ceo_demo | user_after_ready   (catch-rate sensor; observe only)
+    #   should_have_been_caught_by:   # escaped bugs only (found AFTER approval): the gate that SHOULD have caught it
+    #   found_post_ship / found_by:   # (V1.10) post-ship CEO-found defect (Q2 defect ledger)
+
+built_app_audit:      # v1.12: REQUIRED before final-ready (BUILT-APP-AUDIT.md / GATES.md G8) — cx check final-ready P0-blocks if missing or incomplete
+  status:               # run    (the read-only whole-app audit has completed; any other value blocks final-ready)
+  report_ref:           # repo-relative, non-symlink path to the audit report DIRECTORY — must EXIST and contain AUDIT-SUMMARY.md
+  findings_dispositioned:   # true  (every finding fixed via a normal Code-X card, OR CEO-deferred as a scope decision; a known bug/accepted-risk stays OPEN — zero means zero)
+
+last_commit:          # sha of the last advancing commit (session-start guard: must be an ANCESTOR of HEAD — cx check state --session-start)
+next_action:          # ONE plain line: the very next thing to do
+stop_status:          NONE      # NONE | STOP_CARD_OPEN:<id>   (a STOP never asks the CEO to debug)
+
+wip_continuation:     # OPTIONAL — set ONLY when a session legitimately ends with uncommitted work
+  marked: no          # yes = the dirty tree is OWNED, not an accident (else session-start guard = P1)
+  owner_card:         # REQUIRED when marked — the card the WIP belongs to (else P2)
+  handoff_ref:        # REQUIRED when marked — the handoff describing the WIP (else P2)
+
+# Kaizen waste visibility — rolled-up proxy, NOT precise provider accounting (see WEEKLY-BURN.md)
+cost_this_week:
+  cards_run: 0
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 0
+  waste_alarm: LOW          # LOW | MEDIUM | HIGH | RED

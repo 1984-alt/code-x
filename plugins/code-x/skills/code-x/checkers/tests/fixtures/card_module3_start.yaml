@@ -1,0 +1,9 @@
+# BAD: card for module m3 while m2 is unaccepted → order wall FAIL (prior required module).
+id: BUILD-003
+mode: MODULE_BUILD
+module_id: m3
+objective: Build the expense category editor module.
+source_map:
+  # = sha256 over module_start_good_packet/ (V1.10 R4 content-deep binding); the out-of-order
+  # bite fires only after the content check PASSES, so this matches the good packet.
+  locked_packet_hash: b295c33dcd55a019c583bb8797a00e0fab4217aa000e079cbb4211b51bb2ed1c

@@ -1,0 +1,81 @@
+# BAD card: same-family cross_review WITHOUT family_substituted+ceo_authorization_ref
+# Must fire P0: same-family cross-review REJECTED
+
+id: BUILD-003
+mode: MODULE_BUILD
+actor: codex / gpt-5.5
+model_tier: standard
+objective: Build the cx check CLI.
+
+source_map:
+  locked_packet_id: PKT-001
+  locked_packet_hash: abc123
+  source_sections:
+    - file: CX-CHECK-SPEC.md
+      section: Subcommands
+      requirement_ids: [REQ-001]
+  dependency_capsules: []
+
+card_compilation:
+  compiled_by:  { actor: claude-opus, family: claude, model: claude-opus-4, date: "2026-06-09" }
+  audited_by:   { actor: gpt-5.5-pro, family: gpt, model: gpt-5.5, date: "2026-06-09" }
+  audit_status: PASS
+
+actor_record:
+  executor:       { actor: codex, family: gpt, model: gpt-5.5 }
+  self_review:    { required: yes, actor: codex, family: gpt, model: gpt-5.5 }
+  cross_review:
+    required: yes
+    actor: gpt-5.5-pro              # WRONG: same family as executor (both gpt)
+    family: gpt
+    model: gpt-5.5
+    family_substituted: no          # no substitution declared — REJECTED
+    ceo_authorization_ref:
+    recheck_when_opposite_family_available: no
+  fixer:          { actor: codex, family: gpt, model: gpt-5.5 }
+  final_reviewer: { required: yes, actor: claude-opus, family: claude, model: claude-opus-4 }
+
+family_note:
+  known_quirk: gpt family quirk
+  leash: keep lean
+
+read:
+  required: [CX-CHECK-SPEC.md]
+  forbidden: []
+
+allowed_files: [checkers/cx]
+forbidden_files: [.env]
+allowed_operations: [write-python]
+forbidden_operations: [broad-refactor]
+relevant_invariants: [real-data-only]
+acceptance: [cx --help works]
+evidence_required: [checkers/EVIDENCE-cx-check.md]
+
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no
+
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts:
+    codex: 3
+    claude_cross_family: "4 + final synthesis"
+
+stop_conditions: []
+cost_budget: 40000 tokens
+state_update: set current_card=null
+
+execution:                                  # injected from BUILD-ENGINE-PROFILES (pinned test mirror: profiles_test.yaml)
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
+  codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
+  limits: { max_parallel_subagents: 4, max_depth: 1 }

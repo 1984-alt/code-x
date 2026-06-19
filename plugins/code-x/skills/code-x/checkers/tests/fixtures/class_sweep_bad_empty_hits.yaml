@@ -1,0 +1,10 @@
+# BAD — empty pre_fix_hits (nothing enumerated = whack-a-mole, not a class sweep).
+class_sweep:
+  class: "unredacted account-number in log lines"
+  scope_boundary: "app/parsers/*.py"
+  detection_command: "rg -n pattern app/parsers/"
+  pre_fix_hits: []
+  post_fix_count: 0
+  positive_control:
+    planted_instance_detected: yes
+  regression_test_ref: tests/test_x.py

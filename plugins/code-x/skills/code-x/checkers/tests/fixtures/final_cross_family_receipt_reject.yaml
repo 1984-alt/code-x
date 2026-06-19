@@ -1,0 +1,8 @@
+# Typed receipt whose verdict is REJECTED — proves state cannot assert PASS over a failing receipt
+# (the cross-check fires when state's recorded fields disagree with the artifact). [V1.10]
+final_cross_family_review:
+  builder_family: gpt
+  reviewer_family: claude
+  verdict: rejected
+  scope: whole-build final review — blocking findings remain
+  findings_open: 3

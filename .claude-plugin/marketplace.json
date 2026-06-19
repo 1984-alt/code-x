@@ -1,0 +1,18 @@
+{
+  "name": "code-x",
+  "owner": {
+    "name": "Awie",
+    "url": "https://github.com/1984-alt"
+  },
+  "metadata": {
+    "description": "Code-X: a structured AI development methodology for non-coders (plan-then-build, with the cx checker and cross-family review gates)."
+  },
+  "plugins": [
+    {
+      "name": "code-x",
+      "version": "1.12.1",
+      "source": "./plugins/code-x",
+      "description": "Code-X: a structured AI development methodology for non-coders. Two-stage enforced workflow (plan then build), built-in cx checker, cross-family review gates, and session continuity — so AI agents plan before they build and catch the corners they quietly cut."
+    }
+  ]
+}

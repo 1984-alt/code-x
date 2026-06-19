@@ -1,0 +1,51 @@
+# BAD: state ASSERTS verdict PASS, but the bound (hash-matching) receipt artifact says verdict
+# REJECTED → the recorded review is not the artifact; state alone is not the gate (P0) [V1.10].
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card:   # null
+current_actor: claude-opus
+next_actor: CEO
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: deadbeef1234
+next_action: CEO review final-ready certificate
+stop_status: NONE
+
+module_capsules_current: PASS
+module_regressions_pass: PASS
+ceo_module_approvals_complete: PASS
+security_closeout: PASS
+recovery_proof: PASS
+
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+
+# hash MATCHES the reject receipt (binding passes) but its verdict is REJECTED while state claims PASS
+final_cross_family_receipt:
+  receipt: final_cross_family_receipt_reject.yaml
+  receipt_hash: 08ccbdfe1cf3
+  builder_family: gpt
+  reviewer_family: claude
+  verdict: PASS

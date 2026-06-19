@@ -1,0 +1,10 @@
+# Fixture: bad registry — appears_in contains a non-existent path
+# Used by: test_consistency_bad_registry_missing_path
+# Expected: FIX-FIRST (registry validation error)
+rules:
+  - id: eval-count
+    canonical: "grows slowly"
+    key_phrases: ["protocol self-test", "grows slowly"]
+    appears_in:
+      - EVALS.md
+      - DOES_NOT_EXIST/no-such-file.md

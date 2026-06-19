@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Codex SessionStart hook for the code-x plugin.
+# Injects the same compact Code-X spine as session-start; emits the
+# Codex-consumed field. Pattern adapted from obra/superpowers (Apache-2.0).
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+context_content=$(cat "${SCRIPT_DIR}/session-context.md" 2>&1 || echo "Error reading Code-X session context")
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+session_context=$(escape_for_json "$context_content")
+
+printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context" | cat
+
+exit 0

@@ -1,0 +1,8 @@
+# BAD: m1 marked accepted in state but carries NO bound receipt (blank ref/sha) → P0 Andon wall.
+project: cx-module-acceptance-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: ""
+    acceptance_sha12: ""

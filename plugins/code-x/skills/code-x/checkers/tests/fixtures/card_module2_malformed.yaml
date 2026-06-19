@@ -1,0 +1,9 @@
+# Card for m2, frozen against module_start_malformed_packet/ (registry has a malformed first row).
+# content + canonical + no-symlink all pass; the MALFORMED-row fail-closed check is what must bite.
+id: BUILD-002
+mode: MODULE_BUILD
+module_id: m2
+objective: Build the income reconciliation screen module.
+source_map:
+  # = sha256 over module_start_malformed_packet/
+  locked_packet_hash: 5ebc33e26974a966e54a55d0de7c83e12f6d62e417e7768d70f018ec519083be

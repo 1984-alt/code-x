@@ -1,0 +1,8 @@
+# BAD-by-verdict: receipt is bound (sha matches) but its verdict is pending → P0 (only the verdict bites).
+project: cx-module-acceptance-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: module_acceptance_bad_verdict_pending.yaml
+    acceptance_sha12: c0b8ac847491

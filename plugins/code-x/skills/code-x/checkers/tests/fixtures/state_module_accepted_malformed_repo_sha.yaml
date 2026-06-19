@@ -1,0 +1,9 @@
+# State binding the PROP-028 "malformed repo_sha_before" bad receipt (sha12 matches the file, so the
+# only finding is the malformed build-baseline P1 — not a hash-mismatch).
+project: cx-prop028-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: module_acceptance_bad_malformed_repo_sha.yaml
+    acceptance_sha12: "dedfb3e04b5b"

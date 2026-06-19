@@ -1,0 +1,10 @@
+# BAD (PROP-028): repo_sha_before is present but MALFORMED — not hex / shorter than 12 chars. The
+# build-baseline binding is unusable, so the phantom-completion guard cannot run → P1.
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  generated_by: cx-accept
+  quality_card_hash: qc0011223344
+  state_sha_before: 9f8e7d6c5b4a
+  repo_sha_before: nothex9
+  ts: "2026-06-19T00:00:00+00:00"

@@ -1,0 +1,13 @@
+# BAD: verdict is pending — the module is NOT CEO-accepted; the next module stays locked.
+module_acceptance:
+  module_id: m1
+  verdict: pending
+  generated_by: cx-accept
+  ceo_turn_ref: handoffs/2026-06-13-ceo-accept-m1.md
+  live_url: http://localhost:8787/income
+  screenshot_hashes:
+    - sha256:11aa22bb33cc
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs: []
+  state_sha_before: 9f8e7d6c5b4a
+  ts: "2026-06-13T16:00:00+00:00"

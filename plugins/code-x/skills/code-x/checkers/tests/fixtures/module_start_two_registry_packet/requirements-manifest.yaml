@@ -1,0 +1,12 @@
+# Frozen requirements manifest — packet fixture for the module-start REGISTRY-IDENTITY bite (V1.10 R4).
+# This packet legitimately contains the canonical MODULE-REGISTRY.yaml AND an alternate trimmed
+# registry file; the order wall must read ONLY the canonical one (GPT R4 P0).
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+  - id: REQ-002
+    disposition: BUILDING
+  - id: REQ-003
+    disposition: BUILDING
+  - id: REQ-004
+    disposition: BUILDING

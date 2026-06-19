@@ -1,0 +1,8 @@
+# GOOD — operator scrubbed the clean diff; bound to its hash; positive control nonzero.
+egress_scrub:
+  target: coderabbit
+  diff_hash: "343748fc6ae2"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 1
+  redactions_count: 0
+  produced_at: "2026-06-18T09:00:00Z"

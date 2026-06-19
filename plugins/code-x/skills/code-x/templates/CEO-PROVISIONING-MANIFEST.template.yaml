@@ -1,0 +1,19 @@
+# CEO-PROVISIONING-MANIFEST — <project>   (ported from v0.13)
+# Everything OUTSIDE the code that a human must set up — accounts, secrets, services, manual steps.
+# Must be COMPLETE or NOT_APPLICABLE before build authorization (GATES G7), so the build never stalls
+# half-way waiting on the CEO (LESSON-PROVISIONING-001). Secrets by NAME only — never the value.
+# Load-on-demand.
+
+project:
+applicable: yes        # yes | NO   (NO only for a self-contained tool with no external setup)
+
+items:
+  - name:              # e.g. "Supabase project", "OpenAI API key", "domain name", "bank CSV export"
+    type:              # account | secret | service | human_step | data_source
+    status: TODO       # TODO | DONE | NOT_APPLICABLE
+    owner:             # CEO | AI | other
+    secret_name:       # NAME ONLY if type=secret (e.g. my-project-secrets / OPENAI_API_KEY). NEVER the value.
+    note:
+
+# Build is authorized only when every item is DONE or NOT_APPLICABLE (with a reason).
+all_resolved: no

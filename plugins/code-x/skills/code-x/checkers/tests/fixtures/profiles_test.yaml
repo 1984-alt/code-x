@@ -1,0 +1,61 @@
+# PINNED test mirror of BUILD-ENGINE-PROFILES.yaml — used by the cx test suites via
+# CX_PROFILES env (set in run.py / test_cx.py / run_contracts.py) so fixture hashes stay
+# stable when the CEO tunes the live canon seats (one-file change must never break suites).
+# Structure mirrors the canon roles/limits/orchestrator shape. DO NOT EDIT casually:
+# the profiles_hash embedded in card fixtures is the sha256-12 of THIS file's bytes.
+
+version: 1.0
+status: TEST_PIN
+
+limits:
+  max_parallel_subagents: 4
+  max_depth: 1
+  recursive_fanout: forbidden
+
+orchestrator:
+  planning_studio:
+    claude_code: { model: opus, effort: max }
+    codex_app:   { model: gpt-5.5, effort: high }
+  build_factory:
+    claude_code: { model: opus, effort: max }
+    codex_app:   { model: gpt-5.5, effort: medium }
+
+roles:
+  explorer:
+    claude_code: { subagent: Explore,            model: haiku }
+    codex_app:   { agent: explorer,              model: gpt-5.3-codex-spark, effort: low }
+  implementer:
+    standard:
+      claude_code: { subagent: general-purpose,  model: sonnet }
+      codex_app:   { agent: worker,              model: gpt-5.5, effort: medium }
+    high_risk:
+      claude_code: { subagent: general-purpose,  model: opus }
+      codex_app:   { agent: worker,              model: gpt-5.5, effort: high }
+  check_runner:
+    claude_code: { subagent: build-validator,    model: haiku }
+    codex_app:   { agent: worker,                model: gpt-5.3-codex-spark, effort: low }
+  runtime_verifier:
+    claude_code: { subagent: verify-app,         model: sonnet }
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }
+  design_fidelity:
+    claude_code: { subagent: design-fidelity-gate, model: haiku }
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }
+  slop_removal:
+    claude_code: { subagent: code-simplifier,    model: sonnet }
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }
+  self_review:
+    claude_code: { subagent: staff-reviewer,     model: fable, effort: max }
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high }
+  security_delta:
+    claude_code: { subagent: anthropic-cross-review, model: opus, effort: max }
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high }
+  scribe:
+    claude_code: { subagent: claude,             model: haiku }
+    codex_app:   { agent: worker,                model: gpt-5.3-codex-spark, effort: low }
+  stop_diagnosis:
+    claude_code: { subagent: oncall-guide,       model: opus, effort: max }
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high,
+                   escalation: { model: gpt-5.5, effort: xhigh, only_if: "local diagnosis unavoidable" } }
+  card_compiler:
+    claude_code: { seat: session,                model: opus, effort: max }
+    codex_app:   { seat: session,                model: gpt-5.5, effort: high }

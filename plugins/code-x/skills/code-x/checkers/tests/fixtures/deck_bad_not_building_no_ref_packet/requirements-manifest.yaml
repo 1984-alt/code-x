@@ -1,0 +1,5 @@
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+  - id: REQ-002
+    disposition: NOT_BUILDING

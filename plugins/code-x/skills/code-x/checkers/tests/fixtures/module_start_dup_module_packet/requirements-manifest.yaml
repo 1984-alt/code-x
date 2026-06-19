@@ -1,0 +1,6 @@
+# Frozen requirements manifest — packet fixture for the module-start DUPLICATE-module_id bite (V1.10 R4).
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+  - id: REQ-003
+    disposition: BUILDING

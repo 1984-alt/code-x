@@ -1,0 +1,23 @@
+# WORK-ORDER-COST-LOG — one entry appended per card on completion.
+# Feeds the WASTE ALARM + the weekly Kaizen review. Purpose: make waste VISIBLE (Toyota), not precise provider accounting.
+
+- card_id:
+  stage:                # PLANNING | BUILDING | REVIEW | FIX | FINAL_READY
+  actor:
+  model_family:
+  model_tier:           # cheap | standard | top
+  review_mode:          # NONE | SCAN | DELTA | SLICE | FULL
+  files_read:
+  files_changed:
+  estimated_input_size:
+  estimated_output_size:
+  loops_used:
+  self_review_count:
+  fix_batch_count:
+  full_packet_read:     # yes | no
+  result:               # PASS | FIX_FIRST | STOP
+  waste_flags: []       # over_read | repeated_review | loop | wrong_model_tier | unclear_card | missing_evidence | incomplete_capsule
+  ceo_review_started_at:   # MODE_A / module-demo cards only — when the demo reached the CEO (INERT sensor)
+  ceo_decision_at:         # when the CEO accepted/rejected
+  ceo_wait_hours:          # scheduling signal ONLY — never justifies batching modules, skipping approval, or weakening Mode A/module gates
+  kaizen_note:

@@ -1,0 +1,60 @@
+# FINAL-READY-CERTIFICATE — AUTO-ASSEMBLED by `cx check final-ready` from evidence already collected.
+# Never hand-written. Verdict READY only when every line passes. (GATES G8.)
+
+final_ready_certificate:
+  project:
+  version:
+  protocol: Code-X V1
+  commit_sha:
+  date:
+  final_reviewer:
+  builder_family:
+  cross_reviewer_family:
+
+  scope:
+    locked_scope_implemented: PASS | FAIL
+    out_of_scope_changes: NONE | LIST
+
+  findings:                     # all zero or NOT READY (see SEVERITY.md)
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+    known_issues: NONE
+
+  modules:
+    all_module_capsules_current: PASS | FAIL
+    all_module_regressions_pass: PASS | FAIL
+    all_ceo_module_approvals_present: PASS | FAIL
+
+  built_app_audit:                # v1.12 — whole-app audit before ship (BUILT-APP-AUDIT.md / G8)
+    status: run | NOT_RUN
+    findings_dispositioned: PASS | FAIL
+    report_ref:                   # repo-relative path to the audit report dir (exists, has AUDIT-SUMMARY.md)
+
+  ui:
+    mode_a_passed: PASS | NOT_APPLICABLE
+    screenshot_gallery_complete: PASS | FAIL
+    click_path_complete: PASS | FAIL
+    ceo_visual_acceptance: PASS | FAIL
+
+  tests:
+    required_commands_pass: PASS | FAIL
+    regression_smoke_pass: PASS | FAIL
+    evidence_index_complete: PASS | FAIL
+
+  security_privacy:
+    project_security_baseline_done: PASS | FAIL
+    triggered_security_deltas_closed: PASS | FAIL
+    secrets_scan_pass: PASS | FAIL
+    privacy_scan_pass: PASS | FAIL
+
+  recovery:
+    backup_restore_proof: PASS | NOT_APPLICABLE | FAIL
+    rollback_path_exists: PASS | FAIL
+    non_coder_recovery_instructions: PASS | FAIL
+
+  cost:
+    weekly_burn_status_recorded: PASS | FAIL
+
+  verdict: READY | NOT_READY

@@ -1,0 +1,44 @@
+# Incident open, repair_card BUILD-001 -> the repair card itself may proceed
+
+project: sample
+protocol_stamp: Code-X V1
+current_stage: BUILD_FACTORY
+current_mode: REVIEW
+current_card: BUILD-001
+current_actor: codex / gpt-5.5
+next_actor: claude-sonnet (cross-review)
+build_authorized: true
+mode_a_status: NOT_APPLICABLE
+open_findings:
+  counts:
+    p0: 0
+    p1: 1
+    p2: 0
+    p3: 0
+  items:
+  - id: F-001
+    severity: P1
+    source_card: BUILD-001
+    finding: test coverage for scope subcommand is thin
+    owner_card: BUILD-002
+    status: OPEN
+    evidence_ref: null
+    ceo_acceptance_ref: null
+last_commit: abc123def456
+next_action: Claude cross-review BUILD-001 output
+stop_status: PROTOCOL_INCIDENT
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+protocol_incident:
+  id: INC-001
+  status: OPEN
+  cause: cross-family review requested at a non-demoable boundary
+  repair: re-run current-stage rail; record review_boundary in state
+  repair_card: BUILD-001

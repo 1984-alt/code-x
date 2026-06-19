@@ -1,0 +1,32 @@
+# BAD fixture: P1-02 — state with zero open findings but module_capsules_current absent
+# Expected: FIX-FIRST mentioning module_capsules_current (missing = NOT READY)
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card:   # null — no card in flight
+current_actor: claude-opus
+next_actor: CEO
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: deadbeef1234
+next_action: CEO review final-ready certificate
+stop_status: NONE
+
+# module_capsules_current ABSENT — should fail P1-02
+# module_regressions_pass ABSENT — should fail P1-02
+# ceo_module_approvals_complete ABSENT — should fail
+# security_closeout ABSENT — should fail
+# recovery_proof ABSENT — should fail

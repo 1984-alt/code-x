@@ -1,0 +1,12 @@
+# GOOD — a complete class-sweep: class named, detection finds all, swept to zero, pinned.
+class_sweep:
+  class: "unredacted account-number in log lines"
+  scope_boundary: "app/parsers/*.py"
+  detection_command: "rg -n '\\b\\d{10,}\\b' app/parsers/"
+  pre_fix_hits:
+    - "app/parsers/parser_a.py:212"
+    - "app/parsers/parser_b.py:88"
+  post_fix_count: 0
+  positive_control:
+    planted_instance_detected: yes
+  regression_test_ref: tests/test_no_account_numbers_in_logs.py

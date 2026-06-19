@@ -1,0 +1,14 @@
+# Fixture: meaning-flip test registry for fix-card-test-edit rule.
+# appears_in points at the flipped LESSONS fixture (keeps the first canonical phrase but
+# drops "weaken"). With single-token canonical this would PASS. With multi-phrase list it
+# must fire FIX-FIRST because "weaken" is absent.
+# Used by: test_meaning_flip_fires_fix_first
+# Expected: FIX-FIRST naming rule 'fix-card-test-edit' and the flipped fixture file.
+rules:
+  - id: fix-card-test-edit
+    canonical:
+      - "a NEW regression test is allowed only"
+      - "weaken"
+    key_phrases: ["regression test", "weaken"]
+    appears_in:
+      - checkers/tests/fixtures/lessons_meaning_flipped.yaml

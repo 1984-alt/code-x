@@ -1,0 +1,15 @@
+# Fixture: bad registry — duplicate id
+# Used by: test_consistency_bad_registry_dup_id
+# Expected: FIX-FIRST (registry validation error)
+rules:
+  - id: eval-count
+    canonical: "grows slowly"
+    key_phrases: ["protocol self-test", "grows slowly"]
+    appears_in:
+      - EVALS.md
+      - CHARTER.md
+  - id: eval-count
+    canonical: "grows slowly"
+    key_phrases: ["protocol self-test"]
+    appears_in:
+      - EVALS.md

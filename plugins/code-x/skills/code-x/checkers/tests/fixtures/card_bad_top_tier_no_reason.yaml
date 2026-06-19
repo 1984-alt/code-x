@@ -1,0 +1,110 @@
+# BAD: model_tier top with no top_allowed_reason named -> P1
+
+id: BUILD-001
+mode: MODULE_BUILD
+actor: codex / gpt-5.5
+model_tier: top
+objective: Build the cx check CLI implementing 6 subcommands per CX-CHECK-SPEC.md.
+
+source_map:
+  locked_packet_id: PKT-CXCHECK-001
+  locked_packet_hash: abc123def456
+  source_sections:
+    - file: CX-CHECK-SPEC.md
+      section: Subcommands
+      requirement_ids: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006]
+  dependency_capsules: []
+
+card_compilation:
+  compiled_by:  { actor: claude-opus, family: claude, model: claude-opus-4, date: "2026-06-09" }
+  audited_by:   { actor: gpt-5.5-pro, family: gpt, model: gpt-5.5, date: "2026-06-09" }
+  audit_status: PASS
+
+actor_record:
+  executor:       { actor: codex, family: gpt, model: gpt-5.5 }
+  self_review:    { required: yes, actor: codex, family: gpt, model: gpt-5.5 }
+  cross_review:
+    required: yes
+    actor: claude-sonnet
+    family: claude
+    model: claude-sonnet-4-6
+    family_substituted: no
+    ceo_authorization_ref:
+    recheck_when_opposite_family_available: no
+  fixer:          { actor: codex, family: gpt, model: gpt-5.5 }
+  final_reviewer: { required: yes, actor: claude-opus, family: claude, model: claude-opus-4 }
+
+family_note:
+  known_quirk: gpt family tends toward verbose output and defensive fallbacks
+  leash: keep output lean; no extra verbs beyond the 6 subcommands
+
+read:
+  required:
+    - CX-CHECK-SPEC.md
+    - BUILD-CARD-cx-check.md
+  forbidden: []
+
+allowed_files:
+  - checkers/cx
+  - checkers/tests/test_cx.py
+  - checkers/tests/fixtures/
+
+forbidden_files:
+  - .env
+  - secrets/
+
+allowed_operations:
+  - write-python
+  - write-test
+  - chmod-executable
+
+forbidden_operations:
+  - edit-scoring-config
+  - broad-refactor
+  - add-dependency-without-approval
+
+relevant_invariants:
+  - real-data-only
+  - secrets-by-name-never-value
+  - no-mock-data
+
+acceptance:
+  - cx --help lists exactly 6 subcommands
+  - cx check card GOOD fixture = PASS
+  - pytest tests/ all green
+
+evidence_required:
+  - checkers/EVIDENCE-cx-check.md
+
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no
+
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts:
+    codex: 3
+    claude_cross_family: "4 + final synthesis"
+
+stop_conditions:
+  - out-of-scope change detected by scope check
+  - secret value found in diff
+
+cost_budget: 40000 tokens estimated
+
+state_update: set current_card=null, next_actor=CEO after PASS
+
+execution:                                  # injected from BUILD-ENGINE-PROFILES (pinned test mirror: profiles_test.yaml)
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
+  codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
+  limits: { max_parallel_subagents: 4, max_depth: 1 }

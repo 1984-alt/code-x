@@ -1,0 +1,95 @@
+# coverage-map.yaml — lives INSIDE the frozen packet dir (inside the hash).
+# Canon: PACKET-CONTENTS.md Piece 1. Checked by `cx check packet` (mechanical half).
+# Every row: status DONE + file (existing, non-trivial, inside the packet) OR
+# status N/A + na_because. Always-on categories (1-4, 10-13, 15, 16, 19, 20) may never be N/A.
+# Copy per project; keep ids 1-20 exactly (categories, not files — pack into fewer files freely).
+
+categories:
+  - id: 1
+    name: "product vision / problem / users"
+    status:        # DONE | N/A
+    file:          # e.g. product-vision.md
+  - id: 2
+    name: "functional requirements"
+    status:
+    file:          # PRD
+  - id: 3
+    name: "non-functional requirements"
+    status:
+    file:          # PRD or TRD
+  - id: 4
+    name: "technical architecture"
+    status:
+    file:          # TRD
+  - id: 5
+    name: "data model / schema"
+    status:        # N/A allowed (backend/data only)
+    file:
+    na_because:
+  - id: 6
+    name: "internal API / function contracts"
+    status:
+    file:
+    na_because:
+  - id: 7
+    name: "external integration contracts"
+    status:
+    file:
+    na_because:
+  - id: 8
+    name: "validation / errors / permissions / side-effects"
+    status:
+    file:
+    na_because:
+  - id: 9
+    name: "pagination / retries / timeouts / caching / idempotency"
+    status:
+    file:
+    na_because:
+  - id: 10
+    name: "authn / authz / tenant isolation / RLS"
+    status:        # always-on — never N/A
+    file:          # SECURITY-BASELINE
+  - id: 11
+    name: "secrets / privacy / PII / logging redaction"
+    status:
+    file:
+  - id: 12
+    name: "input validation / uploads / rate-limit / CSRF / CORS / XSS / injection / prompt-injection"
+    status:
+    file:
+  - id: 13
+    name: "retention / deletion / audit logs / admin access"
+    status:
+    file:
+  - id: 14
+    name: "UI / workflow locked designs"
+    status:        # N/A allowed (UI/workflow only)
+    file:
+    na_because:
+  - id: 15
+    name: "CEO decision ledger (asks + decisions)"
+    status:        # always-on
+    file: CEO-DECISION-LEDGER.md
+  - id: 16
+    name: "requirements manifest + dispositions"
+    status:        # always-on
+    file: requirements-manifest.yaml
+  - id: 17
+    name: "business-logic validation worked examples"
+    status:        # N/A allowed (money/business rule only)
+    file:
+    na_because:
+  - id: 18
+    name: "CEO provisioning manifest"
+    status:        # N/A allowed (external provisioning only)
+    file:
+    na_because:
+  - id: 19
+    name: "production-readiness triggers answered"
+    status:        # always-on
+    file:
+  - id: 20
+    name: "builder coding standard named"
+    status:        # always-on
+    file:          # pointer to BUILDER-STANDARD.md + project deltas

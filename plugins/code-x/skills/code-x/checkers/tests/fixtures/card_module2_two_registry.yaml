@@ -1,0 +1,11 @@
+# Card for module m2, frozen against module_start_two_registry_packet/ (which contains BOTH the
+# canonical MODULE-REGISTRY.yaml and an alternate TRIMMED-REGISTRY.yaml). The content hash matches the
+# whole packet — so the order wall's IDENTITY check (not the content check) is what must reject a
+# --registry that points at the alternate trimmed file (GPT R4 P0).
+id: BUILD-002
+mode: MODULE_BUILD
+module_id: m2
+objective: Build the income reconciliation screen module.
+source_map:
+  # = sha256 over module_start_two_registry_packet/ (manifest + canonical + alternate registries).
+  locked_packet_hash: 9c1e0126f3091459dd3e25805071ae01200bdab91779c0baa5031d5b3619db95

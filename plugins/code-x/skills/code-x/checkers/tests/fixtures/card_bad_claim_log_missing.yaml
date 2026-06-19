@@ -1,0 +1,12 @@
+# PROP-022 BAD: claim references a log that does not exist
+mode: PROOF
+objective: x
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: unit_suite
+    claimed_verdict: PASS
+    command: python3 -m pytest tests/
+    exit_code: 0
+    log_path: no_such_log.txt
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5

@@ -1,0 +1,36 @@
+# DEPENDENCY-SCAN-RECEIPT (PROP-027) — the pre-build supply-chain gate artifact.
+#
+# Validated by:  cx check dep-scan <this-file> --repo-root <repo>
+# Lives OUTSIDE the frozen packet (it is regenerated when lockfiles change) but each scan
+# is hash-bound to its lockfile, so a stale/forged receipt — or a lockfile that drifts
+# after the gate — fails. A G7 build-authorization line; G8 re-scans pre-ship.
+#
+# Rule: 0 high/critical advisories, OR a typed CEO waiver per offending advisory.
+# Every package-manager manifest found under the repo MUST have a scan entry + a lockfile
+# (scan-all-pairs) — an unscanned root fails.
+
+dependency_scan:
+  scans:
+    - ecosystem: npm                       # npm | pip | go | cargo | gem | maven | composer
+      command: "npm audit --json"          # the exact scanner command run
+      scanner_version: "npm/10.8.0"        # scanner + version (drift is auditable)
+      db_timestamp: "2026-06-18T00:00:00Z" # advisory-DB freshness
+      manifest: package.json               # repo-relative
+      lockfile: package-lock.json          # repo-relative, pinned, committed
+      lockfile_hash: "<sha12-of-lockfile>" # == sha256(lockfile)[:12]; rebind on any change
+      produced_at: "2026-06-18T09:00:00Z"
+      high_count: 0
+      critical_count: 0
+    # ... one entry per manifest/lockfile pair in the repo ...
+
+  # Optional — required only when a scan reports high/critical advisories. Each waiver is
+  # auditable and time-boxed; abuse is the failure mode (GPT #13).
+  waivers: []
+  #  - ceo_decision_ref: CEO-D-XXX        # the ledger row authorizing the risk
+  #    advisory_ids: [GHSA-xxxx-xxxx]     # the specific advisories waived
+  #    package: <name>
+  #    severity: high                     # high | critical
+  #    reason: "why it is acceptable (not reachable / false positive / ...)"
+  #    mitigation: "what reduces the risk meanwhile"
+  #    expiry: "2026-09-01"               # the waiver is NOT permanent
+  #    owner: <who owns clearing it>

@@ -1,0 +1,9 @@
+# BAD fixture: P1-09 — registry with appears_in path that escapes Code-X root via ..
+# Expected: FIX-FIRST mentioning path escape / absolute path
+
+rules:
+  - id: fix-card-test-edit
+    canonical: "a NEW regression test is allowed only"
+    key_phrases: ["regression test", "weaken"]
+    appears_in:
+      - "../../etc/passwd"

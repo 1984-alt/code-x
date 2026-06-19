@@ -1,0 +1,11 @@
+# deck_bad_ghost fixture card — claims REQ-999 which is NOT in the manifest
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-DECK-GHOST
+  locked_packet_hash: 261175afc638348e1df9f62f23d00356b133b0eab16c44d904b1d1ead54eadd9
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-001, REQ-999]

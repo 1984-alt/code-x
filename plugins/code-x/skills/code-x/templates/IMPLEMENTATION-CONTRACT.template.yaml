@@ -1,0 +1,16 @@
+# IMPLEMENTATION-CONTRACT — the locked, non-visual shape a module's built code must conform to (V1.10).
+#
+# Derived from the construction docs at LOCK and frozen inside the packet hash. It is the
+# non-*visual* half of anti-drift (design-fidelity blocks the visual half): a money/login/data
+# module's acceptance must attach an EXTRACTED-actuals diff (built code vs this manifest) as
+# conformance_evidence_refs — proof, not a free-text "conforms to §X". Per module_id.
+
+implementation_contract:
+  module_id:                 # the registry module this contract pins
+  frozen_packet_hash:        # must equal the cards' locked_packet_hash (lives inside the packet)
+  routes: []                 # the exact routes/endpoints this module exposes (method + path)
+  data_schema: []            # tables/columns/types or document shapes the module reads/writes
+  api_surface: []            # public API the module presents to other modules
+  public_functions: []       # the named functions/handlers other code may call (signatures)
+  business_rules: []         # the money/business rules the built code must implement (CEO-signed)
+  file_module_structure: []  # the files/modules this module is allowed to create or own

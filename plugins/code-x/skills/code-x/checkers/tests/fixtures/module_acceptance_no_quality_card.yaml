@@ -1,0 +1,8 @@
+# BAD: m3 (ui only, not money/shared) accepted with NO quality_card block -> P1 quality-card-required (clean single reason).
+module_acceptance:
+  module_id: m3
+  verdict: accepted
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs: []
+  ts: "2026-06-13T16:00:00+00:00"

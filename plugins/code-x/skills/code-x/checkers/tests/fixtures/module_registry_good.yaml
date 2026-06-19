@@ -1,0 +1,26 @@
+# GOOD frozen module registry — 3 ordered modules; m2 depends on m1.
+module_registry:
+  frozen_packet_hash: abc123def456
+  modules:
+    - module_id: m1
+      title: Money source-of-truth importer (the CEO sees imported transactions)
+      requirement_ids: [REQ-001, REQ-002]
+      risk_flags: [money, data]
+      touches_shared_shell: yes
+      dependency_modules: []
+      card_ids: [BUILD-001]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card, conformance_diff]
+    - module_id: m2
+      title: Income reconciliation screen (CEO clicks through a day)
+      requirement_ids: [REQ-003]
+      risk_flags: [money]
+      dependency_modules: [m1]
+      card_ids: [BUILD-002]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card, conformance_diff]
+    - module_id: m3
+      title: Expense category editor (CEO edits a category)
+      requirement_ids: [REQ-004]
+      risk_flags: [ui]
+      dependency_modules: [m2]
+      card_ids: [BUILD-003]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card]

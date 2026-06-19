@@ -1,0 +1,10 @@
+# BAD — positive control does not show a planted instance was detected.
+class_sweep:
+  class: "unredacted account-number in log lines"
+  scope_boundary: "app/parsers/*.py"
+  detection_command: "rg -n pattern app/parsers/"
+  pre_fix_hits: ["app/parsers/parser_a.py:212"]
+  post_fix_count: 0
+  positive_control:
+    planted_instance_detected: no
+  regression_test_ref: tests/test_x.py

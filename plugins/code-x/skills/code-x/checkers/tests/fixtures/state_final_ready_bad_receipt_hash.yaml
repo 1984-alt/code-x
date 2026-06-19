@@ -1,0 +1,51 @@
+# BAD: final cross-family receipt names a real file but the recorded receipt_hash is fabricated/stale →
+# the recorded review is not bound to THIS artifact, must not ship (P0) [V1.10]. Else final-ready-clean.
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card:   # null — no card in flight
+current_actor: claude-opus
+next_actor: CEO
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: deadbeef1234
+next_action: CEO review final-ready certificate
+stop_status: NONE
+
+module_capsules_current: PASS
+module_regressions_pass: PASS
+ceo_module_approvals_complete: PASS
+security_closeout: PASS
+recovery_proof: PASS
+
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+
+# receipt_hash deliberately WRONG — the bite is "fabricated/stale hash not bound to the artifact"
+final_cross_family_receipt:
+  receipt: final_cross_family_receipt_good.yaml
+  receipt_hash: deadbeef0000
+  builder_family: gpt
+  reviewer_family: claude
+  verdict: PASS

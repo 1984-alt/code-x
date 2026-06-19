@@ -1,0 +1,6 @@
+--- a/.env
++++ b/.env
+@@ -1,2 +1,3 @@
++DB_PASSWORD=supersecret123
+ APP_ENV=production
+ DEBUG=false

@@ -1,0 +1,16 @@
+# GOOD machine MODULE-ACCEPTANCE receipt — generator-stamped, verdict accepted, binding fields present, file sha12-bound to state.
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  generated_by: cx-accept
+  ceo_turn_ref: handoffs/2026-06-13-ceo-accept-m1.md
+  live_url: http://localhost:8787/income
+  screenshot_hashes:
+    - sha256:11aa22bb33cc
+    - sha256:44dd55ee66ff
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs:
+    - evidence/conformance-m1-extracted-actuals.diff
+  state_sha_before: 9f8e7d6c5b4a
+  repo_sha_before: NONE_TEST_FIXTURE  # PROP-028: fresh-clone-safe sentinel — skips ONLY the git leg under CODE_X_TEST_MODE=1 (no real commit graph to bind to). Real git-leg coverage lives in the module_acceptance_inrepo_ref temp-repo fixture + run.py TestProp028PhantomCompletion.
+  ts: "2026-06-13T16:00:00+00:00"

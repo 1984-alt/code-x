@@ -1,0 +1,21 @@
+# BAD: cost log entry with review_fix_cycles: 2 (violates one-and-done)
+# Used for F4 P2-04 test
+
+- card_id: BUILD-001
+  stage: BUILDING
+  actor: codex
+  model_family: gpt
+  model_tier: standard
+  review_mode: DELTA
+  files_read: 5
+  files_changed: 3
+  estimated_input_size: 15000
+  estimated_output_size: 8000
+  loops_used: 1
+  self_review_count: 1
+  fix_batch_count: 0
+  full_packet_read: no
+  result: PASS
+  waste_flags: []
+  kaizen_note: clean first pass
+  review_fix_cycles: 2

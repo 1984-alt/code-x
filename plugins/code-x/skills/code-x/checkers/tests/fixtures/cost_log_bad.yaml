@@ -1,0 +1,20 @@
+# BAD cost log — over_read + invalid model_tier + missing required field
+
+- card_id: BUILD-BAD
+  stage: BUILDING
+  actor: codex
+  model_family: gpt
+  model_tier: ultra      # invalid — not cheap/standard/top
+  review_mode: FULL
+  files_read: 45         # over budget (>30 threshold)
+  files_changed: 12
+  estimated_input_size: 120000
+  estimated_output_size: 40000
+  loops_used: 5          # over 3 — loop alarm
+  self_review_count: 3
+  fix_batch_count: 2
+  full_packet_read: yes
+  result: PASS
+  waste_flags: [over_read, loop]
+  kaizen_note: way too many files read; grind detected
+  # 'actor' field missing from model_family entry — testing: actor IS present but model_family is blank

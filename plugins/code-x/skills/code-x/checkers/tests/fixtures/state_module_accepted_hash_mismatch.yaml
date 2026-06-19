@@ -1,0 +1,8 @@
+# BAD: m1 accepted, recorded acceptance_sha12 does NOT match the receipt file's sha → P0 hash mismatch.
+project: cx-module-acceptance-test
+protocol_stamp: Code-X V1
+current_module: m2
+accepted_modules:
+  - module_id: m1
+    acceptance_ref: module_acceptance_good.yaml
+    acceptance_sha12: deadbeef0000

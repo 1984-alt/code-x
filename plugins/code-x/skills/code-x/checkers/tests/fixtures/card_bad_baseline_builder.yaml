@@ -1,0 +1,22 @@
+# PROP-022 BAD: comparison baseline is the builder's own same-wave output
+mode: PROOF
+objective: x
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: design_fidelity
+    claimed_verdict: PASS
+    command: cx check design-fidelity --manifest m.yaml --dom dom.html --screenshot s.png
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["ALL CHECKS PASS"]
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5
+    positive_control:
+      command: cx check design-fidelity --manifest m.yaml --dom dom_perturbed.html --screenshot s.png
+      exit_code: 1
+      log_path: log_proof_red_expected.txt
+      expected_failure_marker: FIDELITY-VIOLATION-DETECTED
+    baseline:
+      baseline_ref: build-output/snapshot-this-wave.html
+      baseline_hash: deadbeef1234
+      baseline_source: builder_same_wave

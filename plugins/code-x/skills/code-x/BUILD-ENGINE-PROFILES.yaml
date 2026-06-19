@@ -1,0 +1,275 @@
+# Code-X V1 — BUILD-ENGINE-PROFILES (ACTIVE CANON — folded 2026-06-10, CEO approved)
+# The ONE source of truth for model routing. Read by: the Card Compiler (injects per-card `execution`
+# blocks) + the session orchestrator (once, at session start). Builders never open this file.
+# Model updates touch ONLY this file; cx check then flags already-compiled cards for re-injection.
+#
+# Provenance (PROP-013): proposed by GPT 5.5 Pro -> amended by Anthropic (Claude Fable 5; dual-branch
+#   injection for mid-project engine switching) -> GPT branch filled by GPT 5.5 Pro (own family) +
+#   cross-family PASS 2026-06-10 -> CEO seat ladders
+#   + CodeRabbit rulings -> CEO fold approval 2026-06-10. Full trail: MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md.
+#
+# ✅ ENFORCEMENT STATUS — BUILT 2026-06-10: all 9 cx_check_clauses below are ENFORCED by `cx check
+#   card` / `cx check state` (checkers/check-contracts.yaml ids CARD-EXEC-BLOCK-REQUIRED ·
+#   CARD-EXEC-PROFILES-HASH · CARD-EXEC-SEAT-IN-PROFILES · CARD-EXEC-CODE-WRITING-FLOOR ·
+#   CARD-EXEC-LIMITS-CAPPED · CARD-TOP-TIER-NEEDS-REASON · CARD-CODERABBIT-NEVER-SATISFIES ·
+#   STATE-ACTIVE-ENGINE-ENUM · STATE-ORCHESTRATOR-SEAT-CAP), each with a bad fixture that BITES
+#   (PROP-004 discipline). Test suites pin a stable mirror via CX_PROFILES env (tests/fixtures/
+#   profiles_test.yaml) so tuning THIS file never breaks the suites; production cx reads THIS file.
+
+version: 1.0
+status: ACTIVE
+
+purpose: >
+  Kill model-routing ambiguity. ONE source of truth mapping each card role to the exact
+  model + effort for BOTH build engines (Claude Code and Codex App). The Card Compiler
+  injects the resolved dual-branch `execution` block into every card (same pattern as
+  family_note), stamped with this file's hash. Whichever app is running follows ITS OWN
+  branch — switching engines mid-project costs ZERO card edits. No actor ever guesses a
+  model. Origin scar: v0.13 Codex orchestrator defaulted to 5.5 high/xhigh for everything;
+  both $200 weekly limits burned in ~2.5 days.
+
+principles:   # [RULE:cost-effective-by-default] — single-source entry in checkers/rule-registry.yaml
+  cost_effective_not_cheapest: >
+    CEO rule 2026-06-10: the default for every seat is the CHEAPEST MODEL THAT RELIABLY
+    SUCCEEDS ON THE FIRST PASS for that task class — never the cheapest absolute.
+    A failed first pass forces a review->fix->re-verify loop costing 2-3x the savings.
+    A redo is the most expensive token.
+  code_writing_floor: >
+    Mini/spark/haiku-class models NEVER write app code. They do mechanical work only:
+    file mapping, running checks/tests, evidence indexing, status summaries, catalogues.
+  judgment_floor: >
+    Card compilation, card audit, cross-family review, security delta, money/business
+    rules, final-ready review, ambiguous-failure diagnosis = TOP tier always (unchanged
+    from ROUTING.md top_allowed_reasons).
+  injection_over_lookup: >
+    The compiler injects; executing actors never open this file mid-build (kernel read
+    law). Only the COMPILER and the session ORCHESTRATOR (once, at session start) read it.
+  routing_belongs_to_the_compiler: >
+    The BUILDER never decides "I'll use high/xhigh because this feels hard." The card
+    decides; the state records what the session actually launched; the checker flags
+    mismatch. (GPT review 2026-06-10.)
+  escalation_valve: cheap/standard seat fails once -> one retry -> escalate one tier or STOP (ROUTING.md, unchanged).
+
+# ── What no YAML can do (honest limit) ─────────────────────────────────────────
+orchestrator_model_is_app_level: >
+  A card can pin every SUBAGENT, but not the model of the top-level session the CEO
+  opened. Fix is two-layer: (1) app-level default pinned in the app's own config
+  (snippet below); (2) CODE-X-STATE.yaml records the session's engine + orchestrator
+  model at session start; `cx check state` flags a mismatch at the FIRST check.
+
+codex_config_toml_snippet: |
+  # ~/.codex/config.toml — pins Codex App session defaults so a session never silently
+  # starts at 5.5 high/xhigh. CEO pastes once.
+  # `model` + `model_reasoning_effort` confirmed against official Codex config docs
+  # (GPT 5.5 Pro, 2026-06-10). The [agents] caps mirror this file's limits — keep them
+  # only if your Codex App version accepts these keys (it will complain if not).
+  model = "gpt-5.5"
+  model_reasoning_effort = "medium"
+
+  [agents]
+  max_threads = 4
+  max_depth = 1
+
+state_fields:   # added to CODE-X-STATE.yaml at fold
+  active_build_engine: CLAUDE_CODE | CODEX_APP        # set at session start; switching = flip this line + provenance note
+  orchestrator_model: <alias + effort as launched>     # what the CEO actually opened; must match this file's seat for the stage
+  engine_switch_log: append-only [date, from, to, reason(e.g. weekly limit)]
+
+# ── Hard caps (both engines) ────────────────────────────────────────────────────
+limits:
+  max_parallel_subagents: 4
+  max_subagent_depth: 1            # subagents never spawn subagents
+  recursive_fanout: forbidden
+
+# ── Claude seat ladder (CEO ruling 2026-06-11, supersedes 2026-06-10) ────────────
+# Effort economics (CEO-verified 2026-06-11 vs FrontierCode chart + Anthropic docs):
+# on Opus 4.8, xhigh outscores max at lower cost -> effort max RETIRED from all Opus seats.
+# On Fable 5, HIGH is the working ceiling; xhigh = EXTRAORDINARY circumstances only
+# (top_allowed_reason required); Fable max = FORBIDDEN (scar: 30% of weekly limit burned
+# in half a day, 2026-06-10). See fable_window below for the 2026-06-23 sunset.
+claude_seat_ladder:
+  normal:            { model: opus,  effort: xhigh }   # universal post-sunset Claude top seat + window default for non-orchestrator/non-review work (diagnosis etc.)
+  # During fable_window (CEO 2026-06-11, second ruling): ORCHESTRATOR seats = fable MEDIUM;
+  # REVIEW seats (self-review, security delta, Claude-as-cross-family-reviewer) = fable HIGH.
+  critical_junction: { model: fable, effort: high }    # reviews + extraordinary compiles; xhigh ONLY with top_allowed_reason (extraordinary); max NEVER
+  council:           # unsolvable problems / super-important decisions — BOTH families together; last stop before CEO
+    - { model: fable, effort: xhigh }   # council = extraordinary by definition; never max
+    - { model: gpt-5.5-pro, channel: gpt_cloud }
+
+# ── Fable 5 subscription window (CEO ruling 2026-06-11) ─────────────────────────
+fable_window:
+  included_in_subscription_until: 2026-06-22   # official: anthropic.com/news/claude-fable-5-mythos-5 (Availability)
+  until_then: >
+    Make FULL use of Fable: ORCHESTRATOR seats = fable medium · REVIEW seats = fable high
+    (CEO 2026-06-11 second ruling) · xhigh extraordinary-only · max never.
+  from_2026_06_23: >
+    Fable 5 requires paid usage credits on top of the subscription. CEO ruling: IF
+    confirmed credits-only (verify in-app first), Fable is COMPLETELY RETIRED — every
+    fable seat in this file reverts to { model: opus, effort: xhigh } (subagent fields
+    unchanged). First session on/after 2026-06-23: verify, flip the seats, bump the
+    version, re-inject open cards (profiles_hash changes).
+
+# ── GPT seat ladder (CEO ruling 2026-06-10) — MIRRORS the Claude ladder ──────────
+# gpt-5.5-pro (cloud) is treated like Fable 5: the family's best, reserved for critical
+# junctions. The scarce resource differs (cloud = CEO's paste attention, not tokens) but
+# the discipline is the same. "Planning has to be done by the best of the best."
+# CLARITY (PROP-014 fold, GPT rider d): gpt-5.5-pro is a REVIEW/critical-junction CHANNEL
+# (CEO paste), never a normal orchestrator seat — cx check state fail-closes a launched
+# orchestrator that outranks the seat below unless an explicit top_allowed_reason is recorded.
+gpt_seat_ladder:
+  normal:            { model: gpt-5.5, effort: xhigh, channel: codex_cli_or_mcp }   # everyday cross-review workhorse: module-boundary reviews + routine cross checks during build
+  critical_junction: { model: gpt-5.5-pro, channel: gpt_cloud }   # planning/architecture + full-construction-docs reviews · card-deck audit · final-ready / full-product review · big reviews · council seat
+  at_weekly_limit:   ALL GPT seats swap to gpt_cloud (gpt-5.5-pro via CEO paste) until the limit resets — never silently skipped, never downgraded
+
+# ── Session orchestrator seats (per stage; chosen by CEO at app launch) ─────────
+orchestrator:
+  planning_studio:
+    claude_code: { model: fable, effort: medium }      # CEO 2026-06-11: orchestrator = fable med (window); escalation needs top_allowed_reason. From 2026-06-23 -> opus xhigh (fable_window)
+    codex_app:   { model: gpt-5.5, effort: high }      # GPT: judgment-heavy deck work; xhigh NOT default (5.5-Pro cloud is the review channel)
+  build_factory:
+    claude_code: { model: fable, effort: medium }      # CEO 2026-06-11: orchestrator = fable med (window). From 2026-06-23 -> opus xhigh (fable_window)
+    codex_app:   { model: gpt-5.5, effort: medium }    # GPT: reliable conductor; high only when a card marks high-risk/ambiguous
+
+# ── Role table (per-card seats; compiler picks the row by card mode + risk) ─────
+# claude_code.subagent = real agent types in the CEO's Claude Code roster (~/.claude/agents).
+# codex_app.agent = generic built-in seat names (default | worker | explorer) — never invent
+# custom rosters that don't exist in the app (fictional rosters drift; GPT P3 2026-06-10).
+# GPT branch filled by GPT 5.5 Pro (own family, cost-effective not cheapest), 2026-06-10.
+roles:
+  explorer:            # file/route mapping, grep catalogue (read-only, mechanical)
+    claude_code: { subagent: Explore,            model: haiku }
+    codex_app:   { agent: explorer,              model: gpt-5.3-codex-spark, effort: low }   # mechanical only; writes no app code
+  implementer:         # writes app code (MODULE_BUILD / FIX cards) — never below this floor
+    standard:
+      claude_code: { subagent: general-purpose,  model: sonnet }
+      codex_app:   { agent: worker,              model: gpt-5.5, effort: medium }   # GPT: 5.5-medium more first-pass-reliable than 5.4 for app code (cost-effective rule)
+    high_risk:         # foundation_checkpoint_required cards (money/auth/shared-data-shape/secrets)
+      claude_code: { subagent: general-purpose,  model: opus }
+      codex_app:   { agent: worker,              model: gpt-5.5, effort: high }     # no xhigh unless STOP/extraordinary
+  check_runner:        # cx check, tests, build pipeline, evidence paths (mechanical)
+    claude_code: { subagent: build-validator,    model: haiku }
+    codex_app:   { agent: worker,                model: gpt-5.3-codex-spark, effort: low }
+  runtime_verifier:    # runs the app as a user; acceptance + golden-screenshot mechanics
+    claude_code: { subagent: verify-app,         model: sonnet }
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }
+  design_fidelity:     # deterministic locked-design vs screenshot delta (Mode A)
+    claude_code: { subagent: design-fidelity-gate, model: haiku }   # Bash/Read/Glob/Grep only
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }   # more visual judgment than spark, less than 5.5-high
+  slop_removal:        # post-build AI-slop strip (dead code, over-abstraction)
+    claude_code: { subagent: code-simplifier,    model: sonnet }
+    codex_app:   { agent: worker,                model: gpt-5.4, effort: medium }
+  self_review:         # same-family module review (fires once per module, G5) — a CRITICAL JUNCTION
+    claude_code: { subagent: staff-reviewer,     model: fable, effort: high }  # CEO 2026-06-11: self review = Fable 5 HIGH (bounded: once per module; xhigh extraordinary-only; max NEVER)
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high }    # justified once per module, not per card
+  security_delta:      # focused security review when a card's tripwire fires
+    claude_code: { subagent: anthropic-cross-review, model: fable, effort: high }  # CEO 2026-06-11: review = fable high (window; sunset -> opus xhigh); top reason: security_privacy
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high }
+  scribe:              # cost log, capsule draft, status summary, evidence index (mechanical)
+    claude_code: { subagent: claude,             model: haiku }
+    codex_app:   { agent: worker,                model: gpt-5.3-codex-spark, effort: low }
+  stop_diagnosis:      # ambiguous failure after self-heal ladder stalls
+    claude_code: { subagent: oncall-guide,       model: opus, effort: xhigh }   # normal; can't-solve -> claude_seat_ladder (fable high -> council)
+    codex_app:   { agent: default,               model: gpt-5.5, effort: high,
+                   escalation: { model: gpt-5.5, effort: xhigh, only_if: "local Codex diagnosis unavoidable AND gpt_cloud handoff impractical" } }
+  card_compiler:       # planning studio; top reason: card_compilation
+    claude_code: { seat: session,                model: fable, effort: medium }   # follows the session orchestrator seat (window; sunset -> opus xhigh); extraordinary scope -> fable high per claude_seat_ladder
+    codex_app:   { seat: session,                model: gpt-5.5, effort: high }    # xhigh only for extraordinary packet ambiguity
+
+# ── Cross-family seats + availability ladder (weekly-limit reality) ─────────────
+cross_family:
+  builder_claude__reviewer_gpt:   # routed per gpt_seat_ladder (CEO 2026-06-10)
+    normal_module_review: { channel: codex_cli_or_mcp, model: gpt-5.5, effort: xhigh, note: "module-boundary cross-reviews + routine cross checks during build, directly from the CLI; agents codex-cross-review / codex-cross-verify. Within weekly limits only." }
+    critical_junction:    { channel: gpt_cloud, model: gpt-5.5-pro, note: "planning/architecture + full-construction-docs reviews · card-deck audit · final-ready / full-product review · big reviews · council seat. UNLIMITED + strongest (CEO: much smarter than 5.5 xhigh). Manual: CEO pastes packet (Desktop packet rule)." }
+    at_weekly_limit:      { channel: gpt_cloud, model: gpt-5.5-pro, note: "Codex limit hit -> ALL GPT review seats swap to cloud until reset. NEVER silently skipped, never downgraded." }
+    last_resort:          { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "gpt_cloud also impractical (CEO away) -> CodeRabbit keeps the build moving; standing auth PROP-013-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
+  builder_codex__reviewer_claude:
+    1: { channel: claude_code,     per: claude_seat_ladder, note: "window: review = fable high (xhigh extraordinary-only, max never); post-sunset = opus xhigh; unsolvable/super-important = council (fable xhigh + gpt-5.5-pro cloud). Agents anthropic-cross-review / anthropic-cross-verify." }
+    at_weekly_limit: { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "Claude family limited (NO unlimited Anthropic cloud exists) -> CodeRabbit keeps the build moving; standing auth PROP-013-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
+
+coderabbit:
+  what: AI code-review product, CLI available to BOTH engines; free tier acceptable.
+  qualifies_as_cross_family: NO   # FAIL-CLOSED: its backing model family is opaque/mixed, so it can
+                                  # never SATISFY the opposite-family checkpoint (which requires a known family).
+  cheap_review_option: >
+    CEO 2026-06-10: CodeRabbit is a named CHEAP code-review tier — and it catches REAL CODE
+    AND LOGIC bugs, not just lint. Do NOT look down on it. Run it on a module's diff BEFORE
+    the paid model review when available: findings absorbed early mean the frontier review
+    spends its tokens on what only a frontier model can see. Advisory; findings join the
+    module's single fix batch (one-and-done discipline unchanged).
+  mechanical_gate_fallback: >
+    CEO 2026-06-10: if the MECHANICAL gates themselves have a problem (cx check bug/gap,
+    a checker that cannot run), CodeRabbit may stand in as the mechanical layer — INCLUDING
+    for higher risk tiers — BEFORE escalating to frontier-model review. It BRIDGES the gap;
+    it never replaces the frontier/cross-family review that still follows, and the gate
+    problem itself is logged as a Kaizen incident (fix the gate — the bridge is temporary).
+  family_at_limit_fallback: >
+    CEO 2026-06-10: when the review family's session/weekly limit is hit — and, on the GPT
+    side, the gpt_cloud paste channel is impractical too (CEO away); note the Anthropic
+    family has NO unlimited cloud equivalent — CodeRabbit reviews the module so THE BUILD
+    KEEPS PROGRESSING instead of stalling. STANDING CEO authorization: cite
+    ceo_authorization_ref: PROP-013-standing-2026-06-10 (no fresh CEO ping needed). Still an
+    IOU like any substitution: opens CROSS_FAMILY_RECHECK_PENDING (P2) which blocks
+    FINAL-READY (ship) — never the build — until the real opposite family re-reviews after
+    the limit resets.
+  standing_role: >
+    SUPPLEMENTARY review harness at every module boundary when available — a third,
+    different HARNESS (own pipeline + static analysis + different prompting) catches what
+    both model families miss. Findings are ADVISORY: they join the module review's single
+    fix batch; CodeRabbit being down/rate-limited never blocks a gate.
+  privacy: >
+    Diffs egress to CodeRabbit's cloud. LESSON-PRIVACY-001 scrub rule applies; NEVER run it
+    on diffs containing secrets or real personal/money data (those should not exist in diffs anyway).
+
+# ── Work-order injection (the delivery mechanism) ───────────────────────────────
+work_order_injection:
+  block_name: execution
+  injected_by: card_compiler
+  example: |
+    execution:                                  # injected from BUILD-ENGINE-PROFILES.yaml
+      profiles_hash: <sha256-12>                # REQUIRED field — cx check card rejects a mismatch (GPT P2 2026-06-10)
+      role: implementer
+      model_tier: standard
+      claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
+      codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
+      limits: { max_parallel_subagents: 4, max_depth: 1 }
+  rule: whichever engine is active (per CODE-X-STATE.active_build_engine) follows ITS branch verbatim.
+
+# ── cx check clauses (BUILT + BITING 2026-06-10 — see ENFORCEMENT STATUS header for clause ids) ─
+cx_check_clauses:
+  card_side:   # cx check card
+    - card without execution block -> REJECT
+    - execution.profiles_hash missing or != current BUILD-ENGINE-PROFILES.yaml hash -> REJECT (re-inject remaining cards)
+    - execution model/effort value not found in this file's branch for that role -> REJECT
+    - mini/spark/haiku-class model in an implementer (app-code) seat -> REJECT   # code_writing_floor, family-neutral (adapted from GPT)
+    - execution.limits exceed file limits (depth>1, parallel>4) -> REJECT
+    - model_tier top/high/xhigh/max without a top_allowed_reason -> REJECT (existing ROUTING rule, now mechanical)
+    - CodeRabbit recorded as a SATISFIED cross-family checkpoint -> REJECT (stand-in = IOU only)
+  state_side:  # cx check state
+    - state.active_build_engine missing or not in enum -> FAIL
+    - state.orchestrator_model/effort exceeds this file's seat for the active engine + stage, without a top_allowed_reason -> FAIL   # adapted from GPT (orchestrator lives in state, not cards)
+
+# ── ROUTING reword — APPLIED at fold 2026-06-10 ─────────────────────────────────
+# The old cheap-by-default wording -> "COST-EFFECTIVE by default" swept across ROUTING.md +
+# KERNEL.md + START-HERE.md (rule-bearing canon). CHARTER.md history left as written (append-only).
+# Registry single-source entry: APPLIED 2026-06-10 (rule-registry.yaml id cost-effective-by-default).
+
+# ── Fix-escalation ladder (PROP-021, folded 2026-06-12) ─────────────────────────
+# GATES carries the rule [RULE:fix-escalation-ladder]; THIS file owns the exact seats
+# (single-source per PROP-013). Attempt history lives in CODE-X-STATE.fix_cycles (state-owned,
+# never card-owned); cards may carry only fix_policy_ref. Escalation never resets
+# loop_budget.review_fix_cycles. Fable-window substitutions + sunset (CEO-D-009/010) apply.
+fix_escalation:
+  ANTHROPIC:
+    fix_1: original_builder_seat
+    fix_2: { model: claude-opus-4-8, effort: high }     # fable_window: fable LOW
+    fix_3: { model: claude-opus-4-8, effort: xhigh }    # fable_window: fable MEDIUM
+    after_fix_3_failure: CROSS_FAMILY_DEBUG_LADDER      # existing 4-failure rule, unchanged
+  CODEX:
+    fix_1: original_builder_seat
+    fix_2: { model: gpt-5.5, effort: high }
+    fix_3: { model: gpt-5.5, effort: xhigh }
+    after_fix_3_failure: CROSS_FAMILY_DEBUG_LADDER
+  enforcement:  # ✅ BUILT 2026-06-12 under cx check state (fix_cycles clauses; EVAL-015)
+    - attempt >=2 whose seat_ref tier is not above the prior attempt's for the active engine -> FAIL
+    - fix_cycles row missing finding_id or source_review_ref -> FAIL
+    - escalation recorded as a loop_budget reset -> FAIL

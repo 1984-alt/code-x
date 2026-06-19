@@ -1,0 +1,42 @@
+# BAD state file — wrong protocol_stamp + counts/items mismatch
+
+project: sample
+protocol_stamp: Code-X v0.13   # WRONG — must be "Code-X V1"
+
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: codex / gpt-5.5
+next_actor: claude-sonnet
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 2    # WRONG: items only has 1 P0
+    p1: 0
+    p2: 0
+    p3: 0
+  items:
+    - id: F-001
+      severity: P0
+      source_card: BUILD-001
+      finding: critical auth bypass
+      owner_card: FIX-001
+      status: OPEN
+      evidence_ref:
+      ceo_acceptance_ref:
+    # Only 1 P0 item but counts says 2 — mismatch
+
+last_commit: abc123def456
+next_action: fix auth bypass
+stop_status: NONE
+
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 0
+  waste_alarm: LOW

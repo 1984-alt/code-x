@@ -1,0 +1,9 @@
+# Typed final cross-family review receipt (fixture). final-ready opens this, sha12-binds it to
+# state.final_cross_family_receipt.receipt_hash, AND reads the decisive fields FROM here to
+# cross-check the state claim — a bound blob of arbitrary bytes is not a review (GPT R2).
+final_cross_family_review:
+  builder_family: gpt
+  reviewer_family: claude     # OPPOSITE of builder — cross-family ship gate
+  verdict: PASS
+  scope: whole-build final review before ship (CEO Option B — cross-family stays last)
+  findings_open: 0

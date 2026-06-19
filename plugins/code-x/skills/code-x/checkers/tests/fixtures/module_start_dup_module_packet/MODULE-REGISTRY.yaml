@@ -1,0 +1,15 @@
+# BAD: a registry with a DUPLICATE module_id (m2 appears before AND after m1). ordered_ids.index('m2')
+# picks the FIRST m2, whose priors are empty — so a card for m2 would skip m1. The order wall must
+# fail-closed on duplicate module_ids: module order must be unambiguous (GPT R7 P0).
+module_registry:
+  frozen_packet_hash: g1-frozen
+  modules:
+    - module_id: m2
+      dependency_modules: []
+      card_ids: [BUILD-002]
+    - module_id: m1
+      dependency_modules: []
+      card_ids: [BUILD-001]
+    - module_id: m2
+      dependency_modules: []
+      card_ids: [BUILD-002]

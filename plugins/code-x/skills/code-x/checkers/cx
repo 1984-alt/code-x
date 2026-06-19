@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""cx — Code-X V1 checker CLI.
+Subcommands: card · state · scope · evidence · cost · final-ready · consistency · deck · packet
+            · boot · build-turn · close-turn · evals · design-fidelity   (PROP-018/019 rails)
+Exit 0 = PASS, 1 = FIX-FIRST, 2 = usage error.
+"""
+import argparse
+import os
+import sys
+
+# Make same-directory modules importable when cx is invoked by path (no .py extension).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from cx_card import cmd_card
+from cx_state import cmd_state
+from cx_scope import cmd_scope
+from cx_evidence import cmd_evidence
+from cx_cost import cmd_cost
+from cx_final_ready import cmd_final_ready
+from cx_consistency import cmd_consistency
+from cx_deck import cmd_deck
+from cx_packet import cmd_packet
+from cx_boot import cmd_boot
+from cx_build_turn import cmd_build_turn
+from cx_close_turn import cmd_close_turn
+from cx_evals import cmd_evals
+from cx_design_fidelity import cmd_design_fidelity
+from cx_module_start import cmd_module_start
+from cx_module_acceptance import cmd_module_acceptance
+from cx_module_quality import cmd_module_quality
+from cx_dep_scan import cmd_dep_scan
+from cx_egress import cmd_egress
+from cx_class_sweep import cmd_class_sweep
+
+# ---------------------------------------------------------------------------
+# CLI surface
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="cx",
+        description="Code-X V1 checker. Exit 0=PASS, 1=FIX-FIRST, 2=usage error."
+    )
+    from cx_common import PROTOCOL_VERSION
+    parser.add_argument("--version", action="version", version=f"cx — Code-X V{PROTOCOL_VERSION}")
+    sub = parser.add_subparsers(dest="command", metavar="SUBCOMMAND")
+    sub.required = True
+
+    # cx check <subcommand> ...
+    check_p = sub.add_parser("check", help="Run a specific check")
+    check_sub = check_p.add_subparsers(dest="check_cmd", metavar="CHECK")
+    check_sub.required = True
+
+    # card
+    p_card = check_sub.add_parser("card", help="Validate a work-order card")
+    p_card.add_argument("file", help="Path to WORK-ORDER YAML file")
+    p_card.add_argument("--state", help="Optional: path to CODE-X-STATE.yaml (enables substitution + foundation checks)", default=None)
+    p_card.add_argument("--profiles", help="Path to BUILD-ENGINE-PROFILES.yaml (default: canonical file; CX_PROFILES env overrides for test pinning)", default=None)
+
+    # state
+    p_state = check_sub.add_parser("state", help="Validate a CODE-X-STATE.yaml file")
+    p_state.add_argument("file", help="Path to CODE-X-STATE.yaml")
+    p_state.add_argument("--session-start", dest="session_start", action="store_true",
+                         default=False,
+                         help="Enable git-continuity checks (requires --repo-root)")
+    p_state.add_argument("--repo-root", dest="repo_root", default=None,
+                         help="Path to the git repo root (required with --session-start)")
+    p_state.add_argument("--profiles", help="Path to BUILD-ENGINE-PROFILES.yaml (default: canonical file; CX_PROFILES env overrides for test pinning)", default=None)
+
+    # scope
+    p_scope = check_sub.add_parser("scope", help="Check a diff against a card's allowed/forbidden files")
+    p_scope.add_argument("card", help="Path to WORK-ORDER YAML (for allowed/forbidden lists)")
+    p_scope.add_argument("diff", help="Path to unified diff or plain file list")
+
+    # evidence
+    p_evidence = check_sub.add_parser("evidence", help="Check all evidence_required paths exist and are valid")
+    p_evidence.add_argument("card", help="Path to WORK-ORDER YAML")
+    p_evidence.add_argument("--diff", help="Optional: path to unified diff (enables diff-aware test-edit guard)", default=None)
+
+    # cost
+    p_cost = check_sub.add_parser("cost", help="Validate and roll-up a WORK-ORDER-COST-LOG")
+    p_cost.add_argument("log", help="Path to WORK-ORDER-COST-LOG YAML file")
+
+    # final-ready
+    p_fr = check_sub.add_parser("final-ready", help="Auto-assemble and check FINAL-READY-CERTIFICATE")
+    p_fr.add_argument("state", help="Path to CODE-X-STATE.yaml")
+    p_fr.add_argument("--card", help="Optional: path to WORK-ORDER YAML for evidence check", default=None)
+    p_fr.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="Repo root to resolve the final cross-family receipt path (default: state file's dir)")
+
+    # consistency
+    p_con = check_sub.add_parser("consistency", help="Check all registry rules are present in their appears_in files")
+    p_con.add_argument("--registry", help="Path to rule-registry.yaml (default: checkers/rule-registry.yaml)",
+                       default=None)
+    p_con.add_argument("--strict", action="store_true",
+                       help="Unlisted files carrying key_phrases FAIL instead of WARN (except design-history/)")
+
+    # deck
+    p_deck = check_sub.add_parser(
+        "deck",
+        help="Reverse-coverage gate: every BUILDING requirement must be claimed by a card"
+    )
+    p_deck.add_argument("cards_dir", help="Directory of work-order card YAML files (non-recursive *.yaml)")
+    p_deck.add_argument("packet_dir", help="Frozen packet directory (contains requirements-manifest.yaml by default)")
+    p_deck.add_argument(
+        "--manifest",
+        help="Path to requirements-manifest.yaml relative to <packet-dir> (default: requirements-manifest.yaml)",
+        default=None,
+    )
+
+    # packet
+    p_packet = check_sub.add_parser(
+        "packet",
+        help="Packet-contents floor (PROP-014): coverage map + ledger + completeness audit present and non-thin"
+    )
+    p_packet.add_argument("packet_dir", help="Frozen packet directory")
+
+    # boot (PROP-018: generates the machine-authored boot receipt)
+    p_boot = check_sub.add_parser("boot", help="Generate the session boot receipt (machine-hashed canon + state check)")
+    p_boot.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_boot.add_argument("--repo-root", dest="repo_root", required=True, help="Path to the git repo root")
+    p_boot.add_argument("--out", default=None, help="Receipt path (default: protocol-boot-receipt.yaml next to the state file)")
+    p_boot.add_argument("--handoffs-dir", dest="handoffs_dir", default=None,
+                        help="Handoffs directory (default: <repo-root>/handoffs)")
+    p_boot.add_argument("--profiles", help="Path to BUILD-ENGINE-PROFILES.yaml (CX_PROFILES env overrides for test pinning)", default=None)
+
+    # build-turn (PROP-018: every-card aggregate gate; check/receipt-only, never a runner)
+    p_bt = check_sub.add_parser("build-turn", help="Aggregate per-card gate: card+scope+stale-allowed-files+evidence+consistency+tests+CodeRabbit receipt")
+    p_bt.add_argument("card", help="Path to WORK-ORDER YAML")
+    p_bt.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_bt.add_argument("--repo-root", dest="repo_root", required=True, help="Path to the git repo root")
+    p_bt.add_argument("--diff", default=None, help="Unified diff or file list (default: derived from git diff HEAD + untracked)")
+
+    # close-turn (PROP-018: turn-end gate; typed findings_delta issue-sync)
+    p_ct = check_sub.add_parser("close-turn", help="Turn-end gate: handoff close_turn block + state reconcile + provenance + vault_sync")
+    p_ct.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_ct.add_argument("--handoff", required=True, help="Path to the turn's handoff .md")
+    p_ct.add_argument("--repo-root", dest="repo_root", required=True, help="Path to the git repo root")
+
+    # evals (PROP-018: env-wrapped protocol suites)
+    p_ev = check_sub.add_parser("evals", help="Run run.py + run_contracts.py + consistency --strict env-wrapped")
+    p_ev.add_argument("--checkers-dir", dest="checkers_dir", default=None,
+                      help="TEST-ONLY: alternate checkers tree for the two suites")
+
+    # design-fidelity (PROP-019: ui_marker_manifest vs live DOM + screenshot support)
+    p_df = check_sub.add_parser("design-fidelity", help="Deterministic UI fidelity: marker manifest vs live DOM snapshot + screenshot presence")
+    p_df.add_argument("--manifest", required=True, help="Path to the locked ui_marker_manifest YAML")
+    p_df.add_argument("--dom", required=True, help="Path to the live DOM snapshot (saved HTML / accessibility dump)")
+    p_df.add_argument("--screenshot", required=True, help="Path to the supporting screenshot")
+    p_df.add_argument("--build-vocab", dest="build_vocab", default=None,
+                      help="Optional: YAML of build vocabulary (translation_keys/ui_states/alert_variants) "
+                           "checked against the ui_lock_manifest (PROP-022)")
+    p_df.add_argument("--legacy-migration", dest="legacy_migration", action="store_true", default=False,
+                      help="(V1.10) in-flight project on a legacy ui_marker_manifest: keep the advisory-WARN "
+                           "migration-debt path instead of the new-build P0 block")
+
+    # module-start (V1.10: the order wall — prior required modules must be accepted before module N+1)
+    p_ms = check_sub.add_parser("module-start",
+                                help="Order wall: a module-advancing card may start only if every prior required module is accepted")
+    p_ms.add_argument("card", help="Path to the WORK-ORDER YAML (carries module_id)")
+    p_ms.add_argument("--packet-dir", dest="packet_dir", default=None,
+                      help="Frozen packet dir (CONTAINS the registry + manifest); re-hashed and required == card locked_packet_hash (V1.10)")
+    p_ms.add_argument("--state", default=None, help="Path to CODE-X-STATE.yaml (reads accepted_modules)")
+    p_ms.add_argument("--registry", default=None, help="Path to the frozen MODULE-REGISTRY YAML (must live inside --packet-dir)")
+    p_ms.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="Repo root to resolve prior modules' relative acceptance_refs (default: state file's dir)")
+
+    # module-acceptance (V1.10: the Andon wall — a bound machine receipt before module N+1 unlocks)
+    p_ma = check_sub.add_parser("module-acceptance",
+                                help="Andon wall: a module unlocks the next only with a bound MODULE-ACCEPTANCE receipt (verdict accepted)")
+    p_ma.add_argument("--module-id", dest="module_id", default=None, help="The registry module_id whose acceptance is being verified")
+    p_ma.add_argument("--state", default=None, help="Path to CODE-X-STATE.yaml (reads accepted_modules ref/hash)")
+    p_ma.add_argument("--acceptance", default=None, help="Path to the MODULE-ACCEPTANCE.yaml receipt (default: state's recorded acceptance_ref)")
+    p_ma.add_argument("--repo-root", dest="repo_root", default=None, help="Repo root to resolve a relative acceptance_ref")
+
+    # module-quality (V1.10: the per-module quality bar — conformance + quality card + regression-smoke)
+    p_mq = check_sub.add_parser("module-quality",
+                                help="Per-module quality bar: quality card core four + conformance-to-lock (money/login/data) + regression-smoke (shared shell)")
+    p_mq.add_argument("--acceptance", default=None, help="Path to the MODULE-ACCEPTANCE.yaml receipt")
+    p_mq.add_argument("--registry", default=None, help="Path to the frozen MODULE-REGISTRY YAML (risk_flags + touches_shared_shell)")
+    p_mq.add_argument("--module-id", dest="module_id", default=None, help="The registry module_id whose quality bar is checked")
+
+    # dep-scan (PROP-027: pre-build supply-chain gate — typed dependency_scan receipt)
+    p_ds = check_sub.add_parser("dep-scan",
+                                help="Pre-build supply-chain gate: validate a typed dependency_scan receipt (0 high/critical or CEO waiver; lockfile hash-bound; every manifest scanned)")
+    p_ds.add_argument("receipt", help="Path to the dependency_scan receipt YAML")
+    p_ds.add_argument("--repo-root", dest="repo_root", required=True,
+                      help="Path to the git repo root (lockfiles + manifests resolve under it)")
+
+    # egress (PROP-026: scrub-before-egress gate for a mandatory external reviewer)
+    p_eg = check_sub.add_parser("egress",
+                                help="Scrub-before-egress gate: a raw diff sent to an external reviewer (CodeRabbit) needs an egress_scrub receipt or a sensitive_code_carveout")
+    p_eg.add_argument("diff", help="Path to the diff/patch that would be uploaded")
+    p_eg.add_argument("--target", required=True, help="The external reviewer target (e.g. coderabbit)")
+    p_eg.add_argument("--receipt", default=None,
+                      help="Path to the egress receipt (egress_scrub OR sensitive_code_carveout)")
+
+    # class-sweep (PROP-026: the anti-whack-a-mole self-audit that resolves a whole class without re-review)
+    p_cs = check_sub.add_parser("class-sweep",
+                                help="Validate a class-sweep receipt: a deterministic finding's fix names the class + detection + pre/post hits + positive control + pinning regression test")
+    p_cs.add_argument("receipt", help="Path to the class_sweep receipt YAML")
+
+    args = parser.parse_args()
+
+    dispatch = {
+        "card": cmd_card,
+        "state": cmd_state,
+        "scope": cmd_scope,
+        "evidence": cmd_evidence,
+        "cost": cmd_cost,
+        "final-ready": cmd_final_ready,
+        "consistency": cmd_consistency,
+        "deck": cmd_deck,
+        "packet": cmd_packet,
+        "boot": cmd_boot,
+        "build-turn": cmd_build_turn,
+        "close-turn": cmd_close_turn,
+        "evals": cmd_evals,
+        "design-fidelity": cmd_design_fidelity,
+        "module-start": cmd_module_start,
+        "module-acceptance": cmd_module_acceptance,
+        "module-quality": cmd_module_quality,
+        "dep-scan": cmd_dep_scan,
+        "egress": cmd_egress,
+        "class-sweep": cmd_class_sweep,
+    }
+
+    fn = dispatch.get(args.check_cmd)
+    if fn is None:
+        print(f"Unknown check: {args.check_cmd}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        rc = fn(args)
+    except Exception as e:
+        print(f"FATAL: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

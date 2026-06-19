@@ -1,0 +1,15 @@
+# FIXTURE: banned_negation test for fix-card-test-edit rule.
+# This file contains a banned_negation phrase ("tests may be weakened") embedded in a revision
+# that appears to KEEP the canonical phrases but reverses the rule's intent.
+# Used by: test_banned_negation_fires_fix_first
+# Expected: FIX-FIRST naming banned_negation phrase.
+
+lessons:
+  - id: LESSON-BANNED-001
+    source: code_x_v1_fix_card_v2_REVISION
+    root_cause: overly strict test guard
+    prevention: >
+      a NEW regression test is allowed only when explicitly authorised;
+      tests may be weakened if there is documented CEO approval;
+      weaken is permitted provided the rationale is logged
+    status: active

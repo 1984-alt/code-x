@@ -1,0 +1,19 @@
+# MODULE-REGISTRY — the frozen, ordered list of modules (smallest shippable pieces) for a build.
+# (V1.10 — the foundation of the module_acceptance gate family.)
+#
+# Compiled at CARD COMPILATION (G1) from the locked packet's requirements + the locked-plan order,
+# then FROZEN inside the packet hash — so the set of modules and their order cannot drift after the
+# deck is cut. Without this registry there is no "module N+1" to gate: it is what
+# `cx check module-start` (the order wall) and `cx check module-acceptance` (the Andon wall) read to
+# decide whether the next module may begin. Every build card carries its `module_id`.
+
+module_registry:
+  frozen_packet_hash:          # (V1.10 R4) presence marks the registry FROZEN; the real binding is content-deep — this registry lives INSIDE the frozen packet dir, so editing it changes the packet content hash and breaks cx check module-start (it cannot store its own containing packet's hash — see GATES.md MODULE-START)
+  modules:                     # ORDERED — list order IS the build order; a module may only start once its dependency_modules are accepted
+    - module_id:               # unique, stable id (e.g. M1, M2) — cards reference this
+      title:                   # one plain-English line: what the CEO will see and judge
+      requirement_ids: []      # the manifest requirement IDs this module satisfies (reverse-coverage: every BUILDING req maps to a module)
+      risk_flags: []           # subset of [money, login, data, ui] — drives quality-card depth + the fresh-checker / conformance-to-lock requirement
+      dependency_modules: []   # module_ids that MUST be `accepted` before this one may start (the order wall reads this)
+      card_ids: []             # the work-order card(s) that build this module
+      expected_acceptance_artifacts: []   # what the Andon receipt must reference: live_url, screenshots, quality_card, conformance diff (money/login/data)

@@ -1,0 +1,14 @@
+# BAD fixture: P1-07 — registry with banned_negations that appears in a target file
+# The appears_in file (lessons_meaning_flipped.yaml) contains "may freely edit tests"
+# which is in the banned_negations list for fix-card-test-edit
+# Expected: FIX-FIRST mentioning banned_negation
+
+rules:
+  - id: fix-card-test-edit
+    canonical:
+      - "a NEW regression test is allowed only"
+      - "weaken"
+    key_phrases: ["regression test", "weaken"]
+    banned_negations: ["may freely edit tests", "without authorisation", "tests may be weakened", "freely delete"]
+    appears_in:
+      - checkers/tests/fixtures/lessons_banned_negation.yaml

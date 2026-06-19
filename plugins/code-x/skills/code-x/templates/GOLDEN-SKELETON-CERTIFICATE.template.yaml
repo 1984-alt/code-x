@@ -1,0 +1,23 @@
+# GOLDEN-SKELETON-CERTIFICATE — for the reusable app starter-kit.
+# Charter §4: a golden skeleton (reusable starter so most apps plan only the DELTA) is allowed ONLY with this
+# certificate. Without it, the skeleton may not be reused. Load-on-demand.
+
+skeleton:
+  name:
+  version:
+  date:
+  certified_by:            # actor + family + model
+
+includes:                  # what the skeleton already provides (auth shell, nav, theme, backup, i18n…)
+  -
+excludes:                  # what every new app must still add itself
+  -
+known_limits:              # honest list of what is NOT solved / rough edges
+  -
+
+security_baseline:  PASS | FAIL          # the skeleton's own security/privacy baseline
+visual_shell_quality: PASS | FAIL        # the empty shell already passes the visual gate (no slop)
+backup_restore_proof: PASS | NOT_APPLICABLE | FAIL
+final_ready_cert_ref:                    # path to the skeleton's own FINAL-READY-CERTIFICATE
+
+reuse_status: CERTIFIED | DRAFT          # only CERTIFIED skeletons may seed a new project

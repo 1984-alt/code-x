@@ -1,0 +1,13 @@
+# Fixture registry for P2-05: should find a .yaml carrying key_phrases in --strict mode
+# appears_in: points at lessons_banned_negation.yaml which has the canonical phrases
+# The test checks that .yaml files are also scanned (not just .md)
+
+rules:
+  - id: fix-card-test-edit
+    canonical:
+      - "a NEW regression test is allowed only"
+      - "weaken"
+    key_phrases: ["regression test", "weaken"]
+    banned_negations: ["may freely edit tests"]
+    appears_in:
+      - MEMORY/LESSONS.yaml

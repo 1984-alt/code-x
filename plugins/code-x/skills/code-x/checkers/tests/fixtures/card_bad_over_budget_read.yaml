@@ -1,0 +1,110 @@
+# BAD card: read.required list over budget (too many files)
+
+id: BUILD-007
+mode: MODULE_BUILD
+actor: codex / gpt-5.5
+model_tier: standard
+objective: Build the cx check CLI.
+
+source_map:
+  locked_packet_id: PKT-001
+  locked_packet_hash: abc123
+  source_sections:
+    - file: CX-CHECK-SPEC.md
+      section: Subcommands
+      requirement_ids: [REQ-001]
+  dependency_capsules: []
+
+card_compilation:
+  compiled_by:  { actor: claude-opus, family: claude, model: claude-opus-4, date: "2026-06-09" }
+  audited_by:   { actor: gpt-5.5-pro, family: gpt, model: gpt-5.5, date: "2026-06-09" }
+  audit_status: PASS
+
+actor_record:
+  executor:       { actor: codex, family: gpt, model: gpt-5.5 }
+  self_review:    { required: yes, actor: codex, family: gpt, model: gpt-5.5 }
+  cross_review:
+    required: yes
+    actor: claude-sonnet
+    family: claude
+    model: claude-sonnet-4-6
+    family_substituted: no
+    ceo_authorization_ref:
+    recheck_when_opposite_family_available: no
+  fixer:          { actor: codex, family: gpt, model: gpt-5.5 }
+  final_reviewer: { required: yes, actor: claude-opus, family: claude, model: claude-opus-4 }
+
+family_note:
+  known_quirk: gpt family quirk
+  leash: keep lean
+
+read:
+  required:   # 30 files — over the budget threshold of 25
+    - file01.py
+    - file02.py
+    - file03.py
+    - file04.py
+    - file05.py
+    - file06.py
+    - file07.py
+    - file08.py
+    - file09.py
+    - file10.py
+    - file11.py
+    - file12.py
+    - file13.py
+    - file14.py
+    - file15.py
+    - file16.py
+    - file17.py
+    - file18.py
+    - file19.py
+    - file20.py
+    - file21.py
+    - file22.py
+    - file23.py
+    - file24.py
+    - file25.py
+    - file26.py   # over 25
+    - file27.py
+    - file28.py
+    - file29.py
+    - file30.py
+  forbidden: []
+
+allowed_files: [checkers/cx]
+forbidden_files: [.env]
+allowed_operations: [write-python]
+forbidden_operations: [broad-refactor]
+relevant_invariants: [real-data-only]
+acceptance: [cx --help works]
+evidence_required: [checkers/EVIDENCE-cx-check.md]
+
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no
+
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts:
+    codex: 3
+    claude_cross_family: "4 + final synthesis"
+
+stop_conditions: []
+cost_budget: 40000 tokens
+state_update: set current_card=null
+
+execution:                                  # injected from BUILD-ENGINE-PROFILES (pinned test mirror: profiles_test.yaml)
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
+  codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
+  limits: { max_parallel_subagents: 4, max_depth: 1 }

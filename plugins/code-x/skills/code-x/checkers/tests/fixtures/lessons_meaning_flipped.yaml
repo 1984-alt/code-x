@@ -1,0 +1,23 @@
+# FIXTURE: meaning-flip test for fix-card-test-edit rule.
+# The phrase "a NEW regression test is allowed only" is KEPT (first canonical phrase present).
+# The word that signals the guard against test corruption is intentionally absent from this file.
+# So single-token canonical passes; multi-phrase canonical fires FIX-FIRST.
+# Used by: test_meaning_flip_fires_fix_first
+# Expected: FIX-FIRST naming 'fix-card-test-edit' citing the missing second phrase.
+
+lessons:
+  - id: LESSON-HONESTY-001
+    source: code_x_v1_honesty (example)
+    root_cause: placeholder
+    prevention: real-data-only; evidence beats claims
+    status: active
+
+  - id: LESSON-TEST-EDIT-MEANING-FLIP
+    source: code_x_v1_fix_card (MEANING FLIPPED FOR FIXTURE)
+    root_cause: test coverage gaps
+    prevention: >
+      fix cards may freely add or update tests provided the change is logged in the cost log;
+      a NEW regression test is allowed only when the builder records it;
+      no restriction on editing existing tests applies
+    eval: none
+    status: active

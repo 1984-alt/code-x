@@ -1,0 +1,35 @@
+# PROP-022: locked ui_lock_manifest — planning-authored, opposite-family audited,
+# CEO-accepted, hash-frozen; the builder only consumes it.
+ui_lock_manifest:
+  screen_id: income
+  route: /income
+  audit_status: PASS
+  audit_ref: design-history/income-lock-manifest-audit-2026-06-12.md
+  ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-012
+  lock_hash: 9b5aa88f58ab
+  dom_markers:
+  - id: top_tabs
+  - id: bottom_nav
+  - id: primary_content
+  controls:
+  - data_fn: add_income
+    label: Add income
+    role: button
+  - data_fn: month_picker
+    label: Month
+    role: combobox
+  shell_regions:
+  - selector: '#app-shell'
+    purpose: approved page chrome
+  forbidden_missing:
+  - top_tabs
+  - bottom_nav
+  - add_income
+  translation_keys:
+  - income.title
+  - income.add
+  ui_states:
+  - empty
+  - loaded
+  alert_variants:
+  - error_red

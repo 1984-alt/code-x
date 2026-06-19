@@ -1,0 +1,14 @@
+# PROP-022 BAD: claimed PASS but the log carries a fail_marker
+mode: PROOF
+objective: x
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: unit_suite
+    claimed_verdict: PASS
+    command: python3 -m pytest tests/
+    exit_code: 0
+    log_path: log_proof_green_with_fail.txt
+    expect_contains: ["passed"]
+    fail_markers: ["FAILED"]
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5

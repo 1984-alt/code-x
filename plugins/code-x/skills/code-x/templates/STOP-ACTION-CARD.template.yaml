@@ -1,0 +1,22 @@
+# STOP-ACTION-CARD — the typed output when an actor must STOP.
+# Replaces the old vague "STOP-HARD". A STOP is a clean, typed handoff — it is NEVER "CEO, go debug."
+# Load-on-demand (the kernel/routing point here when a stop fires).
+
+stop_type:            # one of:
+  # CODEX_TO_CLAUDE_HANDOFF   — Codex self-heal ladder exhausted; hand to Claude (carry the dead-ends ledger)
+  # CLAUDE_TO_CODEX_HANDOFF   — Claude hands a bounded backend/test job to Codex
+  # PLANNING_BACKFLOW         — the card/packet is wrong or incomplete; bounce back to the planner/compiler
+  # CEO_DECISION_CARD         — a CEO/product/money/UX decision is missing (never guess it)
+  # SAFETY_BLOCK              — secret risk / P0 danger; stop now
+  # HUMAN_DEV_ESCALATION      — last resort after the 4-failure cross-family ladder; plain-English options only
+
+raised_by:            # actor + family + model
+card_id:              # the card that hit the stop
+date:
+
+reason:               # plain English — what is blocking, no stack traces
+what_is_needed:       # the ONE thing required to resume (a decision, a fix, a credential by name, a re-compile)
+options_for_ceo:      # if CEO_DECISION_CARD: 2-3 plain-English options + the AI's recommendation
+resume_with:          # which card/actor picks up once this is resolved
+
+# HARD RULE: a STOP card never asks the CEO to read code, debug, or interpret an error. (EVAL-004)

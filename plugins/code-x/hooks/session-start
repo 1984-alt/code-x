@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SessionStart hook for the code-x plugin (Claude Code / Cursor / Copilot CLI).
+# Injects a compact Code-X "spine" at every session start so the plugin works
+# out of the box for non-coders: no command to remember, it just loads.
+# The spine guarantees engagement + continuity (iron laws, resume rule, a hard
+# routing directive, the read-order). Full protocol detail is read on demand
+# from the skill folder. Pattern adapted from obra/superpowers (Apache-2.0).
+
+set -euo pipefail
+
+# The injected payload lives beside this script (single source of truth).
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+context_content=$(cat "${SCRIPT_DIR}/session-context.md" 2>&1 || echo "Error reading Code-X session context")
+
+# Escape a string for JSON embedding using bash parameter substitution.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+session_context=$(escape_for_json "$context_content")
+
+# Emit context injection as JSON, matching the field the current host consumes.
+# Cursor: additional_context. Claude Code: hookSpecificOutput.additionalContext.
+# Copilot CLI / SDK standard: additionalContext (top-level).
+# printf (not heredoc) avoids the bash 5.3+ heredoc hang.
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context" | cat
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context" | cat
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$session_context" | cat
+fi
+
+exit 0

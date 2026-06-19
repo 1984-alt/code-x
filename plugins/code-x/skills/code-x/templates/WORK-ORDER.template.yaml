@@ -1,0 +1,114 @@
+# WORK-ORDER (a "card") — the ONE job an actor does this turn.
+# Compiled by the Card Compiler (top model, reads the locked packet once → emits the whole deck),
+# audited by the opposite-family Card Auditor (this IS the pre-build cross-family checkpoint),
+# shape/scope/budget-checked by `cx check card`.
+# Target size: 1,000–1,800 tokens. If it needs more, it is too big — SPLIT it. A big card is a BAD card.
+
+id:                   # e.g. BUILD-003
+mode:                 # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY
+actor:                # who runs it (model + family)
+model_tier:           # cheap | standard | top   (REQUIRED — if blank, the default is NOT top model)
+objective:            # ONE plain sentence: exactly what "done" looks like
+module_id:            # (V1.10) the frozen module_registry id this card builds (module-start gates module order)
+
+# ── WHERE THIS CARD CAME FROM (compiler-set; `cx check card` REJECTS a card missing this) ── [RULE:source-map-required]
+source_map:           # the exact slice of the locked packet this card compresses, so the auditor can TRACE it
+  locked_packet_id:
+  locked_packet_hash: # the packet is FROZEN once cards are cut from it — this hash must still match (no edit-in-place)
+  source_sections:
+    - file:
+      section:
+      requirement_ids: []
+  dependency_capsules: []   # the ONLY prior modules this card may lean on (read as capsules, never in full)
+
+# ── HIGH-RISK FOUNDATION CHECKPOINT (GATES G5 carve-out — MANDATORY, not optional) ──
+foundation_checkpoint_required: no   # compiler sets YES when this is a HIGH-RISK foundation (money/auth/shared-data-shape/secrets) that LATER cards depend on
+foundation_checkpoint_reason:        # REQUIRED when yes. When yes, `cx check card` BLOCKS every dependent card until this card's checkpoint passes.
+
+card_compilation:
+  compiled_by:  { actor: , family: , model: , date: }
+  audited_by:   { actor: , family: , model: , date: }   # OPPOSITE family — this IS the cross-family checkpoint
+  audit_status: PENDING     # PENDING | PASS | FIX_FIRST
+
+# ── WHO DID WHAT (so self-review vs cross-review is never confused; `cx check` asserts cross-family) ──
+actor_record:
+  executor:       { actor: , family: , model: }
+  self_review:    { required: , actor: , family: , model: }      # same family as executor
+  cross_review:                                 # MUST be the OPPOSITE family from executor
+    required:
+    actor:
+    family:
+    model:
+    family_substituted: no                      # yes ONLY when the opposite family is at its limit AND the CEO authorises a stand-in
+    ceo_authorization_ref:                       # REQUIRED when family_substituted: yes
+    recheck_when_opposite_family_available: no   # set yes ONLY when family_substituted: yes
+  fixer:          { actor: , family: , model: }
+  final_reviewer: { required: , actor: , family: , model: }
+  # cx check card REJECTS same-family cross_review UNLESS family_substituted: yes + ceo_authorization_ref.
+  # family_substituted: yes ALSO opens a CROSS_FAMILY_RECHECK_PENDING finding (P2) that BLOCKS final-ready until the recheck is done.
+
+# ── REVIEW DISPATCH (PROP-015) — required: yes when this card IS a review/audit dispatch ── [RULE:review-three-leg-ask]
+review_dispatch:
+  required: no          # yes for review/audit cards; mode REVIEW / FINAL_READY cards MUST set yes (cx check card enforces)
+  review_kind:          # SELF_REVIEW | CROSS_FAMILY | CARD_AUDIT | FINAL_READY | PROTOCOL_CHANGE
+  prompt_ref:           # path to the dispatch-prompt artifact (recommended)
+  three_leg_ask:        # ALL THREE when required: yes — quote how each leg was asked; placeholders (asked/yes/included/N/A/blank) REJECTED
+    continuity:         # must contain "CONTINUITY" (or rely on prompt_ref) — prior review arc carried, or "first review" + architecture fit
+    problems:           # must contain "PROBLEMS" — new findings by severity (P0–P3)
+    approach_improvement:   # must contain "APPROACH/IMPROVEMENT" — how would YOU do this; what are we not seeing
+
+family_note:          # the executor's one-line quirk + leash, INJECTED here by the compiler (so no one opens ROUTING.md)
+  known_quirk:
+  leash:
+
+execution:            # INJECTED by the compiler from BUILD-ENGINE-PROFILES.yaml — DUAL branch so the deck survives a mid-project engine switch
+  profiles_hash:      # sha256-12 of BUILD-ENGINE-PROFILES.yaml at injection; missing/stale = `cx check card` REJECTS (re-inject)
+  role:               # implementer | explorer | check_runner | runtime_verifier | design_fidelity | slop_removal | self_review | security_delta | scribe | stop_diagnosis
+  claude_code: { subagent: , model: , effort: }
+  codex_app:   { agent: , model: , effort: }
+  limits: { max_parallel_subagents: 4, max_depth: 1 }
+  # the active_build_engine branch is followed verbatim; the other stays dormant, never deleted.
+
+read:
+  required: []        # the ONLY files this card may read (kernel + state are implicit). Keep tiny.
+  forbidden: []       # files explicitly off-limits to read
+  estimate_tokens:    # OPTIONAL — if set, `cx check card` enforces it <= the kernel read ceiling; else falls back to the file-count cap
+allowed_files: []     # the ONLY files this card may EDIT
+forbidden_files: []   # never touch (e.g. live production data, secrets, test files during a fix UNLESS the card authorises a new regression test)
+allowed_operations: []    # e.g. add-component, write-test, run-test
+forbidden_operations: []  # e.g. edit-scoring-config, broad-refactor, add-dependency
+
+relevant_invariants: []   # global rules the compiler injects (real-data-only, secrets-by-name, no-live-writes, ...)
+
+acceptance: []        # checkable criteria. For UI cards: the golden screenshot + click-path items.
+evidence_required: [] # exact paths/outputs that PROVE acceptance (no "should work")
+
+fix_test_edits:         # FIX cards only — proves tests were not weakened / deleted / score-gamed
+  allowed: no           # yes ONLY if the card explicitly authorises a NEW regression test
+  reason:
+  touched_test_files: []        # `cx check scope/evidence` verifies these against the REAL diff
+  regression_test_evidence: []
+
+# SET BY THE COMPILER from the packet + allowed_files; verified by `cx check` against the real diff.
+# The builder may EXPLAIN these, but is not the sole source of truth (closes the self-attestation hole).
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no
+  # ANY yes -> security_delta_required (a focused security review of just this card's diff)
+
+loop_budget:          # TWO different loops — do not conflate them
+  review_fix_cycles: 1          # one-and-done: review once → fix ONE batch → verify once → STOP. Never re-review-grind.
+  verification_passes: 1
+  third_review_loop_allowed: false   # the hard anti-grind lock
+  self_heal_attempts:           # bounded TECHNICAL auto-retry (a DIFFERENT loop from review)
+    codex: 3                    # 3 attempts → STOP card → hand to Claude
+    claude_cross_family: "4 + final synthesis"
+stop_conditions: []   # when to raise a typed STOP-ACTION-CARD (out of scope · ambiguous CEO/product/money decision · secret risk · budget hit · same-family-only handoff). Types: templates/STOP-ACTION-CARD.template.yaml
+cost_budget:          # soft target (tokens/loops). On completion, actuals + waste_flags append to WORK-ORDER-COST-LOG.
+
+state_update:         # what this card MUST write back to CODE-X-STATE.yaml when done (the file handoff)

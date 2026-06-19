@@ -1,0 +1,14 @@
+# BAD: m1 is a money module but carries NO conformance_evidence_refs (free-text answer only) -> P1 conformance.
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs: []
+  quality_card:
+    security: most-secure-way — parameterized queries
+    efficient: no gold-plating
+    regression: PASS
+    tests: critical paths covered
+    conformance: conforms to TRD §4 (asserted, no extracted diff)
+  ts: "2026-06-13T16:00:00+00:00"

@@ -1,0 +1,7 @@
+# BAD — scrub receipt not bound to THIS diff (stale/forged hash).
+egress_scrub:
+  target: coderabbit
+  diff_hash: "deadbeef0000"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 1
+  produced_at: "2026-06-18T09:00:00Z"

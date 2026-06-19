@@ -1,0 +1,4 @@
+build_vocabulary:
+  translation_keys: [income.title, income.add]
+  ui_states: [empty, loaded]
+  alert_variants: [error_red]

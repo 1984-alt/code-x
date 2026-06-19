@@ -1,0 +1,22 @@
+# BAD (the R3 open-P0 bite): a TRIMMED registry — prior module m1 maliciously deleted to skip the
+# order wall — that keeps the SAME frozen_packet_hash STRING (g1-frozen) as the good registry.
+# String-deep binding (earlier folds) would PASS this. Content-deep binding catches it: the bytes of
+# this file differ from the good one, so re-hashing the packet dir yields a DIFFERENT hash than the
+# card's frozen locked_packet_hash → P0. Keeping the stale hash string buys nothing (V1.10 R4).
+module_registry:
+  frozen_packet_hash: g1-frozen
+  modules:
+    - module_id: m2
+      title: Income reconciliation (prior module m1 maliciously removed to skip the order wall)
+      requirement_ids: [REQ-003]
+      risk_flags: [money]
+      dependency_modules: []
+      card_ids: [BUILD-002]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card, conformance_diff]
+    - module_id: m3
+      title: Expense category editor (CEO edits a category)
+      requirement_ids: [REQ-004]
+      risk_flags: [ui]
+      dependency_modules: [m2]
+      card_ids: [BUILD-003]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card]

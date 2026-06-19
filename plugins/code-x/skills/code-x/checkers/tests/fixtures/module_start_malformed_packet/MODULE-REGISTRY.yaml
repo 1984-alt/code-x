@@ -1,0 +1,11 @@
+# BAD: the FIRST registry row is malformed (no module_id) — silently skipping it would drop a real
+# prior module from the order, letting the later m2 start prior-less. The order wall must fail-closed
+# on any malformed row (GPT R8 P0).
+module_registry:
+  frozen_packet_hash: g1-frozen
+  modules:
+    - title: prior module with no module_id (must NOT be silently dropped)
+      dependency_modules: []
+    - module_id: m2
+      dependency_modules: []
+      card_ids: [BUILD-002]

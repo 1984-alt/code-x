@@ -1,0 +1,10 @@
+# BAD (PROP-028): a valid-looking acceptance receipt that OMITS repo_sha_before and carries no typed
+# legacy_no_baseline carve-out → P1. Without the build baseline the phantom-completion guard cannot
+# prove a real change shipped (a green receipt for nothing built).
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  generated_by: cx-accept
+  quality_card_hash: qc0011223344
+  state_sha_before: 9f8e7d6c5b4a
+  ts: "2026-06-19T00:00:00+00:00"

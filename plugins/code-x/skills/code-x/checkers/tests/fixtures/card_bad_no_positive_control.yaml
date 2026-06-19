@@ -1,0 +1,13 @@
+# PROP-022 BAD: money_invariant acceptance claim with green run only — no red run
+mode: PROOF
+objective: x
+evidence_claims:
+  - claim_id: CLM-001
+    claim_type: money_invariant
+    claimed_verdict: PASS
+    command: python3 tests/test_money.py
+    exit_code: 0
+    log_path: log_proof_green.txt
+    expect_contains: ["ALL CHECKS PASS"]
+    produced_at: 2026-06-12T08:00:00+07:00
+    produced_by: builder gpt-5.5

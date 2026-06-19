@@ -1,0 +1,11 @@
+# deck_bad_not_building_no_ref fixture card — covers REQ-001; REQ-002 NOT_BUILDING missing ceo_decision_ref
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-DECK-BAD-REF
+  locked_packet_hash: c3eca3a02b908d73b7a143f0b58cb35c030c4018d222a71cc7b158b36e9554dc
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-001]

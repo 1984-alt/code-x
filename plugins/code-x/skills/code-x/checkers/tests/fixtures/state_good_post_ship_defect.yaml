@@ -1,0 +1,44 @@
+# GOOD: a post-ship CEO-found defect recorded in open_findings (found_post_ship + found_by) [V1.10].
+
+project: sample
+protocol_stamp: Code-X V1
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-FIX-001
+current_actor: codex / gpt-5.5
+next_actor: claude-sonnet (cross-review)
+build_authorized: true
+mode_a_status: NOT_APPLICABLE
+open_findings:
+  counts:
+    p0: 0
+    p1: 1
+    p2: 0
+    p3: 0
+  items:
+  - id: F-PS-001
+    severity: P1
+    source_card: SHIPPED
+    finding: income total off by one on the last day of the month
+    owner_card: BUILD-FIX-001
+    status: OPEN
+    found_post_ship: true
+    found_by: ceo
+    should_have_been_caught_by: regression-smoke
+last_commit: abc123def456
+next_action: triage F-PS-001 into a fix module
+stop_status: NONE
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+review_boundary:
+  deterministic_checks_each_card: 'yes'
+  coderabbit_before_self_review: not_applicable
+  self_review_boundary: module
+  cross_family_boundary: final

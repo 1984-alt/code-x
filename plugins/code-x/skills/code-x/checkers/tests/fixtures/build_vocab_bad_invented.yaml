@@ -1,0 +1,5 @@
+# PROP-022 BAD: the build invented a translation key + alert variant not in the lock
+build_vocabulary:
+  translation_keys: [income.title, income.add, income.fancy_new_caption]
+  ui_states: [empty, loaded]
+  alert_variants: [error_red, warning_orange]

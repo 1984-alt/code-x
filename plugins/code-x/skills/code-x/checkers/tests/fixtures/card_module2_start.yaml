@@ -1,0 +1,9 @@
+# GOOD: card for module m2 — order wall PASSES when its prior required module (m1) is accepted.
+id: BUILD-002
+mode: MODULE_BUILD
+module_id: m2
+objective: Build the income reconciliation screen module.
+source_map:
+  # = sha256 over module_start_good_packet/ (manifest + module-registry.yaml). The order wall
+  # re-hashes that packet dir and requires it == this value (V1.10 R4 content-deep binding).
+  locked_packet_hash: b295c33dcd55a019c583bb8797a00e0fab4217aa000e079cbb4211b51bb2ed1c
