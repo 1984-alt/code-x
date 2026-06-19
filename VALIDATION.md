@@ -2,6 +2,8 @@
 
 Code-X has been used by the author across **two real personal projects** before public release — a personal-finance tracker and a small-business operations dashboard. (Both are private; they're described here by category only.)
 
+**Scope note:** Code-X's rules were shaped across *many* attempted builds over time — including failed and abandoned ones, which is where its weaknesses surfaced. The validation below is narrower and more honest: the **current public version** was tested on fresh rebuilds of these two projects before release — not on every project that shaped it.
+
 ## What it helped catch
 
 - **spec drift** — the build quietly wandering from what was agreed

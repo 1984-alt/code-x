@@ -10,13 +10,13 @@
 
 **A way for non-coders to get software they can trust out of AI: you direct, the AI builds, and built-in checks catch the corners it quietly cuts.**
 
-Because a non-coder can't fix bugs by hand, Code-X tries to catch as many as it can — many layers of review, not few. The catch is cost: those AI reviews are metered and add up fast. So Code-X runs cheap mechanical checks first and stops the reviews from looping, to keep all that coverage affordable. **Keep the coverage, kill the loops.**
+Because a non-coder can't fix bugs by hand, Code-X tries to catch as many as it can — many layers of review, not few. The catch is cost: those AI reviews are metered and add up fast. So Code-X runs cheap mechanical checks first and stops the reviews from looping — cutting the review waste that makes heavy coverage expensive. **Keep the coverage, kill the loops.**
 
 ---
 
 ## What is this
 
-Code-X started from real vibe-coding: sometimes it worked, sometimes it fell apart — and fixing the mess by vibes alone didn't work. What *did* work was turning it into a **protocol** — a way of working, refined over many projects, with one job: to make what you vibe-code come out **as close to your original vision as possible.**
+Code-X started from real vibe-coding across many attempted projects — some worked, many failed. The failures kept exposing the same pattern: the AI drifting from the plan, skipping evidence, calling things "done" too early, and burning time in repeated review loops. Fixing that by vibes alone didn't work — so it became a **protocol**, shaped by those scars, with one job: to make what you vibe-code come out **as close to your original vision as possible.** The current public version was then tested on fresh rebuilds of two real personal projects, where it finally landed much closer to what the author wanted than earlier attempts did.
 
 The thing it fights is **drift** — the AI quietly wandering away from what you actually pictured. If you can't read code, you won't notice until it's already wrong. Code-X fights drift from both ends:
 
@@ -86,7 +86,7 @@ Code-X runs four review stages (mechanical checks → CodeRabbit (an automated c
 
 ## Relation to Spec-Driven Development (SDD)
 
-I built Code-X independently, from hands-on pain with AI coding agents — I didn't know Spec-Driven Development existed. I later discovered Code-X converges with it (Spec Kit, Kiro, BMAD). This isn't a precedence claim — SDD has been public since 2025 — it's independent invention. And honestly, the convergence is a good sign the shape is right: arriving at the same architecture as a large, established movement, alone and from pure trial-and-error, is evidence the design instinct holds.
+I built Code-X independently, from hands-on pain with AI coding agents — I didn't know Spec-Driven Development existed. I later discovered Code-X converges with it (Spec Kit, Kiro, BMAD). This isn't a precedence claim — SDD has been public since 2025 — it's independent invention. And honestly, the convergence is reassuring: arriving at the same architecture as a large, established movement, alone and from pure trial-and-error, is a useful sign the problem shape is real.
 
 The spine is the same idea arrived at twice:
 
@@ -180,6 +180,8 @@ codex plugin add code-x@code-x
 > Prefer clicking? Inside a `codex` session run `/plugins`, find **Code-X**, and Install — or add the repository through the Codex app's **Plugins** panel (the **+** button). The two terminal commands above are the route confirmed working.
 
 That's it — no setup to remember. Code-X turns itself on: a SessionStart hook (on by default) loads the Code-X entrypoint at the start of every session, so the AI plans-then-builds without you having to invoke anything. It also checks for an existing handoff and resumes where you left off.
+
+*A precise note, so this doesn't oversell: that auto-loads the protocol **guidance** at the start of each session — it is not yet a full, hands-off autonomous build loop that runs across sessions on its own. That remains on the roadmap below.*
 
 > **Codex (one-time approval):** Codex gates every plugin's hooks behind a trust prompt. The first time, Codex asks you to approve Code-X's session-start hook — approve it once. The auto-load then activates **from your next session onward** (the approval lands after the current session already started). This is standard Codex behavior, the same for any plugin hook. On Claude Code it's on immediately, no prompt.
 
