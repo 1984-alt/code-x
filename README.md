@@ -4,6 +4,10 @@
 
 # Code-X
 
+[![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![protocol](https://img.shields.io/badge/protocol-v1.12-orange.svg)
+
 **A way for non-coders to get software they can trust out of AI: you direct, the AI builds, and built-in checks catch the corners it quietly cuts.**
 
 ---
