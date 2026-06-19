@@ -1,0 +1,2 @@
+FIX-FIRST
+  [P0] examples/tip-split/packet/requirements-manifest.yaml — requirement 'REQ-004' disposition=BUILDING but appears in NO card's requirement_ids — dropped at compile

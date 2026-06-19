@@ -188,6 +188,18 @@ The checker requires Python 3 and PyYAML (see Prerequisites). No other setup.
 
 ---
 
+## Worked example
+
+[`examples/tip-split/`](examples/tip-split/) is a tiny project you can run in under a minute. A clean card deck passes `cx check deck`; drop one requirement's card and `cx` catches it — a `[P0]`, the exact failure Code-X exists to prevent (a requirement silently dropped when the plan is compiled). Reproduce it:
+
+```bash
+bash examples/tip-split/run.sh
+```
+
+The captured output of both runs is in [`examples/tip-split/receipts/`](examples/tip-split/receipts/), so you can see the result without running anything.
+
+---
+
 ## Roadmap / Help wanted
 
 Code-X welcomes contributions. The headline open item is an **Autonomous Build/Session Loop** — a policy layer that drives the build stage hands-off and stops only when human input is genuinely required (a real gate or a decision the locked plan didn't pre-decide). See [HELP-WANTED.md](HELP-WANTED.md) for the full spec, guardrails, and why it's a good contribution to pick up.

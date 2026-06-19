@@ -1,0 +1,12 @@
+# tip-split — frozen requirements manifest
+# Rule: every requirement marked BUILDING must be covered by at least one card.
+# `cx check deck` proves that mechanically (reverse coverage).
+requirements:
+  - id: REQ-001   # subtotal: sum each person's ordered items
+    disposition: BUILDING
+  - id: REQ-002   # tip: apply a shared tip percentage to the bill
+    disposition: BUILDING
+  - id: REQ-003   # split: divide the total by what each person ordered
+    disposition: BUILDING
+  - id: REQ-004   # rounding: round each share to the nearest unit + reconcile the remainder
+    disposition: BUILDING

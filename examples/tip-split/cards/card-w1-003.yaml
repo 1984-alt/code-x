@@ -1,0 +1,11 @@
+# tip-split card — covers REQ-003 (split by order)
+id: BUILD-W1-003
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_id: PKT-TIP-SPLIT
+  locked_packet_hash: 3d0fa55c8d0e4ad49a7e2180fe9f7e11abe992aa7379ec3097f207dfd62b5811
+  source_sections:
+    - file: spec-summary.md
+      section: Wave W1
+      requirement_ids: [REQ-003]
