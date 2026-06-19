@@ -10,6 +10,8 @@
 
 **A way for non-coders to get software they can trust out of AI: you direct, the AI builds, and built-in checks catch the corners it quietly cuts.**
 
+Because a non-coder can't fix bugs by hand, Code-X tries to catch as many as it can — many layers of review, not few. The catch is cost: those AI reviews are metered and add up fast. So Code-X runs cheap mechanical checks first and stops the reviews from looping, to keep all that coverage affordable. **Keep the coverage, kill the loops.**
+
 ---
 
 ## What is this
@@ -62,6 +64,8 @@ I'm an Indonesian vibe-coder who can't read a single line of code. I didn't buil
 
 **If you're a professional engineer:** this was built by AI, directed by someone who can't read a single line of code — *please tear it apart.* Where is it naive, unsafe, or reinventing a wheel? Issues and PRs that challenge the design are the most welcome contribution. The explicit aim is for the community to make it better. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+**A note, in plain honesty:** I'm not a professional engineer, and I can't hand you formal proof that this works — that's not a background I have. What I *can* offer is honest intent and a method shaped by my own mistakes and real use, trying to make each build come out better than the last. I'm sharing it openly in case it helps someone, and so people who know more than I do can make it better. If the missing proof bothers you, that's fair — take what's useful and judge it for yourself.
+
 ---
 
 ## The three principles
@@ -69,6 +73,14 @@ I'm an Indonesian vibe-coder who can't read a single line of code. I didn't buil
 1. **Capability — what it reaches for.** This is one non-coder's attempt at a way of working with AI: you direct an engineering system, it directs the AI, and the hope is software that genuinely works without you debugging it. It's worked well on my own projects — but with a single user and tester (me), so treat it as personally proven, not independently proven: a work-in-progress shared openly, not a finished method.
 2. **Efficiency — because the meter is running.** The AI subscriptions that power this are metered and priced in USD, which is genuinely expensive from Indonesia — so the protocol tries hard not to waste reads, reviews, or loops. Less optimization theater; more "make the waste visible and cut the biggest piece first."
 3. **Kaizen — it tries to improve itself.** Every mistake — and every review — is meant to become a lesson, and every new kind of failure becomes a check that stops it recurring. Borrowed from the Toyota Way; whether it fully holds up is part of what's being tested.
+
+---
+
+## Why so many reviews — and so many mechanical checks before them?
+
+Code-X runs four review stages (mechanical checks → CodeRabbit (an automated code reviewer) → self-review → a cross-family review) because the director is a non-coder who can't fix bugs by hand — so the system maximizes how many bugs get caught. The expensive part was never the *number* of reviews; it was when the AI reviews **loop** (review → fix → re-review → fix…). Code-X attacks that: the free mechanical checks catch the common mistakes up front, and loop-caps + a one-pass "fix the whole class and pin it with a test" rule stop each review from re-looping. **Keep the coverage, kill the loops.**
+
+*(This is the efficiency principle above, put into practice. It's the design intent, and it held on the author's own builds — but the before/after token numbers aren't published yet; see [VALIDATION.md](VALIDATION.md) for what's actually been measured.)*
 
 ---
 
