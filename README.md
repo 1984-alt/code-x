@@ -14,15 +14,16 @@
 
 ## What is this
 
-When you ask an AI to build something, it often cuts corners — skips part of what you asked, then tells you "all done" when it isn't. If you can't read code, you can't catch that. Code-X exists to stop exactly this.
+Code-X started from real vibe-coding: sometimes it worked, sometimes it fell apart — and fixing the mess by vibes alone didn't work. What *did* work was turning it into a **protocol** — a way of working, refined over many projects, with one job: to make what you vibe-code come out **as close to your original vision as possible.**
 
-Here's the whole idea, in plain words:
+The thing it fights is **drift** — the AI quietly wandering away from what you actually pictured. If you can't read code, you won't notice until it's already wrong. Code-X fights drift from both ends:
 
-- **You ask for one small piece at a time** — not the whole app at once. Small pieces are easy to check.
-- **A little checker called `cx` inspects each piece** and refuses to call it "done" if it's broken or half-finished. `cx` is a small program, not another AI — so it can't be talked into saying yes.
-- **A second AI double-checks the first one.** A different AI (Claude and Codex/GPT) reviews the work, because one AI often can't spot its own mistakes.
+- **You pin your vision down first — and lock it.** Long, meticulous planning before any code: what it should do, the decisions, how it looks, what "safe" means. This is the heart of Code-X — most of the effort lives here, because an AI can't build faithfully to a fuzzy idea.
+- **Then the AI builds only that — and is kept honest.** Small pieces at a time; a plain checker program (not another AI) won't pass work that's broken or has drifted from your locked plan; and a second, different AI double-checks.
 
-Code-X is **not** a robot that builds apps for you. It's a *way of working* — some rules, plus that checker — so you can trust what the AI builds even when you can't read a single line of the code.
+The result isn't "perfect software you never look at." It's software that lands **far closer to what you actually wanted** than vibe-coding alone ever got — even if you can't read a line of the code.
+
+*(Honest: it's experimental, proven so far mostly on the author's own projects — personally proven, not publicly proven. The rest of this page is how it works.)*
 
 The name is simply **Claude Code + Codex** — the two AI tools it's built for, and the two AIs that check each other's work.
 
