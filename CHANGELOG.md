@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.12.2]
+
+### Fixed
+- **`cx check card` no longer rejects valid PROOF cards.** `PROOF` is a first-class card mode — `cx check evidence` has dedicated PROOF logic (a PROOF card must carry evidence_claims) and GATES.md treats it as built and biting — but it was missing from the checker's `VALID_MODES` set, so `cx check card` flagged every PROOF card with a spurious `[P1] mode 'PROOF' not in [...]`. Added `PROOF` to `VALID_MODES` (`checkers/cx_common.py`) and a regression test (`test_proof_mode_card_passes`) that runs a good PROOF card through `cx check card` — the test gap was that PROOF fixtures only ran through `cx check evidence`, never `cx check card`. Author-facing mode hints in the WORK-ORDER and STATE templates now list PROOF too. Protocol unchanged (still 1.12) — a checker bugfix only. Found by an external GPT cloud review; fixed via the Code-X process (TDD + cross-family review).
+
+---
+
 ## [1.12.1]
 
 ### Added

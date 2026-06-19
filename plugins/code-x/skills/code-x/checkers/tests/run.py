@@ -52,6 +52,14 @@ class TestCheckCard(unittest.TestCase):
         self.assertEqual(rc, 0, f"Expected PASS (exit 0), got {rc}.\n{out}")
         self.assertIn("PASS", out)
 
+    def test_proof_mode_card_passes(self):
+        # PROOF is a real intended mode — cx_evidence.py branches on mode == "PROOF".
+        # cx check card must accept it, not flag a spurious "mode 'PROOF' not in [...]" P1.
+        rc, out = run_cx("check", "card", fix("card_good_proof.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS (exit 0), got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+        self.assertNotIn("mode 'PROOF' not in", out)
+
     def test_missing_source_map(self):
         rc, out = run_cx("check", "card", fix("card_bad_missing_source_map.yaml"))
         self.assertEqual(rc, 1)

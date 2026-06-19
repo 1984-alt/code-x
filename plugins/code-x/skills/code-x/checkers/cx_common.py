@@ -18,7 +18,7 @@ PROTOCOL_VERSION = "1.12"    # Code-X V1 protocol version (V1.12 = Plain Talk + 
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
-VALID_MODES = {"MODE_A_UI", "MODULE_BUILD", "REVIEW", "FIX", "FINAL_READY"}
+VALID_MODES = {"MODE_A_UI", "MODULE_BUILD", "REVIEW", "FIX", "FINAL_READY", "PROOF"}
 VALID_RESULTS = {"PASS", "FIX_FIRST", "STOP"}
 VALID_REVIEW_MODES = {"NONE", "SCAN", "DELTA", "SLICE", "FULL"}
 VALID_WASTE_FLAGS = {"over_read", "repeated_review", "loop", "wrong_model_tier",

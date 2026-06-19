@@ -5,7 +5,7 @@
 # Target size: 1,000–1,800 tokens. If it needs more, it is too big — SPLIT it. A big card is a BAD card.
 
 id:                   # e.g. BUILD-003
-mode:                 # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY
+mode:                 # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY | PROOF
 actor:                # who runs it (model + family)
 model_tier:           # cheap | standard | top   (REQUIRED — if blank, the default is NOT top model)
 objective:            # ONE plain sentence: exactly what "done" looks like
