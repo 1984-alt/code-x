@@ -98,17 +98,14 @@ Code-X ships as a plugin in its own single-plugin marketplace (this repository).
 /plugin install code-x@code-x
 ```
 
-**Codex** (run the first in your terminal, then the second inside a `codex` session):
+**Codex** (both commands in your terminal):
 
 ```bash
 codex plugin marketplace add 1984-alt/code-x
+codex plugin add code-x@code-x
 ```
 
-```
-/plugins          # find "Code-X" in the list, then Install
-```
-
-> Codex's third-party plugin install is still settling. If `/plugins` doesn't list Code-X, add the repository through the Codex app's **Plugins** panel (the **+** button). Confirm the skill loads before relying on it.
+> Prefer clicking? Inside a `codex` session run `/plugins`, find **Code-X**, and Install — or add the repository through the Codex app's **Plugins** panel (the **+** button). The two terminal commands above are the route confirmed working.
 
 That's it — no setup to remember. Code-X turns itself on: a SessionStart hook (on by default) loads the Code-X entrypoint at the start of every session, so the AI plans-then-builds without you having to invoke anything. It also checks for an existing handoff and resumes where you left off.
 
