@@ -18,9 +18,9 @@
 - **Goal A — ships working software** a non-coder can show users/devs *proudly*.
 - **Goal B — token-efficient** enough that the subscriptions last the *whole week*.
 - **Soul:** a non-coder → professional-team-quality full-stack apps, working from the get-go, **never debugging, never reading stack traces, never accepting "known issues."**
-- **The CEO is an AI-Directed Engineer:** *directs the engineering system that directs the AI* — not the code.
+- **The CEO is an AI build director:** *directs the engineering system that directs the AI* — not the code.
 **The soul in three lines (canonical phrasing — CEO intent, wording refined + approved 2026-06-11; raw CEO words preserved in ledger A-002):**
-1. **Capability** — Code-X turns a non-coder into an **AI-Directed Engineer**: the CEO directs the engineering system, the system directs the AI, and the output is real, working software to the standard of a professional dev team — shipped proudly, never debugged by the CEO, zero "known issues."
+1. **Capability** — Code-X turns a non-coder into an **AI build director**: the CEO directs the engineering system, the system directs the AI, and the output is real, working software to the standard of a professional dev team — shipped proudly, never debugged by the CEO, zero "known issues."
 2. **Efficiency** — token and work efficiency is an **obsession, not a preference**: every read, review, and loop must earn its cost; waste is made visible and the largest source removed first; the subscriptions last the whole week.
 3. **Kaizen** — the protocol **improves itself continuously**: every mistake — *and every review* — becomes a lesson, every new failure-class becomes a mistake-proofing eval, every change leaves the system leaner — the system learns from *how it works*, not only from *what it builds*. *(reviews added at PROP-017 fold 2026-06-11: learning is review-triggered, not only mistake-triggered)*
 

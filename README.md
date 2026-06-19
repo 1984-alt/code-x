@@ -49,7 +49,7 @@ A practical tip: use **`/plan`** — available in both Claude Code and Codex —
 
 ## Who this is for & how you can help
 
-I'm an Indonesian vibe-coder who can't read a single line of code. I didn't build Code-X — I *directed* it: I told Claude what I wanted, Claude did the actual building, and Codex/GPT cross-reviewed the work and drove improvements along the way. That's the whole idea — directing AI to build software you can trust, without writing the code yourself. If that's you too, this is for you.
+I'm an Indonesian vibe-coder who can't read a single line of code. I didn't build Code-X — I *directed* it: I told Claude what I wanted, Claude did the actual building, and Codex/GPT cross-reviewed the work and drove improvements along the way. That's the whole idea — directing AI to build software you can trust, without writing the code yourself. I think of the role as an **AI build director**: like a film director who directs the cast and crew and owns the final cut without operating the camera, you direct the build and own the result without writing the code. If that's you too, this is for you.
 
 **If you're a vibe-coder or non-coder:** here's a way of working you can try today. Install, read `START-HERE.md`, build something. The checker runs on your machine with Python 3.
 
