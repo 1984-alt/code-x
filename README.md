@@ -24,6 +24,8 @@ It came from repeated, painful experience — AI coding assistants (both Claude 
 
 Code-X is an attempt to put guardrails around the AI so a non-coder can trust the output: a planning stage that pins down exactly what to build, a building stage that forces the AI to build *only that* — one small, checkable work-order at a time — deterministic checks that can't be talked around ("green ≠ enforcing"), and cross-family review so one AI's blind spots get caught by another. It was shaped by using it on real projects and folding every failure back into the rules.
 
+See [VALIDATION.md](VALIDATION.md) for what it's caught on real projects so far — and the honest limits of that (single-operator, not yet publicly reproduced).
+
 ---
 
 ## The two stages
