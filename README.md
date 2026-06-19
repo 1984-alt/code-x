@@ -14,11 +14,17 @@
 
 ## What is this
 
-You hand the AI one small, checkable work-order at a time. A tiny program (`cx`) mechanically catches when the AI claims "done" on work that's broken or half-finished — so a non-coder can't be fooled. A second, *different* AI family then reviews what the first one built, to catch blind spots one family can't see in itself.
+When you ask an AI to build something, it often cuts corners — skips part of what you asked, then tells you "all done" when it isn't. If you can't read code, you can't catch that. Code-X exists to stop exactly this.
 
-The name = **Claude Code + Codex** — the two AI coding harnesses Code-X is built for, and the two families that review each other's work (that cross-family idea is the core of Code-X, baked right into the name). Yes, it brushes OpenAI's "Codex"; the overlap is intentional. To find the repo, search **"Code-X 1984-alt"** or go straight to [github.com/1984-alt/code-x](https://github.com/1984-alt/code-x).
+Here's the whole idea, in plain words:
 
-Code-X is a framework — a methodology plus the `cx` checker. It is not a plugin that writes code for you. It is a way of directing AI agents so the output is trustworthy even when you can't read the code yourself.
+- **You ask for one small piece at a time** — not the whole app at once. Small pieces are easy to check.
+- **A little checker called `cx` inspects each piece** and refuses to call it "done" if it's broken or half-finished. `cx` is a small program, not another AI — so it can't be talked into saying yes.
+- **A second AI double-checks the first one.** A different AI (Claude and Codex/GPT) reviews the work, because one AI often can't spot its own mistakes.
+
+Code-X is **not** a robot that builds apps for you. It's a *way of working* — some rules, plus that checker — so you can trust what the AI builds even when you can't read a single line of the code.
+
+The name is simply **Claude Code + Codex** — the two AI tools it's built for, and the two AIs that check each other's work.
 
 ---
 
