@@ -2571,3 +2571,219 @@ clauses:
       expect_contains: "RENDER-FIT-CANNOT-VERIFY"
     good:
       args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: card / close-turn / drift  — PROP-034 lock-fidelity continuity (fold v1.15)
+  # Each clause pins a biting bad fixture (rc=1 at the stated severity) + a good fixture (rc=0).
+  # ──────────────────────────────────────────────────────────────
+
+  - id: LOCK-FIDELITY-FIX-ANCHOR-MISSING
+    check: card
+    kind: gate
+    clause: "a mode: FIX card without a resolving lock_anchor_ref rejected — a fix that cannot name the frozen requirement it restores is freelancing (PROP-034 Lever A)"
+    source: PROP-034 §2 Lever A
+    git_fixture: lf_card_no_anchor
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-FIX-ANCHOR-MISSING"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-DEVIATION-CLASS-MISSING
+    check: card
+    kind: gate
+    clause: "a mode: FIX card without deviation_class rejected — a fix must declare RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE so a departure is never silent (PROP-034 Lever A)"
+    source: PROP-034 §2 Lever A
+    git_fixture: lf_card_no_devclass
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-DEVIATION-CLASS-MISSING"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED
+    check: card
+    kind: gate
+    clause: "deviation_class: SCOPE_CHANGE without BOTH ceo_decision_ref AND packet_amendment_ref rejected — scope not already in the lock cannot be built as a fix (P1 default; P0 on a high-risk class) (PROP-034 Lever A)"
+    source: PROP-034 §2 Lever A / SEVERITY.md
+    git_fixture: lf_card_scope_unauth
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED"
+    good:
+      git_fixture: lf_card_good_scope
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-RESTORE-OVERREACH
+    check: drift
+    kind: gate
+    clause: "a fix card touching files OUTSIDE its anchored card's allowed_files rejected at module-acceptance — deterministic file/path over-reach (PROP-034 Lever C)"
+    source: PROP-034 §2 Lever C
+    git_fixture: lf_overreach
+    bad:
+      args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-RESTORE-OVERREACH"
+    good:
+      git_fixture: lf_overreach_ok
+      args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
+
+  - id: LOCK-FIDELITY-HANDOFF-HASH-MISMATCH
+    check: close-turn
+    kind: gate
+    clause: "a handoff whose lock_pointer.frozen_packet_hash != the RECOMPUTED packet hash rejected — a self-declared hash is never trusted (PROP-034 Lever B)"
+    source: PROP-034 §2 Lever B
+    git_fixture: lf_handoff_hash_mismatch
+    bad:
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-HANDOFF-HASH-MISMATCH"
+    good:
+      git_fixture: lf_handoff_ok
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+
+  - id: LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH
+    check: close-turn
+    kind: gate
+    clause: "a handoff whose lock_pointer.open_cards != the RECOMPUTED deck+state open-card set rejected — the vacuous open_cards: [] forgery is caught (PROP-034 Lever B)"
+    source: PROP-034 §2 Lever B
+    git_fixture: lf_handoff_opencards_mismatch
+    bad:
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH"
+    good:
+      git_fixture: lf_handoff_ok
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+
+  - id: LOCK-FIDELITY-DRIFT-UNLOGGED
+    check: drift
+    kind: gate
+    clause: "a working-set card referencing a requirement_id NOT in the frozen manifest (not an authorized SCOPE_CHANGE fix) rejected at module-acceptance — unlogged scope drift (PROP-034 Lever C, Layer 1)"
+    source: PROP-034 §2 Lever C
+    git_fixture: lf_drift_unlogged
+    bad:
+      args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-DRIFT-UNLOGGED"
+    good:
+      git_fixture: lf_drift_ok
+      args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
+
+  # ── PROP-034 xfam FIX-FIRST hardening (v1.15 fold) — F2/F3/F6/F7/F8 biting fixtures ──────────────
+  - id: LOCK-FIDELITY-ANCHOR-PACKET-HASH-MISMATCH
+    check: card
+    kind: gate
+    clause: "a FIX card whose source_map.locked_packet_hash != the RECOMPUTED hash of state.packet_dir rejected — the fix anchors to a DIFFERENT packet than the live frozen one; a self-declared anchor packet is never trusted (PROP-034 Lever A / F2)"
+    source: PROP-034 xfam F2
+    git_fixture: lf_card_packet_hash_mismatch
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "!= the RECOMPUTED hash of state.packet_dir"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-ANCHOR-CARD-NOT-IN-REGISTRY
+    check: card
+    kind: gate
+    clause: "a FIX card whose lock_anchor_ref.card_id does not resolve to a card in the frozen MODULE-REGISTRY rejected — a fix must anchor to a real frozen card, else the over-reach check skips an unfound anchor (PROP-034 Lever A / F2)"
+    source: PROP-034 xfam F2
+    git_fixture: lf_card_anchor_card_not_in_registry
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "does not resolve to a card in the frozen MODULE-REGISTRY"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-SCOPE-CEO-REF-DANGLING
+    check: card
+    kind: gate
+    clause: "a SCOPE_CHANGE whose ceo_decision_ref does not resolve to a row in the packet CEO-DECISION-LEDGER rejected — a self-declared decision id is not authorization (PROP-034 Lever A / F3)"
+    source: PROP-034 xfam F3
+    git_fixture: lf_card_scope_ceo_ref_dangling
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "does not resolve to a row in the packet CEO-DECISION-LEDGER"
+    good:
+      git_fixture: lf_card_good_scope
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-SCOPE-AMENDMENT-UNSAFE
+    check: card
+    kind: gate
+    clause: "a SCOPE_CHANGE whose packet_amendment_ref is a path-unsafe ref (absolute / '..' / symlink / outside-repo) rejected — the amendment must be a real in-tree file (PROP-034 Lever A / F3)"
+    source: PROP-034 xfam F3
+    git_fixture: lf_card_scope_amend_unsafe
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "packet_amendment_ref"
+    good:
+      git_fixture: lf_card_good_scope
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-SCOPE-DESTRUCTIVE-P0
+    check: card
+    kind: gate
+    clause: "an UNAUTHORIZED SCOPE_CHANGE on a DESTRUCTIVE surface (touches_upload_restore_import) escalates to P0 — the high-risk class the old card_high_risk() missed (PROP-034 Lever A / F3)"
+    source: PROP-034 xfam F3
+    git_fixture: lf_card_scope_destructive_p0
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P0
+      expect_contains: "SCOPE_CHANGE without BOTH ceo_decision_ref AND"
+    good:
+      git_fixture: lf_card_good_scope
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: LOCK-FIDELITY-DEVIATION-STATUS-INVALID
+    check: module-acceptance
+    kind: gate
+    clause: "a lock_deviation row whose status is not OPEN or CEO_REVIEWED (CLOSED/DONE/typo/blank) fails closed at module-acceptance — an unknown status must never slip through as reviewed (PROP-034 / F8)"
+    source: PROP-034 xfam F8
+    git_fixture: lf_accept_status_invalid
+    bad:
+      args: ["--module-id", "m3", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "only ['CEO_REVIEWED', 'OPEN'] are valid"
+    good:
+      git_fixture: lf_accept_status_ok
+      args: ["--module-id", "m3", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: LOCK-FIDELITY-ACCEPTANCE-LAYER1-DRIFT
+    check: module-acceptance
+    kind: gate
+    clause: "module-acceptance fails closed when the live deck has Layer-1 drift — a working-set card referencing an off-manifest requirement_id cannot be accepted (PROP-034 Lever C / F7)"
+    source: PROP-034 xfam F7
+    git_fixture: lf_accept_layer1_drift
+    bad:
+      args: ["--module-id", "m2", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "LOCK-FIDELITY-DRIFT-UNLOGGED"
+    good:
+      git_fixture: lf_accept_layer1_clean
+      args: ["--module-id", "m2", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: LOCK-FIDELITY-SESSION-LOCK-POINTER-REQUIRED
+    check: state
+    kind: gate
+    clause: "a frozen project (state.packet_dir set) booting on a handoff with NO close_turn.lock_pointer fails closed at session-start — a stripped/absent block cannot boot on a drifted lock; only an explicit typed migration row exempts (PROP-034 Lever B / F6)"
+    source: PROP-034 xfam F6
+    git_fixture: lf_session_no_lock_pointer
+    bad:
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "carries NO close_turn.lock_pointer"
+    good:
+      git_fixture: lf_session_lock_pointer_ok
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]

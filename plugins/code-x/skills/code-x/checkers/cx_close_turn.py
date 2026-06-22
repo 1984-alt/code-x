@@ -49,6 +49,88 @@ def _close_turn_block(handoff_text: str) -> dict | None:
     return None
 
 
+def verify_lock_pointer(lock_block, state, repo_root, loc):
+    """PROP-034 Lever B — RECOMPUTE the frozen_packet_hash + open_cards from real files and verify
+    the handoff's COPIES match EXACTLY. The checker NEVER trusts the handoff copy; it recomputes the
+    truth and compares. Catches the two forgeries: a self-declared hash (recompute, never trust) and
+    a vacuous open_cards: [] (legal ONLY when the recomputed set is genuinely empty).
+
+    lock_block = the close_turn.lock_pointer mapping; state = the live CODE-X-STATE; repo_root resolves
+    the frozen packet via state.packet_dir. Returns a list of (severity, loc, msg) findings —
+    EMPTY means the handoff points at the lock faithfully. Shared by cx check close-turn (write) and
+    cx check state --session-start (read) so both ends recompute identically."""
+    from cx_lock_fidelity import recompute_frozen_packet_hash, recompute_open_cards
+    findings = []
+    if not isinstance(lock_block, dict):
+        findings.append(("P1", loc,
+            "close_turn.lock_pointer missing or not a mapping — a handoff must POINT AT the lock "
+            "(frozen_packet_hash + open_cards + lock_restatement_assertion), copied not paraphrased "
+            "(PROP-034 Lever B)"))
+        return findings
+
+    packet_dir_rel = str(state.get("packet_dir", "") or "").strip()
+
+    # frozen_packet_hash — recompute from the packet body, never trust the handoff's copy.
+    real_hash, herr = recompute_frozen_packet_hash(repo_root, packet_dir_rel)
+    declared_hash = str(lock_block.get("frozen_packet_hash", "") or "").strip()
+    if herr or real_hash is None:
+        findings.append(("P1", loc,
+            f"cannot recompute the frozen packet hash to verify the handoff: {herr} (PROP-034 Lever B)"))
+    elif not declared_hash:
+        findings.append(("P1", loc,
+            "close_turn.lock_pointer.frozen_packet_hash missing — copy the real packet hash verbatim "
+            "(PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
+    elif declared_hash != real_hash:
+        findings.append(("P1", loc,
+            f"close_turn.lock_pointer.frozen_packet_hash '{declared_hash}' != the RECOMPUTED packet "
+            f"hash '{real_hash}' — a self-declared hash is never trusted; the next session cannot boot "
+            "on a drifted handoff (PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
+
+    # open_cards — recompute from frozen registry + state, never trust the handoff's copy.
+    real_open, oerr = recompute_open_cards(repo_root, packet_dir_rel, state)
+    declared_open = lock_block.get("open_cards")
+    if oerr or real_open is None:
+        findings.append(("P1", loc,
+            f"cannot recompute the open-card set to verify the handoff: {oerr} (PROP-034 Lever B)"))
+    elif not isinstance(declared_open, list):
+        findings.append(("P1", loc,
+            "close_turn.lock_pointer.open_cards missing or not a list — copy the deck+state open-card "
+            "set (PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH)"))
+    else:
+        declared_set = sorted(str(c) for c in declared_open)
+        if declared_set != real_open:
+            findings.append(("P1", loc,
+                f"close_turn.lock_pointer.open_cards {declared_set} != the RECOMPUTED open-card set "
+                f"{real_open} — the handoff copy is stale/vacuous; open_cards: [] is legal ONLY when "
+                "the recomputed set is genuinely empty (PROP-034 Lever B / "
+                "LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH)"))
+
+    # lock_restatement_assertion — a one-line machine assertion naming the verified hash.
+    assertion = str(lock_block.get("lock_restatement_assertion", "") or "").strip()
+    if not assertion:
+        findings.append(("P1", loc,
+            "close_turn.lock_pointer.lock_restatement_assertion missing — a one-line "
+            "'no requirement added/dropped since <hash>' assertion makes the lock, not the paraphrase, "
+            "what the next session re-loads (PROP-034 Lever B)"))
+    elif real_hash and real_hash not in assertion:
+        findings.append(("P1", loc,
+            "close_turn.lock_pointer.lock_restatement_assertion does not name the recomputed packet "
+            f"hash '{real_hash}' — the assertion must pin the exact frozen hash (PROP-034 Lever B)"))
+    return findings
+
+
+def _check_lock_pointer(block, state, repo_root, loc, findings):
+    """Wrapper used at close-turn write time. PROP-034 Lever B applies to a build session that has a
+    FROZEN packet (state.packet_dir set) — that is where the lock exists to point at. A turn with no
+    packet_dir (planning / pre-freeze / a non-build handoff) has no lock to copy, so the sub-block is
+    not required; but if the handoff DOES carry a lock_pointer it is still verified (no free pass)."""
+    has_packet = bool(str(state.get("packet_dir", "") or "").strip())
+    has_pointer = isinstance(block.get("lock_pointer"), dict)
+    if not has_packet and not has_pointer:
+        return
+    findings.extend(verify_lock_pointer(block.get("lock_pointer"), state, repo_root, loc))
+
+
 def cmd_close_turn(args) -> int:
     state_path = args.state
     handoff_path = args.handoff
@@ -156,6 +238,9 @@ def cmd_close_turn(args) -> int:
         findings.append(("P1", repo_root,
             "HEAD commit message has no Code-X-Provenance: trailer — commit the turn's "
             "work with provenance before closing"))
+
+    # --- PROP-034 Lever B: lock-pointing handoff sub-block ---
+    _check_lock_pointer(block, state, repo_root, loc, findings)
 
     # --- vault_sync enum (the 11.7h-zero-vault-syncs scar) ---
     vs = block.get("vault_sync")

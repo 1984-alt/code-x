@@ -2145,21 +2145,21 @@ class TestCheckFinalReadyBuiltAppAudit(unittest.TestCase):
 # v1.12 FIX-3: checker version identity must match the shipping protocol version
 # ---------------------------------------------------------------------------
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_14(self):
-        """The checker constant must equal the shipping protocol version (v1.14) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.14, PROP-033)."""
+    def test_protocol_version_constant_is_1_15(self):
+        """The checker constant must equal the shipping protocol version (v1.15) so cx identity
+        can never silently lag the ledger again (VERSION-HISTORY current = v1.15, PROP-034)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.14")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.15")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_14(self):
-        """`cx --version` surfaces V1.14."""
+    def test_cx_version_reports_1_15(self):
+        """`cx --version` surfaces V1.15."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.14", out)
+        self.assertIn("V1.15", out)
 
 
 # ---------------------------------------------------------------------------
@@ -2683,6 +2683,297 @@ class TestCheckDesignFidelityProp031(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("[P1]", out)
         self.assertIn("not judged at the same viewport", out)
+
+
+# ---------------------------------------------------------------------------
+# PROP-034 — lock-fidelity continuity (anti-drift across corrections + handoffs)
+# ---------------------------------------------------------------------------
+import shutil as _shutil
+import yaml as _yaml
+
+_LF_PKT = FIXTURES / "module_start_good_packet"
+
+
+def _lf_packet(repo):
+    _shutil.copytree(_LF_PKT, os.path.join(repo, "packet"))
+
+
+def _lf_write_card(cards, fname, cid, module_id, reqs, allowed=None, mode="MODULE_BUILD",
+                   anchor=None, dev=None):
+    c = {"id": cid, "mode": mode, "module_id": module_id,
+         "source_map": {"source_sections": [{"file": "x", "section": "y", "requirement_ids": reqs}]}}
+    if allowed is not None:
+        c["allowed_files"] = allowed
+    if anchor is not None:
+        c["lock_anchor_ref"] = anchor
+    if dev is not None:
+        c["deviation_class"] = dev
+    with open(os.path.join(cards, fname), "w") as f:
+        _yaml.dump(c, f)
+
+
+class TestLockFidelityDrift(unittest.TestCase):
+    """Lever C — cx check drift. Layer 1 deterministic BLOCKS at --at-acceptance, advisory (rc 0)
+    at session-start; an authorized SCOPE_CHANGE's off-lock req is logged scope, not silent drift."""
+
+    def _setup(self, tmp, ghost):
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        _lf_packet(repo)
+        cards = os.path.join(repo, "cards")
+        os.makedirs(cards)
+        b1 = ["REQ-001", "REQ-002"] + (["REQ-999"] if ghost else [])
+        _lf_write_card(cards, "b1.yaml", "BUILD-001", "m1", b1)
+        _lf_write_card(cards, "b2.yaml", "BUILD-002", "m2", ["REQ-003"])
+        _lf_write_card(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004"])
+        state = os.path.join(tmp, "state.yaml")
+        with open(state, "w") as f:
+            _yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                        "accepted_modules": [], "current_card": "BUILD-001"}, f)
+        return repo, state, cards
+
+    def test_session_start_is_advisory_even_with_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, cards = self._setup(tmp, ghost=True)
+            rc, out = run_cx("check", "drift", "--state", state, "--repo-root", repo, "--cards-dir", cards)
+            self.assertEqual(rc, 0, f"session-start drift must NEVER block a boot.\n{out}")
+            self.assertIn("REQ-999", out, "the divergence is still surfaced as advisory")
+
+    def test_at_acceptance_blocks_on_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, cards = self._setup(tmp, ghost=True)
+            rc, out = run_cx("check", "drift", "--state", state, "--repo-root", repo,
+                             "--cards-dir", cards, "--at-acceptance")
+            self.assertEqual(rc, 1)
+            self.assertIn("LOCK-FIDELITY-DRIFT-UNLOGGED", out)
+
+    def test_at_acceptance_clean_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, cards = self._setup(tmp, ghost=False)
+            rc, out = run_cx("check", "drift", "--state", state, "--repo-root", repo,
+                             "--cards-dir", cards, "--at-acceptance")
+            self.assertEqual(rc, 0, f"a clean deck must PASS at acceptance.\n{out}")
+
+    def test_authorized_scope_change_is_not_unlogged_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            os.makedirs(repo)
+            _lf_packet(repo)
+            cards = os.path.join(repo, "cards")
+            os.makedirs(cards)
+            _lf_write_card(cards, "b1.yaml", "BUILD-001", "m1", ["REQ-001", "REQ-002"])
+            _lf_write_card(cards, "b2.yaml", "BUILD-002", "m2", ["REQ-003"])
+            _lf_write_card(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004"])
+            c = {"id": "FIX-SC", "mode": "FIX", "module_id": "m1",
+                 "deviation_class": "SCOPE_CHANGE", "ceo_decision_ref": "CEO-D-X",
+                 "packet_amendment_ref": "packet/AM-1.md",
+                 "lock_anchor_ref": {"card_id": "BUILD-001", "requirement_id": "REQ-001"},
+                 "allowed_files": [],
+                 "source_map": {"source_sections": [
+                     {"file": "x", "section": "y", "requirement_ids": ["REQ-NEW-1"]}]}}
+            with open(os.path.join(cards, "fix.yaml"), "w") as f:
+                _yaml.dump(c, f)
+            state = os.path.join(tmp, "state.yaml")
+            with open(state, "w") as f:
+                _yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                            "accepted_modules": [], "current_card": "FIX-SC"}, f)
+            rc, out = run_cx("check", "drift", "--state", state, "--repo-root", repo,
+                             "--cards-dir", cards, "--at-acceptance")
+            self.assertEqual(rc, 0, f"an authorized SCOPE_CHANGE's off-lock req is not drift.\n{out}")
+
+
+class TestLockFidelityOpenCardDerivation(unittest.TestCase):
+    """Lever B — the open-card set = cards of frozen-registry modules NOT receipt-VERIFIED-accepted."""
+
+    def _accept_repo_with_receipt(self, tmp):
+        """A git repo + frozen packet + a state recording m1 accepted with a REAL bound, sha-verified,
+        in-repo acceptance receipt (the only kind validate_accepted_module() passes). Returns
+        (repo, base_sha, receipt_sha12)."""
+        import hashlib
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        _lf_packet(repo)
+        subprocess.run(["git", "init", "-q", repo], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "first"], check=True)
+        base = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+        with open(os.path.join(repo, "b.txt"), "w") as f:
+            f.write("two\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "second"], check=True)
+        os.makedirs(os.path.join(repo, "acc"))
+        receipt = os.path.join(repo, "acc", "m1.yaml")
+        with open(receipt, "w") as f:
+            f.write("module_acceptance:\n  module_id: m1\n  verdict: accepted\n  generated_by: cx\n"
+                    "  state_sha_before: abc123\n  quality_card_hash: qc001122334455\n"
+                    f"  repo_sha_before: {base}\n")
+        with open(receipt, "rb") as rf:
+            sha = hashlib.sha256(rf.read()).hexdigest()[:12]
+        return repo, base, sha
+
+    def test_accepting_a_module_with_a_bound_receipt_shrinks_the_open_set(self):
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _base, sha = self._accept_repo_with_receipt(tmp)
+            none_accepted = recompute_open_cards(repo, "packet", {"accepted_modules": []})[0]
+            self.assertEqual(none_accepted, ["BUILD-001", "BUILD-002", "BUILD-003"])
+            # A REAL bound, sha-verified, in-repo receipt for m1 — its card drops out of the open set.
+            m1_accepted = recompute_open_cards(repo, "packet",
+                {"accepted_modules": [{"module_id": "m1", "acceptance_ref": "acc/m1.yaml",
+                                       "acceptance_sha12": sha}]})[0]
+            self.assertEqual(m1_accepted, ["BUILD-002", "BUILD-003"],
+                             "a receipt-VERIFIED m1 must drop BUILD-001 from the open set")
+
+    def test_raw_accepted_id_with_no_receipt_does_not_shrink_the_open_set(self):
+        """F4 fail-closed: a hand-authored accepted_modules row with NO bound acceptance receipt is
+        NOT proof of acceptance — its cards STAY OPEN. This closes the forgery where any row with a
+        module_id made open_cards: [] verify (PROP-034 xfam F4)."""
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _base, _sha = self._accept_repo_with_receipt(tmp)
+            forged = recompute_open_cards(repo, "packet",
+                {"accepted_modules": [{"module_id": "m1"}]})[0]
+            self.assertEqual(forged, ["BUILD-001", "BUILD-002", "BUILD-003"],
+                             "a raw module_id with no bound receipt must NOT close BUILD-001 — "
+                             "its card stays OPEN (F4 fail-closed)")
+
+
+class TestLockFidelityFrozenRegistryIntegrity(unittest.TestCase):
+    """F5 — _frozen_registry fails closed on the same integrity faults the v1.10 order wall rejects;
+    open-card derivation NEVER silently drops a malformed/duplicate row (which would hide cards)."""
+
+    def _packet_with_registry(self, tmp, registry_yaml: str) -> str:
+        """A packet dir with the given MODULE-REGISTRY.yaml body + a valid manifest. Returns repo root."""
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(os.path.join(repo, "packet"))
+        with open(os.path.join(repo, "packet", "requirements-manifest.yaml"), "w") as f:
+            f.write("requirements:\n  - id: REQ-001\n    disposition: BUILDING\n")
+        with open(os.path.join(repo, "packet", "MODULE-REGISTRY.yaml"), "w") as f:
+            f.write(registry_yaml)
+        return repo
+
+    def test_duplicate_module_id_fails_closed(self):
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        reg = ("module_registry:\n  frozen_packet_hash: g1\n  modules:\n"
+               "    - module_id: m1\n      card_ids: [BUILD-001]\n      dependency_modules: []\n"
+               "    - module_id: m1\n      card_ids: [BUILD-099]\n      dependency_modules: []\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._packet_with_registry(tmp, reg)
+            cards, err = recompute_open_cards(repo, "packet", {"accepted_modules": []})
+            self.assertIsNone(cards, "a duplicate module_id must NOT yield a (possibly card-hiding) set")
+            self.assertIsNotNone(err)
+            self.assertIn("duplicate module_id", err)
+
+    def test_malformed_row_fails_closed(self):
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        reg = ("module_registry:\n  frozen_packet_hash: g1\n  modules:\n"
+               "    - module_id: m1\n      card_ids: [BUILD-001]\n      dependency_modules: []\n"
+               "    - just-a-string-not-a-mapping\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._packet_with_registry(tmp, reg)
+            cards, err = recompute_open_cards(repo, "packet", {"accepted_modules": []})
+            self.assertIsNone(cards, "a malformed row must fail closed, not be silently dropped")
+            self.assertIsNotNone(err)
+            self.assertIn("not a mapping", err)
+
+    def test_unknown_dependency_fails_closed(self):
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        reg = ("module_registry:\n  frozen_packet_hash: g1\n  modules:\n"
+               "    - module_id: m1\n      card_ids: [BUILD-001]\n      dependency_modules: [m_ghost]\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._packet_with_registry(tmp, reg)
+            cards, err = recompute_open_cards(repo, "packet", {"accepted_modules": []})
+            self.assertIsNone(cards)
+            self.assertIsNotNone(err)
+            self.assertIn("unregistered module_id", err)
+
+    def test_well_formed_registry_still_derives(self):
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_lock_fidelity import recompute_open_cards
+        reg = ("module_registry:\n  frozen_packet_hash: g1\n  modules:\n"
+               "    - module_id: m1\n      card_ids: [BUILD-001]\n      dependency_modules: []\n"
+               "    - module_id: m2\n      card_ids: [BUILD-002]\n      dependency_modules: [m1]\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._packet_with_registry(tmp, reg)
+            cards, err = recompute_open_cards(repo, "packet", {"accepted_modules": []})
+            self.assertIsNone(err, f"a clean registry must still derive: {err}")
+            self.assertEqual(cards, ["BUILD-001", "BUILD-002"])
+
+
+class TestLockFidelityDeviationBlocksAcceptance(unittest.TestCase):
+    """An OPEN lock_deviation row blocks module-acceptance (logged ambiguity can never quietly ship)."""
+
+    def _accept_repo(self, tmp, deviations):
+        import hashlib
+        repo = os.path.join(tmp, "repo")
+        subprocess.run(["git", "init", "-q", repo], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.name", "t"], check=True)
+        with open(os.path.join(repo, "a.txt"), "w") as f:
+            f.write("one\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "first"], check=True)
+        base = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+        with open(os.path.join(repo, "b.txt"), "w") as f:
+            f.write("two\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "second"], check=True)
+        os.makedirs(os.path.join(repo, "acc"))
+        receipt = os.path.join(repo, "acc", "m1.yaml")
+        with open(receipt, "w") as f:
+            f.write("module_acceptance:\n  module_id: m1\n  verdict: accepted\n  generated_by: cx\n"
+                    "  state_sha_before: abc123\n  quality_card_hash: qc001122334455\n"
+                    f"  repo_sha_before: {base}\n")
+        with open(receipt, "rb") as rf:
+            sha = hashlib.sha256(rf.read()).hexdigest()[:12]
+        state = os.path.join(tmp, "state.yaml")
+        st = {"project": "lf", "protocol_stamp": "Code-X V1",
+              "accepted_modules": [{"module_id": "m1", "acceptance_ref": "acc/m1.yaml",
+                                    "acceptance_sha12": sha}]}
+        if deviations is not None:
+            st["lock_deviations"] = deviations
+        with open(state, "w") as f:
+            _yaml.dump(st, f)
+        return repo, state
+
+    def test_open_deviation_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state = self._accept_repo(tmp, [{
+                "deviation_id": "LD-1", "card_id": "FIX-1",
+                "lock_anchor_ref": "BUILD-001/REQ-001", "deviation_class": "AMBIGUITY_RESOLVED",
+                "reason": "picked reading X", "status": "OPEN",
+                "surfaced_at_gate": "module-acceptance"}])
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", state, "--repo-root", repo)
+            self.assertEqual(rc, 1)
+            self.assertIn("is OPEN at the module-acceptance gate", out)
+
+    def test_ceo_reviewed_deviation_does_not_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state = self._accept_repo(tmp, [{
+                "deviation_id": "LD-1", "card_id": "FIX-1",
+                "lock_anchor_ref": "BUILD-001/REQ-001", "deviation_class": "AMBIGUITY_RESOLVED",
+                "reason": "picked reading X", "status": "CEO_REVIEWED",
+                "surfaced_at_gate": "module-acceptance"}])
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", state, "--repo-root", repo)
+            self.assertEqual(rc, 0, f"a CEO_REVIEWED deviation must not block.\n{out}")
+
+    def test_no_deviations_key_does_not_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state = self._accept_repo(tmp, None)
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", state, "--repo-root", repo)
+            self.assertEqual(rc, 0, f"absent lock_deviations must not block (back-compat).\n{out}")
 
 
 # ---------------------------------------------------------------------------

@@ -11,6 +11,19 @@ model_tier:           # cheap | standard | top   (REQUIRED — if blank, the def
 objective:            # ONE plain sentence: exactly what "done" looks like
 module_id:            # (V1.10) the frozen module_registry id this card builds (module-start gates module order)
 
+# ── PROP-034 Lever A: RE-ANCHOR BEFORE FIX — REQUIRED on a mode: FIX card (re-anchor before you fix) ──
+# A fix that cannot name the frozen requirement it restores is freelancing. `cx check card --state`
+# resolves lock_anchor_ref.requirement_id INSIDE the frozen packet named by CODE-X-STATE.packet_dir.
+lock_anchor_ref:      # REQUIRED on mode: FIX — {card_id, requirement_id}; requirement_id MUST resolve in the frozen packet
+  # card_id:          # the frozen card_id the fix touches
+  # requirement_id:   # the frozen requirement_id (must be a real line in the requirements-manifest)
+deviation_class:      # REQUIRED on mode: FIX — RESTORE (silent) | AMBIGUITY_RESOLVED (log a lock_deviation) | SCOPE_CHANGE (HARD STOP)
+# SCOPE_CHANGE = anything NOT already in the lock → CANNOT be built as a fix; needs BOTH of:
+ceo_decision_ref:     # REQUIRED when deviation_class: SCOPE_CHANGE (CEO-DECISION-LEDGER row id)
+packet_amendment_ref: # REQUIRED when deviation_class: SCOPE_CHANGE (packet amendment / re-freeze ref, or a new PROP)
+# HONEST LIMIT: cx proves fields-present + anchor-resolves + scope-authorized; it does NOT prove a
+# RESTORE truly only restores — the opposite-family reviewer audits deviation_class on every fix card.
+
 # ── WHERE THIS CARD CAME FROM (compiler-set; `cx check card` REJECTS a card missing this) ── [RULE:source-map-required]
 source_map:           # the exact slice of the locked packet this card compresses, so the auditor can TRACE it
   locked_packet_id:

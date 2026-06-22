@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.14"    # Code-X V1 protocol version (V1.14 = PROP-033 in-loop rendered-fidelity gate; v1.13 = PROP-031/023/032/024)
+PROTOCOL_VERSION = "1.15"    # Code-X V1 protocol version (V1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}

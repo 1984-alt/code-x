@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.0]
+
+Syncs the public release up to protocol **v1.15**, folding in one protocol upgrade (PROP-034). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.
+
+### Added
+- **Lock-fidelity continuity (PROP-034) — `cx check drift`, fix-card anchoring, and lock-pointing handoffs.** Locked plans tend to rot during corrections and handoffs: the AI starts reasoning from the drifted conversation instead of the frozen plan, and a handoff carries a paraphrase rather than the lock itself. This is the *scope/plan* sibling of the previous release's *visual* drift gate (PROP-033). Three levers, with friction matched to risk:
+  - **Re-anchor before you fix.** A fix card must name the exact locked requirement it touches and classify the change as a *restore*, an *ambiguity resolved*, or a *scope change*. A scope change is a hard stop — nothing outside the lock can be built as a "fix" without a recorded decision and a plan amendment.
+  - **Handoffs point at the lock, they don't paraphrase it.** A handoff now carries the frozen plan's hash and its open-work list, copied verbatim; both writing and reading the handoff recompute those from the real files and reject a self-declared hash or an empty open-work list that doesn't actually match.
+  - **Drift alarm.** A new deterministic check flags a card that references a requirement not in the frozen plan, a planned requirement with no card covering it, or a fix touching files outside its anchored card — wired into the acceptance wall so it blocks before a module is accepted. A semantic "this behavior exceeds the requirement" layer ships advisory-only for now.
+
+  Honest limit: the checker proves the fields are present, the anchor resolves, and a scope change is authorized — it can't mechanically prove a card *labeled* a restore truly is one. That residual is held by a fail-closed default (when in doubt, the stricter class) plus an opposite-family reviewer auditing the label on every fix card. Green never means "this restore is honest."
+
+257 tests · 219 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.14.0]
 
 Syncs the public release up to protocol **v1.14**, folding in everything from the v1.13 and v1.14 cycles. Five protocol upgrades (PROP-031, PROP-023, PROP-032, PROP-024, PROP-033), each cross-family reviewed and fixed-first before landing.

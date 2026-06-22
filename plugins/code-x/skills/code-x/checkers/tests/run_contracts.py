@@ -37,7 +37,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep", "render-fidelity"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -512,6 +512,124 @@ def _recipe_module_acceptance_inrepo_ref(tmp: str) -> tuple[str, str]:
     return _module_acceptance_ref_repo(tmp, external=False)
 
 
+def _lf_acceptance_repo(tmp: str, *, deviations=None, drift_card=False,
+                        accept_module="m3") -> tuple[str, str]:
+    """An lf-packet git repo with a REAL bound receipt for accept_module + a state that sets packet_dir
+    (so the F7 Layer-1 gate runs) and optional lock_deviations. drift_card=True adds a working-set card
+    referencing an off-manifest requirement_id (Layer-1 (a) drift) into <repo>/cards so module-acceptance
+    must fail closed (F7). deviations seeds state.lock_deviations (F8). The packet's m1/m2 are receipt-
+    verified-accepted so the open set = m3's cards (the working set the drift card joins)."""
+    import hashlib
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    _lf_copy_packet(repo)
+    _git_init(repo)
+    # a real prior commit so repo_sha_before..HEAD has a non-empty diff (PROP-028 baseline)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    base = _git_commit(repo, "first")
+    with open(os.path.join(repo, "b.txt"), "w") as f:
+        f.write("two\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    _git_commit(repo, "second")
+    # the live deck (cards dir) — full BUILDING coverage so Layer-1 (b) does NOT fire on the clean case
+    cards = os.path.join(repo, "cards")
+    os.makedirs(cards, exist_ok=True)
+    _wcard(cards, "b1.yaml", "BUILD-001", "m1", ["REQ-001", "REQ-002"])
+    _wcard(cards, "b2.yaml", "BUILD-002", "m2", ["REQ-003"])
+    _wcard(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004"])
+    if drift_card:
+        # a working-set card (m3 not accepted → BUILD-003 open) referencing an OFF-manifest req
+        _wcard(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004", "REQ-OFF-LOCK-999"])
+    # bound, sha-verified, in-repo receipts for the accepted modules
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    accepted = []
+    verified_priors = ["m1", "m2"] if accept_module == "m3" else ["m1"]
+    for mid in set(verified_priors + [accept_module]):
+        rp = os.path.join(repo, "acc", f"{mid}.yaml")
+        with open(rp, "w") as f:
+            f.write(f"module_acceptance:\n  module_id: {mid}\n  verdict: accepted\n"
+                    "  generated_by: cx-accept\n  state_sha_before: abc123\n"
+                    f"  quality_card_hash: qc0011223344\n  repo_sha_before: {base}\n")
+        sha = hashlib.sha256(open(rp, "rb").read()).hexdigest()[:12]
+        accepted.append({"module_id": mid, "acceptance_ref": f"acc/{mid}.yaml",
+                         "acceptance_sha12": sha})
+    st = {"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+          "accepted_modules": accepted}
+    if deviations is not None:
+        st["lock_deviations"] = deviations
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump(st, f)
+    return repo, state
+
+
+def _recipe_lf_accept_status_invalid(tmp: str) -> tuple[str, str]:
+    # F8: a lock_deviation with a non-enum status (CLOSED) must fail closed, not slip through.
+    return _lf_acceptance_repo(tmp, deviations=[{
+        "deviation_id": "LD-9", "card_id": "FIX-9", "lock_anchor_ref": "BUILD-001/REQ-001",
+        "deviation_class": "AMBIGUITY_RESOLVED", "reason": "x", "status": "CLOSED",
+        "surfaced_at_gate": "module-acceptance"}])
+
+
+def _recipe_lf_accept_status_ok(tmp: str) -> tuple[str, str]:
+    # F8 good: CEO_REVIEWED is the only nonblocking status.
+    return _lf_acceptance_repo(tmp, deviations=[{
+        "deviation_id": "LD-9", "card_id": "FIX-9", "lock_anchor_ref": "BUILD-001/REQ-001",
+        "deviation_class": "AMBIGUITY_RESOLVED", "reason": "x", "status": "CEO_REVIEWED",
+        "surfaced_at_gate": "module-acceptance"}])
+
+
+def _recipe_lf_accept_layer1_drift(tmp: str) -> tuple[str, str]:
+    # F7: accept m2 (m1 the only verified prior) so m3's BUILD-003 stays OPEN; the off-manifest req on
+    # that open working-set card is Layer-1 drift that must block this module-acceptance.
+    return _lf_acceptance_repo(tmp, drift_card=True, accept_module="m2")
+
+
+def _recipe_lf_accept_layer1_clean(tmp: str) -> tuple[str, str]:
+    # F7 good: a clean deck (no Layer-1 drift) accepts m2.
+    return _lf_acceptance_repo(tmp, drift_card=False, accept_module="m2")
+
+
+def _lf_session_start_repo(tmp: str, *, with_lock_pointer: bool) -> tuple[str, str]:
+    """F6: a frozen project (state.packet_dir set) at session-start. Built on _STATE_BASE so all the
+    unrelated state checks pass; the ONLY variable under test is the handoff's lock_pointer.
+    with_lock_pointer=False writes a handoff carrying a close_turn block but NO lock_pointer → must
+    fail closed. with_lock_pointer=True copies the real recomputed hash + open set → must pass."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    real = _lf_copy_packet(repo)
+    _git_init(repo)
+    os.makedirs(os.path.join(repo, "handoffs"), exist_ok=True)
+    handoff = os.path.join(repo, "handoffs", "2026-06-22-turn.md")
+    if with_lock_pointer:
+        body = _LF_HANDOFF.format(hash=real, open="[BUILD-001, BUILD-002, BUILD-003]", assert_hash=real)
+    else:
+        body = ("# Handoff — no lock pointer\n\n```yaml\nclose_turn:\n  findings_delta: []\n"
+                "  evidence_paths: [evidence.txt]\n  next_prompt: |\n    Continue.\n"
+                "  vault_sync:\n    status: NOT_APPLICABLE\n    reason: t\n    where_saved: repo\n```\n")
+    with open(handoff, "w") as f:
+        f.write(body)
+    with open(os.path.join(repo, "evidence.txt"), "w") as f:
+        f.write("evidence\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    head = _git_commit(repo, "turn")
+    state = os.path.join(tmp, "state.yaml")
+    # _STATE_BASE is a build-mode session that already satisfies builder-standard / boot-ack /
+    # review-boundary; add packet_dir so the F6 lock-pointer requirement applies, and the open-card
+    # set is m1/m2/m3's cards (no accepted_modules) so the good lock_pointer's open_cards matches.
+    _write_state(state, head, overrides={"packet_dir": "packet"})
+    _finalize_boot(repo, state)
+    return repo, state
+
+
+def _recipe_lf_session_no_lock_pointer(tmp: str) -> tuple[str, str]:
+    return _lf_session_start_repo(tmp, with_lock_pointer=False)
+
+
+def _recipe_lf_session_lock_pointer_ok(tmp: str) -> tuple[str, str]:
+    return _lf_session_start_repo(tmp, with_lock_pointer=True)
+
+
 # PROP-032: m1 is a live_slice in the FROZEN registry; m2 depends on m1. The order wall must read
 # live_slice from the registry and require m1's receipt to carry a live_slice_accept block before m2
 # can start — proving "no next slice until the CEO drove the prior" (P0).
@@ -764,8 +882,305 @@ def _recipe_dep_scan_uncovered_manifest(tmp):
     return _mk_dep_repo(tmp, extra_manifests=["requirements.txt"])
 
 
+# ── PROP-034 lock-fidelity recipes ──────────────────────────────────────────────
+# All reuse the frozen module_start_good_packet (REQ-001..004 BUILDING; m1->BUILD-001,
+# m2->BUILD-002, m3->BUILD-003) committed under <repo>/packet, with state.packet_dir=packet.
+
+import shutil as _shutil
+
+_LF_PACKET_SRC = FIXTURES / "module_start_good_packet"
+
+
+def _lf_copy_packet(repo: str) -> str:
+    """Copy the frozen packet into <repo>/packet; return its content hash (= deck/order-wall hash)."""
+    dst = os.path.join(repo, "packet")
+    _shutil.copytree(_LF_PACKET_SRC, dst)
+    return _packet_hash(dst)
+
+
+def _lf_card_repo(tmp: str, card_fixture: str, bind_packet_hash: bool = False,
+                  seed_packet=None) -> tuple[str, str]:
+    """A repo with the frozen packet + a state pointing packet_dir=packet, and the named card fixture
+    copied to <repo>/card.yaml. The card check resolves the packet relative to the state file's dir
+    (== repo), so lock_anchor_ref REQ ids resolve. The clause references {REPO}/card.yaml.
+
+    seed_packet(repo): optional callback run AFTER the packet is copied, BEFORE the hash is bound —
+    used to add F3 authorization files (ledger row + amendment) into the hashed packet body.
+    bind_packet_hash=True (GOOD fixtures only, F2): recompute the copied packet's hash and inject it as
+    the card's source_map.locked_packet_hash so the anchor-binds-to-packet check passes for the honest
+    case. BAD fixtures leave the fixture's static hash so the F2 mismatch is NOT what they trip on."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    _lf_copy_packet(repo)
+    if seed_packet is not None:
+        seed_packet(repo)
+    card_dst = os.path.join(repo, "card.yaml")
+    _shutil.copyfile(FIXTURES / card_fixture, card_dst)
+    if bind_packet_hash:
+        sys.path.insert(0, str(CHECKERS_DIR))
+        from cx_deck import _compute_packet_hash
+        real_hash = _compute_packet_hash(Path(os.path.join(repo, "packet")))
+        with open(card_dst) as f:
+            card = yaml.safe_load(f)
+        card.setdefault("source_map", {})["locked_packet_hash"] = real_hash
+        with open(card_dst, "w") as f:
+            yaml.dump(card, f)
+    state = os.path.join(repo, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet"}, f)
+    return repo, state
+
+
+def _lf_drift_repo(tmp: str, ghost: bool) -> tuple[str, str]:
+    """Drift repo: cards-dir covering all four BUILDING reqs (no Layer-1(b) drop). ghost=True adds a
+    requirement_id NOT in the manifest to an OPEN working-set card → LOCK-FIDELITY-DRIFT-UNLOGGED."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    _lf_copy_packet(repo)
+    cards = os.path.join(repo, "cards")
+    os.makedirs(cards)
+    # cover all four BUILDING reqs across the three module cards (no silent drop)
+    b1_reqs = ["REQ-001", "REQ-002"] + (["REQ-999"] if ghost else [])
+    _wcard(cards, "b1.yaml", "BUILD-001", "m1", b1_reqs)
+    _wcard(cards, "b2.yaml", "BUILD-002", "m2", ["REQ-003"])
+    _wcard(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004"])
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                   "accepted_modules": [], "current_card": "BUILD-001"}, f)
+    return repo, state
+
+
+def _wcard(cards_dir: str, fname: str, cid: str, module_id: str, req_ids: list,
+           allowed_files=None, mode="MODULE_BUILD", anchor=None, dev_class=None) -> None:
+    card = {"id": cid, "mode": mode, "module_id": module_id,
+            "source_map": {"source_sections": [
+                {"file": "x", "section": "y", "requirement_ids": req_ids}]}}
+    if allowed_files is not None:
+        card["allowed_files"] = allowed_files
+    if anchor is not None:
+        card["lock_anchor_ref"] = anchor
+    if dev_class is not None:
+        card["deviation_class"] = dev_class
+    with open(os.path.join(cards_dir, fname), "w") as f:
+        yaml.dump(card, f)
+
+
+def _lf_mutated_card_repo(tmp: str, mutate, bind_packet_hash: bool = False,
+                          seed_packet=None) -> tuple[str, str]:
+    """Build an lf card repo from card_fix_good_restore.yaml, then apply mutate(card) to the loaded
+    card dict and re-write it. Used to forge a single F2/F3 violation off an otherwise-valid card so
+    the clause bites for the RIGHT reason (only the mutated field is wrong)."""
+    repo, state = _lf_card_repo(tmp, "card_fix_good_restore.yaml",
+                                bind_packet_hash=bind_packet_hash, seed_packet=seed_packet)
+    card_dst = os.path.join(repo, "card.yaml")
+    with open(card_dst) as f:
+        card = yaml.safe_load(f)
+    mutate(card)
+    with open(card_dst, "w") as f:
+        yaml.dump(card, f)
+    return repo, state
+
+
+def _recipe_lf_card_packet_hash_mismatch(tmp: str) -> tuple[str, str]:
+    # F2: a valid RESTORE anchor but the card's locked_packet_hash points at a DIFFERENT packet.
+    def m(card):
+        card.setdefault("source_map", {})["locked_packet_hash"] = "deadbeefdeadbeefdeadbeef"
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=False)
+
+
+def _recipe_lf_card_anchor_card_not_in_registry(tmp: str) -> tuple[str, str]:
+    # F2: valid hash binding, but lock_anchor_ref.card_id names a card NOT in the frozen registry.
+    def m(card):
+        card.setdefault("lock_anchor_ref", {})["card_id"] = "BUILD-DOES-NOT-EXIST"
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _recipe_lf_card_scope_ceo_ref_dangling(tmp: str) -> tuple[str, str]:
+    # F3: SCOPE_CHANGE whose ceo_decision_ref does NOT resolve to a packet ledger row (amendment ok).
+    def m(card):
+        card["deviation_class"] = "SCOPE_CHANGE"
+        card["ceo_decision_ref"] = "CEO-D-NOT-IN-LEDGER-999"
+        card["packet_amendment_ref"] = "packet/AMENDMENT-001.md"
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True, seed_packet=_lf_seed_scope_authorization)
+
+
+def _recipe_lf_card_scope_amend_unsafe(tmp: str) -> tuple[str, str]:
+    # F3: SCOPE_CHANGE with a resolving ceo_decision_ref but a path-unsafe packet_amendment_ref.
+    def m(card):
+        card["deviation_class"] = "SCOPE_CHANGE"
+        card["ceo_decision_ref"] = "CEO-D-LOCKFID-001"
+        card["packet_amendment_ref"] = "../../etc/passwd"
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True, seed_packet=_lf_seed_scope_authorization)
+
+
+def _recipe_lf_card_scope_destructive_p0(tmp: str) -> tuple[str, str]:
+    # F3: an UNAUTHORIZED SCOPE_CHANGE on a DESTRUCTIVE surface (touches_upload_restore_import) must
+    # escalate to P0 — the class the OLD card_high_risk() missed.
+    def m(card):
+        card["deviation_class"] = "SCOPE_CHANGE"
+        card.pop("ceo_decision_ref", None)
+        card.pop("packet_amendment_ref", None)
+        card.setdefault("security_tripwire", {})["touches_upload_restore_import"] = True
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _recipe_lf_card_no_anchor(tmp: str) -> tuple[str, str]:
+    return _lf_card_repo(tmp, "card_fix_no_anchor.yaml")
+
+
+def _recipe_lf_card_no_devclass(tmp: str) -> tuple[str, str]:
+    return _lf_card_repo(tmp, "card_fix_no_devclass.yaml")
+
+
+def _recipe_lf_card_scope_unauth(tmp: str) -> tuple[str, str]:
+    return _lf_card_repo(tmp, "card_fix_scope_change_unauthorized.yaml")
+
+
+def _recipe_lf_card_good_restore(tmp: str) -> tuple[str, str]:
+    return _lf_card_repo(tmp, "card_fix_good_restore.yaml", bind_packet_hash=True)
+
+
+def _lf_seed_scope_authorization(repo: str) -> None:
+    """F3: seed the packet so a GOOD SCOPE_CHANGE's refs resolve — the ledger row CEO-D-LOCKFID-001 in
+    the packet's CEO-DECISION-LEDGER.md, and the in-repo packet_amendment_ref packet/AMENDMENT-001.md.
+    Called BEFORE bind_packet_hash so these files are part of the hashed packet body."""
+    packet = os.path.join(repo, "packet")
+    with open(os.path.join(packet, "CEO-DECISION-LEDGER.md"), "w") as f:
+        f.write("# CEO Decision Ledger (packet fixture)\n\n"
+                "- CEO-D-LOCKFID-001 — authorize the scope expansion this fix builds.\n")
+    with open(os.path.join(packet, "AMENDMENT-001.md"), "w") as f:
+        f.write("# Packet amendment AMENDMENT-001\nScope expansion authorized by CEO-D-LOCKFID-001.\n")
+
+
+def _recipe_lf_card_good_scope(tmp: str) -> tuple[str, str]:
+    # F3: a GOOD SCOPE_CHANGE must resolve its ceo_decision_ref to the packet ledger AND carry a real
+    # in-repo packet_amendment_ref. Seed both into the packet BEFORE the hash is bound so the honest
+    # case passes the tightened authorization without breaking the F2 packet-hash binding.
+    return _lf_card_repo(tmp, "card_fix_good_scope_change.yaml", bind_packet_hash=True,
+                         seed_packet=_lf_seed_scope_authorization)
+
+
+def _recipe_lf_drift_unlogged(tmp: str) -> tuple[str, str]:
+    return _lf_drift_repo(tmp, ghost=True)
+
+
+def _recipe_lf_drift_ok(tmp: str) -> tuple[str, str]:
+    return _lf_drift_repo(tmp, ghost=False)
+
+
+def _lf_overreach_repo(tmp: str, overreach: bool) -> tuple[str, str]:
+    """A fix card anchored to BUILD-001 (allowed src/a.py). overreach=True gives the fix an
+    allowed_files entry OUTSIDE BUILD-001's set → LOCK-FIDELITY-RESTORE-OVERREACH."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    _lf_copy_packet(repo)
+    cards = os.path.join(repo, "cards")
+    os.makedirs(cards)
+    _wcard(cards, "b1.yaml", "BUILD-001", "m1", ["REQ-001", "REQ-002"], allowed_files=["src/a.py"])
+    _wcard(cards, "b2.yaml", "BUILD-002", "m2", ["REQ-003"])
+    _wcard(cards, "b3.yaml", "BUILD-003", "m3", ["REQ-004"])
+    fix_files = ["src/a.py"] + (["src/OTHER.py"] if overreach else [])
+    _wcard(cards, "fix.yaml", "FIX-OVR", "m1", ["REQ-001"], allowed_files=fix_files, mode="FIX",
+           anchor={"card_id": "BUILD-001", "requirement_id": "REQ-001"}, dev_class="RESTORE")
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                   "accepted_modules": [], "current_card": "FIX-OVR"}, f)
+    return repo, state
+
+
+def _recipe_lf_overreach(tmp: str) -> tuple[str, str]:
+    return _lf_overreach_repo(tmp, overreach=True)
+
+
+def _recipe_lf_overreach_ok(tmp: str) -> tuple[str, str]:
+    return _lf_overreach_repo(tmp, overreach=False)
+
+
+_LF_HANDOFF = """# Handoff — lock-fidelity fixture
+
+```yaml
+close_turn:
+  findings_delta: []
+  evidence_paths: [evidence.txt]
+  next_prompt: |
+    Continue per the deck.
+  lock_pointer:
+    frozen_packet_hash: {hash}
+    open_cards: {open}
+    lock_restatement_assertion: "no requirement added/dropped since {assert_hash}"
+  vault_sync:
+    status: NOT_APPLICABLE
+    reason: contract-test
+    where_saved: committed in the fixture repo
+```
+"""
+
+
+def _lf_close_turn_repo(tmp: str, hash_val, open_val, assert_val) -> tuple[str, str]:
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    real = _lf_copy_packet(repo)
+    _git_init(repo)
+    with open(os.path.join(repo, "evidence.txt"), "w") as f:
+        f.write("evidence\n")
+    handoff = os.path.join(repo, "handoff.md")
+    with open(handoff, "w") as f:
+        f.write(_LF_HANDOFF.format(
+            hash=(real if hash_val == "REAL" else hash_val),
+            open=open_val,
+            assert_hash=(real if assert_val == "REAL" else assert_val)))
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "lf fixture\n\nCode-X-Provenance: cx-contract-test"], check=True)
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "lf", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                   "accepted_modules": [],
+                   "open_findings": {"counts": {"p0": 0, "p1": 0, "p2": 0, "p3": 0}, "items": []}}, f)
+    return repo, state
+
+
+def _recipe_lf_handoff_hash_mismatch(tmp: str) -> tuple[str, str]:
+    # correct open cards, WRONG hash → HANDOFF-HASH-MISMATCH
+    return _lf_close_turn_repo(tmp, "deadbeefw0ng", "[BUILD-001, BUILD-002, BUILD-003]", "REAL")
+
+
+def _recipe_lf_handoff_opencards_mismatch(tmp: str) -> tuple[str, str]:
+    # correct hash, VACUOUS open_cards: [] (the forgery) → HANDOFF-OPENCARDS-MISMATCH
+    return _lf_close_turn_repo(tmp, "REAL", "[]", "REAL")
+
+
+def _recipe_lf_handoff_ok(tmp: str) -> tuple[str, str]:
+    return _lf_close_turn_repo(tmp, "REAL", "[BUILD-001, BUILD-002, BUILD-003]", "REAL")
+
+
 _RECIPES = {
     "ancestor_ok": _recipe_ancestor_ok,
+    "lf_card_no_anchor": _recipe_lf_card_no_anchor,
+    "lf_card_no_devclass": _recipe_lf_card_no_devclass,
+    "lf_card_scope_unauth": _recipe_lf_card_scope_unauth,
+    "lf_card_good_restore": _recipe_lf_card_good_restore,
+    "lf_card_good_scope": _recipe_lf_card_good_scope,
+    "lf_card_packet_hash_mismatch": _recipe_lf_card_packet_hash_mismatch,
+    "lf_card_anchor_card_not_in_registry": _recipe_lf_card_anchor_card_not_in_registry,
+    "lf_card_scope_ceo_ref_dangling": _recipe_lf_card_scope_ceo_ref_dangling,
+    "lf_card_scope_amend_unsafe": _recipe_lf_card_scope_amend_unsafe,
+    "lf_card_scope_destructive_p0": _recipe_lf_card_scope_destructive_p0,
+    "lf_accept_status_invalid": _recipe_lf_accept_status_invalid,
+    "lf_accept_status_ok": _recipe_lf_accept_status_ok,
+    "lf_accept_layer1_drift": _recipe_lf_accept_layer1_drift,
+    "lf_accept_layer1_clean": _recipe_lf_accept_layer1_clean,
+    "lf_session_no_lock_pointer": _recipe_lf_session_no_lock_pointer,
+    "lf_session_lock_pointer_ok": _recipe_lf_session_lock_pointer_ok,
+    "lf_drift_unlogged": _recipe_lf_drift_unlogged,
+    "lf_drift_ok": _recipe_lf_drift_ok,
+    "lf_overreach": _recipe_lf_overreach,
+    "lf_overreach_ok": _recipe_lf_overreach_ok,
+    "lf_handoff_hash_mismatch": _recipe_lf_handoff_hash_mismatch,
+    "lf_handoff_opencards_mismatch": _recipe_lf_handoff_opencards_mismatch,
+    "lf_handoff_ok": _recipe_lf_handoff_ok,
     "dep_scan_ok": _recipe_dep_scan_ok,
     "dep_scan_stale_hash": _recipe_dep_scan_stale_hash,
     "dep_scan_high_unwaived": _recipe_dep_scan_high_unwaived,

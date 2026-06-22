@@ -368,3 +368,22 @@ rules:
     appears_in:
       - GATES.md
       - checkers/CX-CHECK-SPEC.md
+
+  - id: lock-fidelity-fail-closed
+    # Assertion (PROP-034, fold v1.15, GATES.md): lock-fidelity continuity keeps the build TRUE to the
+    # frozen lock during corrections + handoffs. The FAIL-CLOSED CLASSIFIER is the teeth: a change not
+    # OBVIOUSLY a pure restore of an explicit locked line is NOT RESTORE — default to the stricter
+    # class; the "when unsure, RESTORE" negation is banned. HONEST LIMIT (stated, not hidden): the
+    # deterministic shell proves fields-present + anchor-resolves + scope-authorized; it does NOT prove
+    # a card labeled RESTORE truly is one — that residual is the opposite-family reviewer's standing
+    # deviation_class audit, NOT a green over-claim. This entry is the standing presence/anti-drift bite
+    # (mirrors prevention-first-ladder): the canonical phrases must stay PRESENT in GATES.md, so cx
+    # check consistency fails the moment any is removed/reworded out (a [RULE:] pointer would no-op it).
+    canonical:
+      - "re-anchor before you fix"
+      - "FAIL-CLOSED CLASSIFIER"
+      - "logged ambiguity can never quietly ship"
+    key_phrases: ["lock-fidelity", "re-anchor before you fix", "deviation_class"]
+    banned_negations: ["when unsure, RESTORE", "lock-fidelity is optional", "a handoff may paraphrase the lock", "drift alarm is advisory at module-acceptance", "RESTORE when in doubt"]
+    appears_in:
+      - GATES.md

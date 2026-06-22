@@ -116,7 +116,7 @@ def _git(repo_root: str, *git_args) -> tuple[int, str]:
 
 
 def validate_accepted_module(module_id, state, state_loc, repo_root=None, acceptance_override=None,
-                             require_live_slice=False):
+                             require_live_slice=False, cards_dir=None):
     """The SINGLE source of truth for 'is module <module_id> validly accepted in <state>'.
 
     Returns a list of (severity, loc, message) findings — EMPTY means validly accepted.
@@ -311,6 +311,40 @@ def validate_accepted_module(module_id, state, state_loc, repo_root=None, accept
     if require_live_slice:
         findings.extend(validate_live_slice_accept(ma, receipt_path))
 
+    # ── PROP-034 Lever B/C: an OPEN lock_deviation row blocks module-acceptance ──────────────────
+    # A logged AMBIGUITY/scope deviation surfaced at the Andon wall must be CEO_REVIEWED before the
+    # module is accepted — logged ambiguity can never quietly ship. Honest scope: a deviation row
+    # carries card_id (not module_id), so EVERY OPEN row blocks the wall (conservative fail-closed);
+    # a row already CEO_REVIEWED does not block.
+    from cx_drift import open_lock_deviation_blockers
+    findings.extend(open_lock_deviation_blockers(state, state_loc, "module-acceptance"))
+
+    # ── PROP-034 xfam F7: module-acceptance fails closed on Layer-1 drift ─────────────────────────
+    # An OPEN lock_deviation is not the only way scope can drift; a working-set card can reference a
+    # requirement_id NOT in the frozen manifest, a BUILDING requirement can be silently dropped, or a
+    # fix card can over-reach its anchored allowed_files — all DETERMINISTIC Layer-1 divergences. The
+    # Andon wall must re-run the drift Layer-1 validator (the SAME logic cx check drift uses) so a
+    # module cannot be accepted while Layer-1 drift exists. Gated on cards_dir so it runs ONLY in the
+    # direct command path (cmd_module_acceptance) — the order wall's per-prior calls and the F4 open-card
+    # recompute pass NO cards_dir, which both avoids an infinite recompute recursion and keeps the wall's
+    # prior-module checks about acceptance receipts, not deck drift.
+    if cards_dir is not None and repo_root:
+        from cx_drift import compute_layer1_findings
+        cdir = Path(cards_dir)
+        if not cdir.is_dir():
+            findings.append(("P1", state_loc,
+                f"module-acceptance cannot prove no Layer-1 drift: cards-dir '{cards_dir}' is not a "
+                "directory — the Andon wall fails closed when the live deck cannot be read to re-run "
+                "drift (PROP-034 Lever C / F7)"))
+        else:
+            packet_dir_rel = str(state.get("packet_dir", "") or "").strip()
+            l1, _l2, fatal = compute_layer1_findings(repo_root, packet_dir_rel, state, cdir, state_loc)
+            if fatal:
+                findings.append(("P1", state_loc,
+                    f"module-acceptance cannot prove no Layer-1 drift — {fatal} (PROP-034 Lever C / F7)"))
+            else:
+                findings.extend(l1)
+
     return findings
 
 
@@ -332,8 +366,21 @@ def cmd_module_acceptance(args) -> int:
         print(f"FIX-FIRST\n  [P0] {state_path} — {serr}")
         return 1
 
+    # PROP-034 F7: the Andon wall re-runs the drift Layer-1 validator over the live deck. An EXPLICIT
+    # --cards-dir always runs the gate (fail-closed if that dir is unreadable). With no --cards-dir we
+    # auto-discover <repo-root>/cards and run the gate ONLY when that conventional deck dir actually
+    # exists — so a project without an in-repo deck (or a receipt-only check) is not forced to fail
+    # closed on a dir that was never part of its layout, while a project WITH a deck cannot accept a
+    # module that has Layer-1 drift.
+    cards_dir = getattr(args, "cards_dir", None)
+    if cards_dir is None and repo_root:
+        conventional = Path(repo_root) / "cards"
+        if conventional.is_dir():
+            cards_dir = str(conventional)
+
     findings = validate_accepted_module(
-        module_id, state, state_path, repo_root=repo_root, acceptance_override=acceptance_path)
+        module_id, state, state_path, repo_root=repo_root, acceptance_override=acceptance_path,
+        cards_dir=cards_dir)
 
     if not findings:
         print("PASS")

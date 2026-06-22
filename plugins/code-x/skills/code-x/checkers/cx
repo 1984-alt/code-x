@@ -32,6 +32,7 @@ from cx_dep_scan import cmd_dep_scan
 from cx_egress import cmd_egress
 from cx_class_sweep import cmd_class_sweep
 from cx_render_fidelity import cmd_render_fidelity
+from cx_drift import cmd_drift
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -173,6 +174,7 @@ def main():
     p_ma.add_argument("--state", default=None, help="Path to CODE-X-STATE.yaml (reads accepted_modules ref/hash)")
     p_ma.add_argument("--acceptance", default=None, help="Path to the MODULE-ACCEPTANCE.yaml receipt (default: state's recorded acceptance_ref)")
     p_ma.add_argument("--repo-root", dest="repo_root", default=None, help="Repo root to resolve a relative acceptance_ref")
+    p_ma.add_argument("--cards-dir", dest="cards_dir", default=None, help="Directory of compiled work-order card YAMLs (the live deck) — enables the PROP-034 Layer-1 drift gate at the Andon wall (default: <repo-root>/cards)")
 
     # module-quality (V1.10: the per-module quality bar — conformance + quality card + regression-smoke)
     p_mq = check_sub.add_parser("module-quality",
@@ -208,6 +210,16 @@ def main():
     p_rf.add_argument("--repo-head", dest="repo_head", required=True,
                       help="The AUTHORITATIVE live repo HEAD (git rev-parse HEAD), supplied by the rail — every evidence row's repo_head must equal this. Freshness is proven against the live head, never against the bundle's own self-declared current_repo_head (PROP-033 xfam FIX 1)")
 
+    # drift (PROP-034 Lever C: the drift alarm — Layer 1 deterministic BITES + Layer 2 advisory WARN)
+    p_dr = check_sub.add_parser("drift",
+                                help="Drift alarm: Layer-1 deterministic divergences over the working set (BLOCKING at --at-acceptance) + Layer-2 advisory WARN; session-start = advisory (never blocks a boot)")
+    p_dr.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_dr.add_argument("--repo-root", dest="repo_root", required=True, help="Path to the git repo root (frozen packet resolves under it via state.packet_dir)")
+    p_dr.add_argument("--cards-dir", dest="cards_dir", required=True, help="Directory of compiled work-order card YAMLs (the live deck)")
+    p_dr.add_argument("--at-acceptance", dest="at_acceptance", action="store_true", default=False,
+                      help="Module-acceptance mode: Layer-1 divergences BLOCK (exit 1); default (session-start) is advisory (exit 0)")
+    p_dr.add_argument("--module-id", dest="module_id", default=None, help="Optional: the module whose acceptance is being gated (informational)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -232,6 +244,7 @@ def main():
         "egress": cmd_egress,
         "class-sweep": cmd_class_sweep,
         "render-fidelity": cmd_render_fidelity,
+        "drift": cmd_drift,
     }
 
     fn = dispatch.get(args.check_cmd)

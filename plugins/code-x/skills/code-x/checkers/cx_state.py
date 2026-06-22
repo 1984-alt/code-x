@@ -628,6 +628,83 @@ def _git(repo_root: str, *git_args) -> tuple[int, str]:
     return result.returncode, result.stdout.strip() + result.stderr.strip()
 
 
+def _latest_handoff_path(repo_root: str) -> str | None:
+    """Latest handoff = lexically last *.md in <repo-root>/handoffs (mirrors cx_boot._latest_handoff)."""
+    hd = Path(repo_root) / "handoffs"
+    if not hd.is_dir():
+        return None
+    candidates = sorted(p.name for p in hd.glob("*.md"))
+    return str(hd / candidates[-1]) if candidates else None
+
+
+def _lock_pointer_migration_exempt(data: dict) -> bool:
+    """F6: an explicit typed migration/deviation row in state.lock_deviations can exempt a session
+    from the REQUIRED lock-pointer (a project genuinely mid-migration before the sub-block existed).
+    The exemption must be EXPLICIT and typed — a row whose deviation_class is the recognized migration
+    marker — never the mere ABSENCE of the block (which is the forgery F6 closes)."""
+    rows = data.get("lock_deviations")
+    if not isinstance(rows, list):
+        return False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        dc = str(row.get("deviation_class", "") or "").strip().upper()
+        reason = str(row.get("reason", "") or "")
+        if dc == "MIGRATION" or "lock_pointer_migration" in reason.lower():
+            return True
+    return False
+
+
+def _check_handoff_lock_pointer(data: dict, repo_root: str, loc: str, findings: list) -> None:
+    """PROP-034 Lever B (read side): when state.packet_dir is set, the latest handoff in
+    <repo-root>/handoffs MUST carry a typed close_turn.lock_pointer that points at the RECOMPUTED
+    frozen hash + open-card set, so the next session NEVER boots on a drifted handoff.
+
+    F6 hardening: a frozen project (state.packet_dir set) that has a handoff but NO lock_pointer block,
+    or a handoff whose block was removed, now FAILS CLOSED — the silent-return was the hole (a
+    REVIEW/FINAL_READY handoff, or a stripped block, booted without recomputing the lock). The ONLY
+    exemption is an EXPLICIT typed migration/deviation row (_lock_pointer_migration_exempt). When
+    packet_dir is unset there is no frozen lock to point at, so nothing is required."""
+    packet_dir_rel = str(data.get("packet_dir", "") or "").strip()
+    if not packet_dir_rel:
+        return  # no frozen packet → no lock to point at; nothing to verify
+
+    handoff = _latest_handoff_path(repo_root)
+    if not handoff:
+        return  # no handoff yet (e.g. the very first session) — nothing to read
+
+    try:
+        text = Path(handoff).read_text(encoding="utf-8")
+    except OSError:
+        findings.append(("P1", loc,
+            f"latest handoff '{handoff}' is unreadable — cannot verify the lock pointer at "
+            "session-start; fail closed (PROP-034 Lever B / F6)"))
+        return
+    import re as _re
+    import yaml as _yaml
+    block = None
+    for m in _re.finditer(r"```ya?ml\s*\n(.*?)```", text, _re.S):
+        try:
+            d = _yaml.safe_load(m.group(1))
+        except _yaml.YAMLError:
+            continue
+        if isinstance(d, dict) and isinstance(d.get("close_turn"), dict):
+            block = d["close_turn"]
+            break
+    if not isinstance(block, dict) or "lock_pointer" not in block:
+        if _lock_pointer_migration_exempt(data):
+            return  # explicit typed migration row exempts this session
+        findings.append(("P1", loc,
+            f"state.packet_dir is set but the latest handoff '{handoff}' carries NO "
+            "close_turn.lock_pointer — a frozen project must POINT AT the lock every turn so the next "
+            "session cannot boot on a drifted/stripped handoff; only an explicit typed migration "
+            "deviation row exempts this (PROP-034 Lever B / F6)"))
+        return
+    from cx_close_turn import verify_lock_pointer
+    findings.extend(verify_lock_pointer(block.get("lock_pointer"), data, repo_root,
+                                        f"{handoff} (lock-pointer)"))
+
+
 def _session_start_checks(data: dict, repo_root: str, loc: str, findings: list,
                           check_boot_ack: bool = True) -> list[str]:
     """Run --session-start continuity checks. Returns list of advisory WARN lines (not findings).
@@ -686,6 +763,12 @@ def _session_start_checks(data: dict, repo_root: str, loc: str, findings: list,
             _check_boot_ack(data, repo_root, loc, findings)
         # P1: reviewer taxonomy/timing declared as typed state (PROP-020).
         _check_review_boundary(data, loc, findings, require_block=True)
+
+    # P1: PROP-034 Lever B (F6) — when state.packet_dir is set, the latest handoff's lock-pointer
+    # must match the RECOMPUTED frozen hash + open-card set, so the next session cannot boot on a
+    # drifted handoff. This runs across ALL handoff-bearing modes (REVIEW / FINAL_READY / build),
+    # not just BUILD_MODES — a stripped or absent lock_pointer on a frozen project fails closed.
+    _check_handoff_lock_pointer(data, repo_root, loc, findings)
 
     # P2: lessons-preload acknowledgment (PROP-017, planning-session read law).
     # A planning session records WHICH MEMORY/LESSONS.yaml it preloaded the

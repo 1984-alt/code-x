@@ -62,6 +62,17 @@ protocol_incident:    # PROP-020: set (with stop_status: PROTOCOL_INCIDENT) on a
   # repair:
   # repair_card:      # the ONLY card allowed to build while OPEN (cx check card --state blocks the rest; cross-family + final-ready forbidden)
 
+lock_deviations: []   # PROP-034 Lever A: TYPED rows logging a departure from the FROZEN PROJECT LOCK during a fix (distinct from protocol_deviations, which depart from the PROTOCOL). An OPEN row BLOCKS module-acceptance (logged ambiguity can never quietly ship). refs path-safety-validated (v1.10).
+  # - deviation_id:        # unique id (e.g. LOCKDEV-001)
+  #   card_id:             # the fix card that introduced the deviation
+  #   lock_anchor_ref:     # {card_id, requirement_id} the fix anchored to in the frozen packet
+  #   deviation_class:     # AMBIGUITY_RESOLVED | SCOPE_CHANGE  (RESTORE proceeds silently, no row)
+  #   reason:              # one plain line: what reading was picked / what scope changed
+  #   ceo_decision_ref:    # REQUIRED for SCOPE_CHANGE (CEO-DECISION-LEDGER row id)
+  #   packet_amendment_ref:# REQUIRED for SCOPE_CHANGE (packet amendment / re-freeze ref)
+  #   status:              # OPEN | CEO_REVIEWED   (OPEN blocks the named accept gate)
+  #   surfaced_at_gate:    # the gate where the CEO sees it (e.g. module-acceptance / live-slice-accept)
+
 packet_dir:           # (V1.10 R4) path (relative to repo root) to the FROZEN packet dir (contains the manifest + the MODULE-REGISTRY) — build-turn's order wall re-hashes it (content-deep binding) and passes it to cx check module-start as --packet-dir; absent on a module build = fail-closed
 module_registry_ref:  # (V1.10) path (relative to repo root) to the CANONICAL <packet_dir>/MODULE-REGISTRY.yaml — build-turn's order wall (cx check module-start) reads order ONLY from that canonical file for every MODULE_BUILD/MODE_A_UI card; must equal packet_dir + "/MODULE-REGISTRY.yaml"; absent on a module build = fail-closed
 accepted_modules: []  # (V1.10) compact refs [{module_id, acceptance_ref, acceptance_sha12}] — never the blob (tiny-state)

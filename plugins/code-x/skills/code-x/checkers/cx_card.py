@@ -286,6 +286,191 @@ def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
                 "prompt_ref — quote the stanza leg verbatim or point prompt_ref at the dispatch prompt"))
 
 
+def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
+    """[PROP-034 Lever A] A FIX/correction card must RE-ANCHOR to the frozen lock before it fixes.
+
+    Required on mode: FIX cards (the cards whose purpose is to repair, not build new locked scope):
+      - lock_anchor_ref {card_id, requirement_id} — the requirement_id MUST resolve to a real
+        requirement line INSIDE the frozen packet named by CODE-X-STATE.packet_dir (reuses the same
+        packet source the deck + acceptance checks read; no new CLI surface). Unresolved = fail closed
+        (LOCK-FIDELITY-FIX-ANCHOR-MISSING).
+      - deviation_class one of RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE
+        (LOCK-FIDELITY-DEVIATION-CLASS-MISSING).
+      - SCOPE_CHANGE additionally needs BOTH ceo_decision_ref AND packet_amendment_ref or it fails
+        closed (LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED): P1 default, P0 when the card touches a
+        high-risk class (money/auth/shared-data-shape/secrets/destructive).
+
+    HONEST JUDGMENT LIMIT (documented, not a closed hole): this proves fields-present + anchor-
+    resolves + scope-authorized. It does NOT prove a card labeled RESTORE truly only restores an
+    explicit locked line — a mislabeled RESTORE with a clean in-bounds diff WILL pass this shell. That
+    residual is mitigated (not eliminated) by the rule-registry 'lock-fidelity-fail-closed' default +
+    the opposite-family reviewer auditing deviation_class on every fix card. GREEN here never means
+    'this RESTORE is honest'."""
+    from cx_lock_fidelity import (
+        VALID_DEVIATION_CLASSES, recompute_frozen_packet_hash, frozen_requirement_ids,
+        path_is_unsafe, card_high_risk, _frozen_registry, resolve_in_repo,
+    )
+    if str(data.get("mode", "")) != "FIX":
+        return
+
+    anchor = data.get("lock_anchor_ref")
+    dev_class = str(data.get("deviation_class", "") or "").strip()
+
+    # deviation_class first (independent of the packet)
+    if not dev_class:
+        findings.append(("P1", loc,
+            "mode: FIX card without deviation_class — a fix must declare RESTORE | "
+            "AMBIGUITY_RESOLVED | SCOPE_CHANGE so a departure from the lock is never silent "
+            "(PROP-034 Lever A / LOCK-FIDELITY-DEVIATION-CLASS-MISSING) "
+            "[RULE:lock-fidelity-fail-closed]"))
+    elif dev_class not in VALID_DEVIATION_CLASSES:
+        findings.append(("P1", loc,
+            f"deviation_class '{dev_class}' not in {sorted(VALID_DEVIATION_CLASSES)} — "
+            "RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE (PROP-034 Lever A)"))
+
+    # SCOPE_CHANGE authorization (independent of the packet — both refs must be present)
+    if dev_class == "SCOPE_CHANGE":
+        ceo_ref = str(data.get("ceo_decision_ref", "") or "").strip()
+        amend_ref = str(data.get("packet_amendment_ref", "") or "").strip()
+        if not ceo_ref or not amend_ref:
+            sev = "P0" if card_high_risk(data) else "P1"
+            findings.append((sev, loc,
+                "deviation_class: SCOPE_CHANGE without BOTH ceo_decision_ref AND "
+                "packet_amendment_ref — anything not already in the lock CANNOT be built as a fix; "
+                "it needs a CEO decision + a packet amendment/re-freeze (or a new PROP) (PROP-034 "
+                "Lever A / LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED)"))
+
+    # lock_anchor_ref presence + shape — BOTH halves required (F2). A fix that omits/forges card_id
+    # lets the drift over-reach check (cx_drift._scope_overreach) skip silently when the anchor card
+    # can't be found, so an unbound requirement_id alone is not enough.
+    anchor_card_id = str(anchor.get("card_id", "") or "").strip() if isinstance(anchor, dict) else ""
+    anchor_req_id = str(anchor.get("requirement_id", "") or "").strip() if isinstance(anchor, dict) else ""
+    if not isinstance(anchor, dict) or not anchor_card_id or not anchor_req_id:
+        findings.append(("P1", loc,
+            "mode: FIX card without a resolving lock_anchor_ref {card_id, requirement_id} — a fix "
+            "that cannot name BOTH the frozen card AND the requirement it restores is freelancing "
+            "(PROP-034 Lever A / LOCK-FIDELITY-FIX-ANCHOR-MISSING)"))
+        return
+    req_id = anchor_req_id
+
+    # Anchor MUST resolve inside the frozen packet named by state.packet_dir.
+    state_path = getattr(args, "state", None)
+    if not state_path:
+        findings.append(("P1", loc,
+            "mode: FIX card carries lock_anchor_ref but --state was not supplied — cannot resolve "
+            "the anchor against the frozen packet (state.packet_dir); fail closed (PROP-034 Lever A)"))
+        return
+    state_data, _serr = load_yaml(state_path)
+    if not isinstance(state_data, dict):
+        findings.append(("P1", loc,
+            f"mode: FIX card: state file '{state_path}' unreadable — cannot resolve the lock anchor "
+            "(PROP-034 Lever A)"))
+        return
+    packet_dir_rel = str(state_data.get("packet_dir", "") or "").strip()
+    repo_root = str(Path(state_path).resolve().parent)
+    if path_is_unsafe(packet_dir_rel):
+        findings.append(("P1", loc,
+            f"state.packet_dir '{packet_dir_rel}' is unsafe (absolute / '..') — the frozen packet "
+            "must be an in-tree path; fail closed (PROP-034 Lever A)"))
+        return
+
+    # F2: the packet the card anchors to is BOUND to the card by hash. RECOMPUTE the state.packet_dir
+    # packet hash and require it == the card's source_map.locked_packet_hash, so a fix cannot anchor
+    # to an attacker-chosen in-repo packet (a different frozen dir) while pointing state elsewhere.
+    declared_pkt_hash = str(nested_get(data, "source_map", "locked_packet_hash") or "").strip()
+    if not declared_pkt_hash:
+        findings.append(("P1", loc,
+            "mode: FIX card without source_map.locked_packet_hash — a fix must bind to the packet it "
+            "restores by hash so its anchor cannot point at an attacker-chosen packet (PROP-034 Lever A / F2)"))
+        return
+    real_pkt_hash, herr = recompute_frozen_packet_hash(repo_root, packet_dir_rel)
+    if herr or real_pkt_hash is None:
+        findings.append(("P1", loc,
+            f"mode: FIX card: cannot recompute the frozen packet hash to bind the anchor — {herr} "
+            "(PROP-034 Lever A / F2)"))
+        return
+    if declared_pkt_hash != real_pkt_hash:
+        findings.append(("P1", loc,
+            f"source_map.locked_packet_hash '{declared_pkt_hash}' != the RECOMPUTED hash of "
+            f"state.packet_dir '{packet_dir_rel}' ('{real_pkt_hash}') — the fix anchors to a DIFFERENT "
+            "packet than the live frozen one; a self-declared anchor packet is never trusted "
+            "(PROP-034 Lever A / F2)"))
+        return
+
+    req_ids, rerr = frozen_requirement_ids(repo_root, packet_dir_rel)
+    if rerr or req_ids is None:
+        findings.append(("P1", loc,
+            f"mode: FIX card: cannot read the frozen packet to resolve lock_anchor_ref — {rerr} "
+            "(PROP-034 Lever A)"))
+        return
+    if req_id not in req_ids:
+        findings.append(("P1", loc,
+            f"lock_anchor_ref.requirement_id '{req_id}' does not resolve to a requirement inside the "
+            f"frozen packet '{packet_dir_rel}' (requirements-manifest) — a fix must anchor to a real "
+            "locked line (PROP-034 Lever A)"))
+
+    # F2: card_id MUST resolve to a card in the frozen MODULE-REGISTRY (the same source the order wall
+    # + open-card derivation trust). An anchor naming a card not in the frozen deck cannot be the card
+    # a fix restores — fail closed rather than letting the over-reach check skip an unfound anchor.
+    resolved_pkt, _perr = resolve_in_repo(repo_root, packet_dir_rel)
+    if resolved_pkt is not None:
+        by_module, regerr = _frozen_registry(resolved_pkt)
+        if regerr:
+            findings.append(("P1", loc,
+                f"mode: FIX card: cannot read the frozen MODULE-REGISTRY to resolve "
+                f"lock_anchor_ref.card_id — {regerr} (PROP-034 Lever A / F2)"))
+        else:
+            known_cards = {c for cards in by_module.values() for c in cards}
+            if anchor_card_id not in known_cards:
+                findings.append(("P1", loc,
+                    f"lock_anchor_ref.card_id '{anchor_card_id}' does not resolve to a card in the "
+                    f"frozen MODULE-REGISTRY of '{packet_dir_rel}' (known: {sorted(known_cards)}) — a "
+                    "fix must anchor to a real frozen card (PROP-034 Lever A / F2)"))
+
+    # F3: a SCOPE_CHANGE's authorizing refs must RESOLVE, not merely be present. The ceo_decision_ref
+    # must resolve to a real row in the packet's CEO-DECISION-LEDGER.md (reusing the SAME resolver the
+    # deck/packet checks use), and the packet_amendment_ref must be a typed safe in-repo ref (v1.10
+    # path-safety: no absolute path / '..' / symlink / outside-repo). A dangling decision id or a
+    # path-unsafe amendment is unauthorized scope (P1 default, P0 on a high-risk class).
+    if dev_class == "SCOPE_CHANGE":
+        ceo_ref = str(data.get("ceo_decision_ref", "") or "").strip()
+        amend_ref = str(data.get("packet_amendment_ref", "") or "").strip()
+        sev = "P0" if card_high_risk(data) else "P1"
+        if ceo_ref:
+            from cx_deck import LEDGER_FILE, LEDGER_ROW_ID_RE
+            if resolved_pkt is None:
+                findings.append((sev, loc,
+                    "deviation_class: SCOPE_CHANGE ceo_decision_ref cannot be resolved — the frozen "
+                    "packet is unreadable, so the authorizing decision cannot be verified (PROP-034 "
+                    "Lever A / F3)"))
+            else:
+                ledger_path = resolved_pkt / LEDGER_FILE
+                if not ledger_path.is_file():
+                    findings.append((sev, loc,
+                        f"deviation_class: SCOPE_CHANGE names ceo_decision_ref '{ceo_ref}' but the "
+                        f"packet has no {LEDGER_FILE} — the authorizing decision cannot resolve "
+                        "(PROP-034 Lever A / F3)"))
+                else:
+                    ledger_ids = set(LEDGER_ROW_ID_RE.findall(
+                        ledger_path.read_text(encoding="utf-8", errors="replace")))
+                    if ceo_ref not in ledger_ids:
+                        findings.append((sev, loc,
+                            f"deviation_class: SCOPE_CHANGE ceo_decision_ref '{ceo_ref}' does not "
+                            f"resolve to a row in the packet {LEDGER_FILE} — a self-declared decision "
+                            "id is not authorization (PROP-034 Lever A / F3)"))
+        if amend_ref:
+            _resolved_amend, amend_err = resolve_in_repo(repo_root, amend_ref)
+            if amend_err is not None:
+                findings.append((sev, loc,
+                    f"deviation_class: SCOPE_CHANGE packet_amendment_ref {amend_err} — the amendment "
+                    "must be a real in-tree file (PROP-034 Lever A / F3)"))
+            elif _resolved_amend is None or not _resolved_amend.is_file():
+                findings.append((sev, loc,
+                    f"deviation_class: SCOPE_CHANGE packet_amendment_ref '{amend_ref}' does not point "
+                    "at a real in-repo file — a missing amendment is not authorization (PROP-034 "
+                    "Lever A / F3)"))
+
+
 def cmd_card(args) -> int:
     path = args.file
     data, err = load_yaml(path)
@@ -454,6 +639,9 @@ def cmd_card(args) -> int:
 
     # --- PROTOCOL_INCIDENT gate: blocks new build/cross-family while open (PROP-020) ---
     _check_incident_gate(data, args, loc, findings)
+
+    # --- PROP-034 Lever A: re-anchor-before-fix on mode: FIX cards ---
+    _check_lock_fidelity(data, args, loc, findings)
 
     # --- actor_record: present + cross-family check ---
     ar = data.get("actor_record")
