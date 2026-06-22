@@ -248,6 +248,7 @@ Code-X welcomes contributions. The headline open item is an **Autonomous Build/S
 
 - **obra / superpowers** — the plugin template and methodology (including the TDD skill).
 - **frontend-design** — the design skill Code-X relies on as a prerequisite.
+- **CodeRabbit** — the automated code-review tool Code-X's mandatory review gate depends on (one of its four review stages).
 
 ---
 
