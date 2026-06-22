@@ -328,3 +328,43 @@ rules:
     appears_in:
       - VOICE.md
       - KERNEL.md
+
+  - id: prevention-first-ladder
+    # Assertion (v1.13, PROP-024, BUILDER-STANDARD.md): the ordered pre-write do-less ladder is a
+    # PREVENTION gate walked before the first code edit — its presence in the builder standard must
+    # not silently vanish or drift. NOTE: BUILDER-STANDARD.md deliberately carries NO [RULE:prevention-
+    # first-ladder] pointer — the pointer is a full-pass shortcut (cx_consistency.py), and this rule's
+    # WHOLE POINT is that the canonical phrases must actually be PRESENT, so cx check consistency fails
+    # the moment any of them is removed/reworded out of the standard (built-code xfam P1-01: a pointer
+    # would have made the bite a no-op). This entry is the standing presence/anti-drift bite (EVAL-029).
+    # Honest limit: a presence lint, NOT mechanical overbuild detection (you cannot mechanically
+    # prove the builder honestly walked the rungs — that is what module reviews judge).
+    canonical:
+      - "do-less ladder"
+      - "decide what NOT to build first"
+      - "The ladder NEVER cuts"
+    key_phrases: ["do-less ladder", "decide what NOT to build first"]
+    banned_negations: ["ladder is optional", "ladder is advisory", "skip the do-less ladder", "ladder no longer required"]
+    appears_in:
+      - BUILDER-STANDARD.md
+
+  - id: render-fidelity-gate
+    # Assertion (PROP-033, fold v1.14): cx check render-fidelity is an in-loop RENDERED-fidelity
+    # gate run after a UI build card renders and BEFORE self-review. Layer 1 is deterministic +
+    # BLOCKING — it VALIDATES a render bundle (it never drives a browser): a pinned render_profile,
+    # fresh machine-generated commit-bound evidence (collect != check), a frozen coverage matrix,
+    # and measured overflow/offscreen/blank checks markers cannot see. Layer 2 (golden-drift) is
+    # ADVISORY WARN only until same-commit repeatability is proven (a perceptual diff as a hard gate
+    # today = the flaky-gate scar). The eight Layer-1 clauses (RENDER-FIT-*) each FAIL on their bad
+    # fixture and PASS on render_good.yaml; the gate adds NO new gate family (it rides PROP-019/022/
+    # 031/032 + module_acceptance receipts) and an additive render_fidelity_receipt_ref links it to
+    # PROP-031 without editing the locked external-capture check.
+    canonical:
+      - "render-fidelity"
+      - "Layer 1"
+      - "collect != check"
+    key_phrases: ["render-fidelity", "render-fit", "collect != check"]
+    banned_negations: ["render-fidelity is optional", "Layer 2 golden-drift blocks", "a hand-authored screenshot is enough", "render-fidelity may be skipped"]
+    appears_in:
+      - GATES.md
+      - checkers/CX-CHECK-SPEC.md

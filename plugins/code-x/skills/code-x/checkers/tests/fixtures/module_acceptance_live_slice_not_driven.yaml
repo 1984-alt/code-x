@@ -1,0 +1,21 @@
+# BAD: a live_slice (m_live) whose live_slice_accept block is PRESENT but ceo_drove is false —
+# the CEO did not drive the running build (PROP-032). module-quality must P0.
+module_acceptance:
+  module_id: m_live
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0044556677
+  quality_card:
+    security: no auth surface on this page; no secrets rendered
+    efficient: single template, no premature framework
+    regression: PASS
+    tests: page render + nav links covered
+    conformance: built page matches the locked home-screen contract
+  live_slice_accept:
+    live_url: http://localhost:8000/home
+    ceo_drove: false
+    ceo_turn_ref: handoffs/2026-06-20-slice-home-accept.md
+    repo_sha: 7d1408c9aa21
+    viewport: 390x844
+  ts: "2026-06-20T16:00:00+00:00"

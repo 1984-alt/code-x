@@ -209,4 +209,60 @@ def cmd_design_fidelity(args) -> int:
         findings.append(("P2", screenshot_path,
             f"screenshot extension '{shot.suffix}' not in {sorted(SCREENSHOT_EXTS)}"))
 
+    # PROP-031: external-visual-reference lock binding + side-by-side ACCEPT receipt.
+    # When the lock's baseline is an external app capture (not team-produced output), the
+    # lock must trace to the captured reference and the CEO must have ACCEPTED the produced
+    # screen side-by-side with that reference at the target viewport. cx check packet owns
+    # the cross-file capture hashes; this owns the lock-side binding + receipt shape.
+    if is_lock_manifest and str(manifest.get("baseline_source", "")).strip() == "external_capture":
+        for f in ("external_reference_ref", "capture_ids", "capture_manifest_hash", "viewport_ids"):
+            if not manifest.get(f):
+                findings.append(("P1", manifest_path,
+                    f"ui_lock_manifest.baseline_source is external_capture but '{f}' is missing — "
+                    "the lock baseline must trace to the captured external reference, not to "
+                    "team-produced output (PROP-031)"))
+        receipt = manifest.get("side_by_side_accept")
+        if not isinstance(receipt, dict):
+            findings.append(("P0", manifest_path,
+                "external_capture lock has no side_by_side_accept receipt — the CEO must ACCEPT the "
+                "produced screen side-by-side with the captured reference at the target viewport "
+                "before G7 (the gap that let 'like MM' ship from memory, PROP-031)"))
+        else:
+            req = ("produced_screen_hash", "reference_capture_hash", "viewport_id",
+                   "produced_dimensions", "reference_dimensions", "composite_path",
+                   "ceo_acceptance_ref")
+            miss = [k for k in req if not str(receipt.get(k, "") or "").strip()]
+            if miss:
+                findings.append(("P0", manifest_path,
+                    f"side_by_side_accept receipt missing {miss} — an ACCEPT with no reference "
+                    "in-frame is not a valid taste gate (PROP-031)"))
+            pd = str(receipt.get("produced_dimensions", "") or "").strip()
+            rd = str(receipt.get("reference_dimensions", "") or "").strip()
+            if pd and rd and pd != rd:
+                findings.append(("P1", manifest_path,
+                    f"side_by_side_accept produced_dimensions ({pd}) != reference_dimensions ({rd}) "
+                    "— not judged at the same viewport (PROP-031)"))
+            comp = str(receipt.get("composite_path", "") or "").strip()
+            if comp:
+                cp = Path(comp)
+                if cp.is_absolute() or ".." in cp.parts:
+                    findings.append(("P1", manifest_path,
+                        f"side_by_side_accept composite_path '{comp}' must be lock-relative, no "
+                        "'..'/absolute (PROP-031)"))
+                else:
+                    base = Path(manifest_path).resolve().parent
+                    full = base / cp
+                    try:
+                        escapes = full.is_symlink() or not full.resolve().is_relative_to(base)
+                    except OSError:
+                        escapes = True
+                    if escapes:
+                        findings.append(("P1", manifest_path,
+                            f"side_by_side_accept composite_path '{comp}' is a symlink or resolves "
+                            "outside the lock directory — no symlink-ancestor escape (PROP-031)"))
+                    elif not full.is_file():
+                        findings.append(("P1", manifest_path,
+                            f"side_by_side_accept composite_path '{comp}' is not a real file beside "
+                            "the lock — the side-by-side image must exist (PROP-031)"))
+
     return findings_report(findings)

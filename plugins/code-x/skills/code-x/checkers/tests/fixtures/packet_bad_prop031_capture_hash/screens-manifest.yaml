@@ -1,0 +1,12 @@
+# PROP-031: provenance + capture binding + scope per screen.
+screens:
+  - id: expense
+    user_facing: true
+    visual_provenance: external_reference
+    external_reference_ids: [mm-expense]
+    target_viewports: [mobile]
+    borrowed_axes: [layout_character, density]
+    excluded_axes: [color_mood]
+  - id: home
+    user_facing: true
+    visual_provenance: original

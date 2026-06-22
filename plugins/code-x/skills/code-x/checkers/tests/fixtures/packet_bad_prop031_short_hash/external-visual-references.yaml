@@ -1,0 +1,7 @@
+manifest_hash: ab
+references:
+  - ref_id: mm-expense
+    named_source: "Money Manager (MM)"
+    viewport: mobile
+    file_path: design-reference/mm-expense-390.png
+    file_hash: ab

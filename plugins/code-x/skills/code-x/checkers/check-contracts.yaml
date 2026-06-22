@@ -360,6 +360,33 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
 
+  # ── PROP-032 fold: Live Slice Delivery — the CEO must DRIVE the running build per page slice ──
+  - id: MODULE-QUALITY-LIVE-SLICE-NO-DRIVE
+    check: module-quality
+    kind: gate
+    clause: "a live_slice module (frozen registry) accepted with no live_slice_accept block rejected — a Mode A screenshot/shell or module batch is not proof the CEO DROVE the running build (P0) [PROP-032]"
+    source: "PROP-032 (Live Slice Delivery); covers the LAST slice (no next to gate)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_missing.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m_live"]
+      expect_severity: P0
+      expect_contains: "NO typed live_slice_accept block"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m_live"]
+
+  - id: MODULE-START-LIVE-SLICE-NO-DRIVE
+    check: module-start
+    kind: gate
+    clause: "the order wall reads live_slice from the FROZEN registry — a prior live_slice with no live_slice_accept block is NOT validly accepted, so the next slice cannot start (P0 — 'no next until the CEO drove it') [PROP-032]"
+    source: "PROP-032 (Live Slice Delivery); the core 'no accept, no next' P0"
+    git_fixture: module_start_live_slice_blocks
+    bad:
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "live_slice_accept"
+    good:
+      git_fixture: module_start_live_slice_ok
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
   # ── V1.10 fix-fold (GPT built-code cross-review) — the bypass cases the first fold missed ──
   - id: MODULE-START-PRIOR-NO-RECEIPT
     check: module-start
@@ -1201,6 +1228,71 @@ clauses:
       args: ["tests/fixtures/packet_good"]
 
   # ──────────────────────────────────────────────────────────────
+  # PROP-023 fold: WRITING-stage front-end hardening (clarify-before-freeze + testable
+  # acceptance criterion). Part of v1.13. Canon: PACKET-CONTENTS.md Piece 2.
+  # ──────────────────────────────────────────────────────────────
+
+  - id: PACKET-CLARIFY-SWEEP-REQUIRED
+    check: packet
+    kind: gate
+    clause: "packet without clarification-sweep.md rejected — no markers is not proof the sweep ran"
+    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a"
+    bad:
+      args: ["tests/fixtures/packet_bad_clarify_no_sweep"]
+      expect_severity: P1
+      expect_contains: "absence of markers is not proof the sweep ran"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-CLARIFY-NO-OPEN-MARKERS
+    check: packet
+    kind: gate
+    clause: "an unresolved [NEEDS-CLARIFICATION: …] marker in a content doc blocks freeze"
+    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a"
+    bad:
+      args: ["tests/fixtures/packet_bad_clarify_open_marker"]
+      expect_severity: P1
+      expect_contains: "unresolved '[NEEDS-CLARIFICATION"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-CLARIFY-RESOLUTION-LEDGER-BOUND
+    check: packet
+    kind: gate
+    clause: "a clarification whose ceo_decision_ref does not RESOLVE to a real ledger row rejected — a fake/unresolving ref (CEO-D-99999) is the inline free-text self-exemption hatch (built-code review P1: presence-only check was not ledger-bound)"
+    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a (synthesis ADAPT ii + built-code review)"
+    bad:
+      args: ["tests/fixtures/packet_bad_clarify_inline_dismissal"]
+      expect_severity: P1
+      expect_contains: "does not resolve to a"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-ACCEPTANCE-CRITERION-REQUIRED
+    check: packet
+    kind: gate
+    clause: "BUILDING requirement without a structured acceptance_criterion {pass_condition, evidence_type, verification_ref} rejected — present+non-placeholder, cold reader judges testability"
+    source: "PACKET-CONTENTS.md Piece 2 / PROP-023b (synthesis ADAPT, fold-blocking P1: not an English-quality gate)"
+    bad:
+      args: ["tests/fixtures/packet_bad_acceptance_missing"]
+      expect_severity: P1
+      expect_contains: "no 'acceptance_criterion' block"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-ACCEPTANCE-CRITERION-FILLED
+    check: packet
+    kind: gate
+    clause: "BUILDING acceptance_criterion field that is a placeholder OR a non-string (bool/list/dict via str-coercion) rejected — present != filled-in (built-code review P1: `pass_condition: true` must not pass)"
+    source: "PACKET-CONTENTS.md Piece 2 / PROP-023b (built-code review)"
+    bad:
+      args: ["tests/fixtures/packet_bad_acceptance_nonstring"]
+      expect_severity: P1
+      expect_contains: "missing/placeholder/non-string"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  # ──────────────────────────────────────────────────────────────
   # PROP-015 fold (2026-06-10): review-dispatch three-leg ask — [RULE:review-three-leg-ask]
   # ──────────────────────────────────────────────────────────────
 
@@ -1273,6 +1365,49 @@ clauses:
       expect_severity: P1
     good:
       args: ["tests/fixtures/packet_good_style_locked"]
+
+  # ──────────────────────────────────────────────────────────────
+  # PROP-031 fold (2026-06-20): external-visual-reference capture + lock
+  # ──────────────────────────────────────────────────────────────
+
+  - id: PACKET-PROP031-PROVENANCE-REQUIRED
+    check: packet
+    kind: gate
+    clause: "user-facing packet (category 14 DONE) with a screen lacking a valid visual_provenance rejected — 'like MM' can never be a silent prose aside"
+    source: "GATES.md G6 / PACKET-CONTENTS.md cat-14 / PROP-031"
+    bad:
+      args: ["tests/fixtures/packet_bad_prop031_no_provenance"]
+      expect_severity: P1
+      expect_contains: "look-source unstated (PROP-031)"
+    good:
+      args: ["tests/fixtures/packet_prop031_external_good"]
+
+  - id: PACKET-PROP031-EXTERNAL-UNCAPTURED
+    check: packet
+    kind: gate
+    clause: "external_reference screen with no captured/pinned reference manifest rejected — a chat 'confirmed the UX' is not a capture"
+    source: "PACKET-CONTENTS.md cat-14 / PROP-031"
+    bad:
+      args: ["tests/fixtures/packet_bad_prop031_uncaptured"]
+      expect_severity: P1
+      expect_contains: "the captured reference must be pinned inside the packet (PROP-031)"
+    good:
+      args: ["tests/fixtures/packet_prop031_external_good"]
+
+  - id: PACKET-PROP031-CAPTURE-HASH
+    check: packet
+    kind: gate
+    clause: "captured reference whose file_hash no longer matches the pinned bytes rejected — the capture changed since freeze"
+    source: "PACKET-CONTENTS.md cat-14 / PROP-031"
+    bad:
+      args: ["tests/fixtures/packet_bad_prop031_capture_hash"]
+      expect_severity: P1
+      expect_contains: "file_hash mismatch"
+    good:
+      args: ["tests/fixtures/packet_prop031_external_good"]
+
+  # (PROP-031 advisory fidelity-language WARN is non-blocking — covered by a unit
+  #  test in test_cx.py, not the contract harness, which proves GATES bite.)
 
   - id: STATE-LESSONS-PRELOAD-ACK
     check: state
@@ -2275,3 +2410,164 @@ clauses:
       expect_contains: "UNVERIFIED"
     good:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--build-vocab", "tests/fixtures/build_vocab_good.yaml"]
+
+  - id: DESIGN-FIDELITY-PROP031-RECEIPT-MISSING
+    check: design-fidelity
+    kind: gate
+    clause: "external_capture lock with no side_by_side_accept receipt rejected — the CEO must ACCEPT the produced screen side-by-side with the captured reference (the gap that let 'like MM' ship from memory)"
+    source: GATES.md G6 / PROP-031
+    bad:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_no_receipt.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+      expect_severity: P0
+      expect_contains: "no side_by_side_accept receipt"
+    good:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+
+  - id: DESIGN-FIDELITY-PROP031-VIEWPORT-MISMATCH
+    check: design-fidelity
+    kind: gate
+    clause: "external_capture side-by-side receipt whose produced/reference dimensions differ rejected — not judged at the same viewport"
+    source: GATES.md G6 / PROP-031
+    bad:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_dim_mismatch.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+      expect_severity: P1
+      expect_contains: "not judged at the same viewport"
+    good:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+
+  # ── render-fidelity (PROP-033, fold v1.14) — in-loop RENDERED-fidelity gate ──────────
+  # Layer 1 = deterministic + BLOCKING (P0 gate-integrity, P1 layout-defect); each bad fixture
+  # isolates ONE clause and the shared render_good.yaml PASSES.
+  # FIX 1 (xfam): every render clause supplies the AUTHORITATIVE --repo-head aaaaaaaaaaaa (the
+  # good fixture's evidence repo_head). The check no longer trusts the bundle's own current_repo_head.
+  - id: RENDER-FIT-PROFILE-UNPINNED
+    check: render-fidelity
+    kind: gate
+    clause: "render bundle with no pinned render_profile (empty/missing profile_hash) rejected — a non-deterministic render proves nothing"
+    source: GATES.md G6 / PROP-033 §4.1
+    bad:
+      args: ["tests/fixtures/render_bad_profile_unpinned.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "RENDER-FIT-PROFILE-UNPINNED"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-PROFILE-UNBOUND
+    check: render-fidelity
+    kind: gate
+    clause: "render bundle whose profile_hash != the fingerprint recomputed from the profile body rejected — a self-declared hash any string satisfies pins nothing (FIX 2)"
+    source: GATES.md G6 / PROP-033 §4.1
+    bad:
+      args: ["tests/fixtures/render_bad_profile_unbound.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "does not bind the profile body"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-EVIDENCE-MISSING-OR-STALE
+    check: render-fidelity
+    kind: gate
+    clause: "evidence whose repo_head != the authoritative --repo-head (a leftover screenshot from a prior commit) rejected — green render-fit must mean a render of THIS commit"
+    source: GATES.md G6 / PROP-033 §4.2
+    bad:
+      args: ["tests/fixtures/render_bad_evidence_stale.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "RENDER-FIT-EVIDENCE-MISSING-OR-STALE"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-RECEIPT-FORGED
+    check: render-fidelity
+    kind: gate
+    clause: "evidence whose screenshot_hash != sha12 of the real screenshot bytes (a forged/swapped screenshot) rejected — collect != check, the receipt must bind the real file"
+    source: GATES.md G6 / PROP-033 §4.2
+    bad:
+      args: ["tests/fixtures/render_bad_receipt_forged.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "RENDER-FIT-RECEIPT-FORGED"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-RECEIPT-FORGED-MISSING-ROW-HASH
+    check: render-fidelity
+    kind: gate
+    clause: "an evidence row with NO render_profile_hash rejected — the profile pin is mandatory per-row; an absent row hash can no longer skip the pin (FIX 2)"
+    source: GATES.md G6 / PROP-033 §4.2
+    bad:
+      args: ["tests/fixtures/render_bad_missing_row_hash.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "render_profile_hash"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-RECEIPT-FORGED-WRONG-VIEWPORT
+    check: render-fidelity
+    kind: gate
+    clause: "an evidence row whose measured viewport_width != the pinned profile width for its viewport_id rejected — the receipt lies about the viewport it rendered at, gaming the overflow check (FIX 3, rated P0 forgery)"
+    source: GATES.md G6 / PROP-033 §4.4
+    bad:
+      args: ["tests/fixtures/render_bad_wrong_viewport.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "the receipt lies about the viewport"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-COVERAGE-INCOMPLETE
+    check: render-fidelity
+    kind: gate
+    clause: "a frozen coverage_matrix required row with no otherwise-valid render evidence rejected — no required render row may silently ship unrendered"
+    source: GATES.md G6 / PROP-033 §4.3
+    bad:
+      args: ["tests/fixtures/render_bad_coverage_incomplete.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "RENDER-FIT-COVERAGE-INCOMPLETE"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-OVERFLOW
+    check: render-fidelity
+    kind: gate
+    clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production module)"
+    source: GATES.md G6 / PROP-033 §4.4
+    bad:
+      args: ["tests/fixtures/render_bad_overflow.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P1
+      expect_contains: "RENDER-FIT-OVERFLOW"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-CONTROL-OFFSCREEN
+    check: render-fidelity
+    kind: gate
+    clause: "a locked primary control rendered out of frame (in_frame: false) rejected — an off-screen control fails the screen even with no horizontal overflow"
+    source: GATES.md G6 / PROP-033 §4.4
+    bad:
+      args: ["tests/fixtures/render_bad_control_offscreen.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P1
+      expect_contains: "RENDER-FIT-CONTROL-OFFSCREEN"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-BLANK-OR-ROUTE-FAIL
+    check: render-fidelity
+    kind: gate
+    clause: "a blank render / app that never reached app-ready rejected — a blank error page has no overflow and would otherwise pass the width checks"
+    source: GATES.md G6 / PROP-033 §4.4
+    bad:
+      args: ["tests/fixtures/render_bad_blank_route_fail.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P1
+      expect_contains: "RENDER-FIT-BLANK-OR-ROUTE-FAIL"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-FIT-CANNOT-VERIFY
+    check: render-fidelity
+    kind: gate
+    clause: "a cannot_verify: true evidence row with no preflight_pass_ref rejected — env-absence must be preflight-backed, never a blanket per-card waiver"
+    source: GATES.md G6 / PROP-033 §4.8
+    bad:
+      args: ["tests/fixtures/render_bad_cannot_verify.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P1
+      expect_contains: "RENDER-FIT-CANNOT-VERIFY"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]

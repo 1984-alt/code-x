@@ -57,6 +57,18 @@ build-runbook half of v0.13 cat-23 is V1-owned by KERNEL/GATES/ROUTING and is NO
 content. Net: **20 categories.** The number is not sacred; the AUDIT is: every category
 accounted for.
 
+**Category 14 — visual provenance + external references (PROP-031, 2026-06-20).** When category 14
+is DONE (user-facing app), beyond the PRODUCT-TASTE-LOCK `locked_style_direction` (PROP-016) the
+packet carries `screens-manifest.yaml` — every user-facing screen with a `visual_provenance`
+(`original | external_reference | derived_from_locked_style`); a screen with its look-source unstated
+FAILS `cx check packet` ("like a reference app" can no longer be a silent prose aside). Any `external_reference`
+screen additionally requires `external-visual-references.yaml` INSIDE the frozen packet hash: the
+named app's real screens CAPTURED + pinned read-only (per-capture `file_hash` + a set `manifest_hash`
++ repo-relative path-safe `file_path`), bound to the screen by `ref_id` with `{target_viewports,
+borrowed_axes, excluded_axes}` and a capture at every target viewport. A verbal "confirmed the UX" is
+never a capture. (The lock-side binding + the side-by-side CEO ACCEPT receipt live in GATES G6 /
+`cx check design-fidelity`.) Category 14 N/A = not user-facing = clause silent.
+
 ## Piece 2 — Completeness-audit gate (fresh cold reader)
 
 **When:** after all packet docs are drafted, **BEFORE** CEO business-logic validation and
@@ -86,6 +98,35 @@ review changes product intent, money/business logic, a security/privacy tradeoff
 requirements, or CEO decisions, the packet must **return to the affected CEO validation**
 / decision step before freeze. Not a new review loop — a correctness backflow. (Semantic
 rule — enforced by process + review methodology, not by a checker; honest scope.)
+
+**WRITING-stage front-end hardening (PROP-023, 2026-06-20 — part of v1.13).** Two HARD
+mechanical clauses ride the mechanical half, both firing at the WRITING→freeze boundary
+(GitHub Spec Kit's two enforcement-neutral front-end ideas rendered as Code-X clauses that
+actually bite — never the prose, self-exemptible gates Code-X exists to kill):
+- **(a) clarify-before-freeze.** Packet authoring runs a templated ambiguity-elicitation
+  pass; every open / under-specified point is tagged inline with the ONE canonical marker
+  `[NEEDS-CLARIFICATION: <question>]`, raised to the CEO, and resolved to a
+  CEO-DECISION-LEDGER row before its inline marker is removed. Resolutions are recorded in a
+  STRUCTURED `clarification-sweep.yaml` (a `clarification_sweep.clarifications` list; empty =
+  swept, nothing raised). `cx check packet`: requires that artifact (absence of markers is
+  NOT proof the sweep ran); FAILS while ANY `[NEEDS-CLARIFICATION]` marker survives in a
+  content doc (EVERY non-binary file is scanned — only the root sweep is excluded — so a
+  marker hidden in a `.json` or extensionless file cannot dodge); and requires every listed
+  clarification's `ceo_decision_ref` to **RESOLVE to a real `CEO-D-NNN` ledger row** — a ref
+  that merely looks valid but names no row (or an inline free-text dismissal) is the
+  self-exemption escape hatch this floor rejects. (Built-code GPT/Codex review hardened the
+  artifact from free-text to structured so the fake-ref / case-variant / false-positive
+  bypasses cannot exist.)
+- **(b) testable acceptance criterion.** Every BUILDING row in `requirements-manifest.yaml`
+  carries a structured `acceptance_criterion: {pass_condition, evidence_type,
+  verification_ref}`, present + non-placeholder **string** (a bool / list / dict does not
+  pass via str-coercion). Scoped to BUILDING (dispositioned-out rows already carry ref/reason
+  semantics via `cx check deck`). **This is a PRESENCE + structure gate, NOT an
+  English-quality gate** — the cold-reader completeness audit (the semantic half above)
+  judges whether the criterion is actually *testable*; a literal "is this measurable" checker
+  would over-claim, the cardinal sin. A requirement with no testable acceptance criterion is
+  exactly what drifts undetected to acceptance (the live-production drift class). GREEN = the
+  structured fields are present + filled, NOT that the requirement is unambiguous.
 
 ## Piece 3 — CEO-DECISION-LEDGER (asks + decisions, one home)
 
@@ -159,6 +200,12 @@ DECK-CEO-REF-RESOLVES (P1, deck-side) · STATE-BUILDER-STANDARD-ACK (P2, state-s
 CARD-PROFILES-ENV-TEST-ONLY (P1 — `CX_PROFILES` honored only with `CODE_X_TEST_MODE=1`;
 production reads live canon, fail-loud, GPT P1-02). G7 carries the packet-floor line;
 G8 carries the R1–R4 always-on lines.
+
+Later v1.13 folds added more `cx check packet` clauses, each with a pinned biting fixture:
+PROP-031 (external-visual-reference) the `PACKET-PROP031-*` provenance/capture clauses;
+**PROP-023 (WRITING-stage front-end hardening) five clauses — PACKET-CLARIFY-SWEEP-REQUIRED ·
+PACKET-CLARIFY-NO-OPEN-MARKERS · PACKET-CLARIFY-RESOLUTION-LEDGER-BOUND ·
+PACKET-ACCEPTANCE-CRITERION-REQUIRED · PACKET-ACCEPTANCE-CRITERION-FILLED** (all P1, see EVAL-027).
 
 ## What this floor does NOT do (anti-bloat)
 

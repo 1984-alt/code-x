@@ -1,0 +1,16 @@
+# GOOD: module m_qfalse has live_slice: "false" (quoted STRING) in the registry — registry_flag_true
+# must NOT truthy-coerce it, so the live-drive gate does NOT fire (built-code review P2). No
+# live_slice_accept block, yet module-quality must PASS (this is an honest NON-live module).
+module_acceptance:
+  module_id: m_qfalse
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0055667788
+  quality_card:
+    security: no auth surface; no secrets rendered
+    efficient: single template
+    regression: PASS
+    tests: render covered
+    conformance: matches the locked contract
+  ts: "2026-06-20T17:00:00+00:00"

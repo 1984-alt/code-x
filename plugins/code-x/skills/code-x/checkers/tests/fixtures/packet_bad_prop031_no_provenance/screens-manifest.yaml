@@ -1,0 +1,4 @@
+screens:
+  - id: expense
+    user_facing: true
+    visual_provenance: copy_that_app

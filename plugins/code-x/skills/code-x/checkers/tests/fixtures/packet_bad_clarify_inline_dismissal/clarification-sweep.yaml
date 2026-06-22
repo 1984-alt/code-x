@@ -1,0 +1,10 @@
+# Clarification sweep (PROP-023a) — this fixture's defect: a clarification recorded with a
+# ceo_decision_ref that LOOKS valid (CEO-D-99999) but resolves to NO real ledger row. The
+# gate must reject it — a fake / unresolving ref is the self-exemption escape hatch.
+clarification_sweep:
+  swept_by: cx-fixture-cold-reader
+  swept_at: "2026-06-20"
+  clarifications:
+    - question: "Should the export include archived rows?"
+      resolution: "decided not applicable this wave"
+      ceo_decision_ref: CEO-D-99999

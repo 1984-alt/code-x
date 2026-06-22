@@ -33,6 +33,15 @@ def _run_cx(*cx_args) -> tuple[int, str]:
 
 
 def _sub(label: str, rc: int, out: str, findings: list) -> None:
+    # FIX 4 (build-turn mis-tier — SHARED aggregator, NOT render-local): EVERY sub-check that fails
+    # surfaces as ("P1", ...) at the build-turn layer regardless of the child's true max severity, so
+    # a render-fidelity P0 (forged/stale/unpinned receipt) is LABELLED P1 here. This is a pre-existing
+    # protocol-wide pattern affecting all sub-checks (card, scope, evidence, dep-scan, ...), not unique
+    # to render — per the fold instruction it is NOT refactored in this xfam fold (a shared-path change
+    # is a protocol-wide call, out of scope). It does NOT let a P0 slip: any failed sub-check (rc!=0)
+    # adds a finding, so findings_report returns non-zero and the turn HARD-BLOCKS — the defect is the
+    # severity LABEL, not a silent pass. The render check itself still emits the true [P0] in its own
+    # output (preserved in `tail`).
     if rc == 0:
         print(f"  [INFO] PASS {label}")
     else:
@@ -250,5 +259,31 @@ def cmd_build_turn(args) -> int:
                 "(fail-closed, PROP-027)"))
         else:
             print("  [INFO] NOT_APPLICABLE dep-scan (no dependency manifests)")
+
+    # 9. render-fidelity — the in-loop RENDERED-fidelity gate (PROP-033). A UI build card that
+    #    declares a render bundle (card.render_bundle) must pass cx check render-fidelity BEFORE
+    #    the turn passes / before self-review (Layer 1 P0 blocks the card; P1 = the layout defect).
+    #    A card with no render_bundle is NOT_APPLICABLE (non-UI cards / functions-only modules).
+    rb_ref = str(card.get("render_bundle", "") or "").strip()
+    if rb_ref:
+        if Path(rb_ref).is_absolute() or ".." in Path(rb_ref).parts:
+            findings.append(("P1", "render-fidelity",
+                f"card.render_bundle '{rb_ref}' must be a repo-relative path (no absolute path / .. "
+                "escape) — build-turn reads only the render bundle committed inside the repo"))
+        else:
+            # FIX 1 (stale render): supply the AUTHORITATIVE live repo HEAD from --repo-root (the
+            # same git rev-parse HEAD source cx check boot binds) — the render check no longer trusts
+            # the bundle's own current_repo_head. Same head source the rail already uses elsewhere.
+            head = subprocess.run(["git", "-C", repo_root, "rev-parse", "HEAD"],
+                                  capture_output=True, text=True)
+            if head.returncode != 0:
+                findings.append(("P1", "render-fidelity",
+                    f"cannot read live repo HEAD for render-fidelity freshness: {head.stderr.strip()}"))
+            else:
+                rc, out = _run_cx("check", "render-fidelity", str(root / rb_ref),
+                                  "--repo-head", head.stdout.strip())
+                _sub("render-fidelity", rc, out, findings)
+    else:
+        print("  [INFO] NOT_APPLICABLE render-fidelity (card declares no render_bundle)")
 
     return findings_report(findings)

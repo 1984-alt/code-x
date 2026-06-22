@@ -14,6 +14,7 @@
 #
 # READ-ONLY. (design-fidelity BLOCKS the VISUAL half; this blocks the architecture/logic/data half.)
 from cx_common import findings_report, load_yaml, nested_get, field_present
+from cx_module_acceptance import validate_live_slice_accept, registry_flag_true
 
 CONFORMANCE_RISK = {"money", "login", "data"}
 CORE_FOUR = ("security", "efficient", "regression", "tests")
@@ -46,6 +47,19 @@ def cmd_module_quality(args) -> int:
     if not module_id:
         module_id = str(ma.get("module_id", "") or "").strip()
 
+    # Built-code review (F1): the receipt must be FOR the requested module — a wrong-module receipt
+    # (e.g. a live_slice receipt pointed at a non-live module to skip the live-drive check) is rejected.
+    # HONEST SCOPE: module-quality trusts its --registry + --acceptance the SAME way it trusts them for
+    # risk/conformance (pre-existing). The order wall (module-start) content-binds the registry for every
+    # slice WITH a successor; the LAST slice rides this check, so the rail must invoke it for that slice
+    # with the frozen registry + its bound receipt. final-ready does not re-check live_slice (residual).
+    receipt_mid = str(ma.get("module_id", "") or "").strip()
+    if module_id and receipt_mid and receipt_mid != module_id:
+        findings.append(("P1", loc,
+            f"acceptance receipt module_id '{receipt_mid}' != requested '{module_id}' — the quality "
+            "bar must read the receipt FOR the module it checks (a wrong-module receipt cannot satisfy "
+            "another module's bar, e.g. skip a live_slice's live-drive check) [PROP-032 built-code review]"))
+
     # Risk context: the frozen registry is the SOURCE OF TRUTH for risk; the receipt's own
     # declaration may only ADD risk (raise the bar), never lower it (fail-closed against under-declaring).
     risk_flags = set()
@@ -67,6 +81,13 @@ def cmd_module_quality(args) -> int:
         touches_shared = str(mod.get("touches_shared_shell", "")).strip().lower() in ("yes", "true")
     risk_flags |= {str(r).strip().lower() for r in (ma.get("risk_flags") or [])}
     touches_shared = touches_shared or str(ma.get("touches_shared_shell", "")).strip().lower() in ("yes", "true")
+
+    # --- PROP-032: live-slice CEO live-drive accept (P0) ---
+    # The frozen registry (not the receipt's self-declaration) decides which modules are live_slices.
+    # The order wall (module-start) gates a slice that has a NEXT; this covers the LAST slice too —
+    # so every live_slice's acceptance proves the CEO DROVE the running build, never a Mode A shell.
+    if mod is not None and registry_flag_true(mod.get("live_slice")):
+        findings.extend(validate_live_slice_accept(ma, loc))
 
     # --- QUALITY CARD: core four + conformance answer present ---
     qc = ma.get("quality_card")

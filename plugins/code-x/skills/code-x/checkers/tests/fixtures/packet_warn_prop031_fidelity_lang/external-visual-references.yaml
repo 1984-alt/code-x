@@ -1,0 +1,9 @@
+manifest_hash: 7ef8c5dd0d722a54b12cbe5355625eb55b3b627e7d5909d44a66e3ad39820ccb
+references:
+  - ref_id: mm-expense
+    named_source: "Money Manager (MM)"
+    source_version: "play-store-2026-06"
+    captured_at: "2026-06-20"
+    viewport: mobile
+    file_path: design-reference/mm-expense-390.png
+    file_hash: fb86518a7031a1504c2303be7c933a050761164500d221152f804476072dcb21

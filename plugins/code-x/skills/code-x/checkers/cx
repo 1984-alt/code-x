@@ -31,6 +31,7 @@ from cx_module_quality import cmd_module_quality
 from cx_dep_scan import cmd_dep_scan
 from cx_egress import cmd_egress
 from cx_class_sweep import cmd_class_sweep
+from cx_render_fidelity import cmd_render_fidelity
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -200,6 +201,13 @@ def main():
                                 help="Validate a class-sweep receipt: a deterministic finding's fix names the class + detection + pre/post hits + positive control + pinning regression test")
     p_cs.add_argument("receipt", help="Path to the class_sweep receipt YAML")
 
+    # render-fidelity (PROP-033: in-loop RENDERED-fidelity gate — Layer 1 deterministic + Layer 2 advisory)
+    p_rf = check_sub.add_parser("render-fidelity",
+                                help="Validate a render bundle: pinned profile + fresh machine-generated commit-bound evidence + frozen coverage matrix + measured overflow/offscreen/blank checks (Layer 1 blocks); golden-drift WARNs only (Layer 2 advisory)")
+    p_rf.add_argument("bundle", help="Path to the render bundle YAML (render_profile, coverage_matrix, render_evidence, optional golden_drift)")
+    p_rf.add_argument("--repo-head", dest="repo_head", required=True,
+                      help="The AUTHORITATIVE live repo HEAD (git rev-parse HEAD), supplied by the rail — every evidence row's repo_head must equal this. Freshness is proven against the live head, never against the bundle's own self-declared current_repo_head (PROP-033 xfam FIX 1)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -223,6 +231,7 @@ def main():
         "dep-scan": cmd_dep_scan,
         "egress": cmd_egress,
         "class-sweep": cmd_class_sweep,
+        "render-fidelity": cmd_render_fidelity,
     }
 
     fn = dispatch.get(args.check_cmd)

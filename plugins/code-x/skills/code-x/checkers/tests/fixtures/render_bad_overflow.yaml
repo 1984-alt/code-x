@@ -1,0 +1,59 @@
+# RENDER-FIT-OVERFLOW (P1): the rendered content is 617px wide on a 390px phone viewport
+# (a live-production module defect class). The evidence is otherwise fresh + valid + pinned, and its
+# viewport_width (390) MATCHES the pinned profile width — the overflow comes from content_width,
+# not a lied-about viewport — so the ONLY clause that fires is the overflow defect.
+# Run with: --repo-head aaaaaaaaaaaa.
+current_repo_head: aaaaaaaaaaaa
+
+render_profile:
+  chromium_revision: "1234.5"
+  device_pixel_ratio: 2
+  viewport: "390x844"
+  viewports:
+    - viewport_id: phone
+      width: 390
+  color_schemes: [light, dark]
+  reduced_motion: true
+  locale: en-US
+  timezone: UTC
+  fonts: bundled
+  animations: disabled
+  network: blocked
+  fixture: DESIGN_FIXTURE
+  profile_hash: c7c416dfa9b0
+
+coverage_matrix:
+  ui_card: true
+  required_rows:
+    - screen_id: home
+      viewport_id: phone
+      theme: light
+      content_state: populated
+
+render_evidence:
+  - card_id: BUILD-RF-001
+    screen_id: home
+    viewport_id: phone
+    theme: light
+    content_state: populated
+    route: /home
+    repo_head: aaaaaaaaaaaa
+    state_sha12: state00aabbcc
+    locked_packet_hash: pkt00112233aa
+    render_profile_hash: c7c416dfa9b0
+    tool_version: "cx-render/1.0.0"
+    command: "cx render collect --screen home"
+    generated_by: cx render collect
+    screenshot_path: render_shot.txt
+    screenshot_hash: 3e4f45cb0a7d
+    measured_metrics:
+      viewport_width: 390
+      content_width: 617
+      has_horizontal_overflow: true
+      max_visible_right: 617.0
+      nonblank: true
+      app_ready: true
+      controls_in_frame:
+        - id: add_expense
+          in_frame: true
+    produced_at: "2026-06-22T09:00:00Z"

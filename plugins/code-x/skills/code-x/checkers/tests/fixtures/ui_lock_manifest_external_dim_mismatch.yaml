@@ -1,0 +1,37 @@
+ui_lock_manifest:
+  screen_id: expense
+  route: /expense
+  audit_status: PASS
+  audit_ref: design-history/expense-lock-audit-2026-06-20.md
+  ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-031
+  baseline_source: external_capture
+  external_reference_ref: mm-expense
+  capture_ids: [mm-expense]
+  capture_manifest_hash: 63604d5b4b063639752c2825045d962465c49cd6f948c683af4cda51ad31da69
+  viewport_ids: [mobile]
+  dom_markers:
+  - id: top_tabs
+  - id: bottom_nav
+  - id: primary_content
+  controls:
+  - data_fn: add_income
+    label: Add income
+    role: button
+  - data_fn: month_picker
+    label: Month
+    role: combobox
+  shell_regions:
+  - selector: '#app-shell'
+    purpose: approved page chrome
+  forbidden_missing:
+  - top_tabs
+  - bottom_nav
+  - add_income
+  side_by_side_accept:
+    produced_screen_hash: aaaa1111
+    reference_capture_hash: fb86518a7031a1504c2303be7c933a050761164500d221152f804476072dcb21
+    viewport_id: mobile
+    produced_dimensions: 390x844
+    reference_dimensions: 1280x800
+    composite_path: composite_prop031.png
+    ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-031

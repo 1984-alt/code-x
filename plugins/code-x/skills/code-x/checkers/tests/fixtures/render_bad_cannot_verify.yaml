@@ -1,0 +1,60 @@
+# RENDER-FIT-CANNOT-VERIFY (P1): an evidence row declares cannot_verify: true (the render
+# could not run) with NO preflight_pass_ref — env-absence as a blanket per-card waiver, which
+# the gate refuses. Everything else is fresh + valid + pinned (viewport_width matches the pinned
+# width), so the matrix row IS covered and ONLY the cannot-verify clause fires.
+# Run with: --repo-head aaaaaaaaaaaa.
+current_repo_head: aaaaaaaaaaaa
+
+render_profile:
+  chromium_revision: "1234.5"
+  device_pixel_ratio: 2
+  viewport: "390x844"
+  viewports:
+    - viewport_id: phone
+      width: 390
+  color_schemes: [light, dark]
+  reduced_motion: true
+  locale: en-US
+  timezone: UTC
+  fonts: bundled
+  animations: disabled
+  network: blocked
+  fixture: DESIGN_FIXTURE
+  profile_hash: c7c416dfa9b0
+
+coverage_matrix:
+  ui_card: true
+  required_rows:
+    - screen_id: home
+      viewport_id: phone
+      theme: light
+      content_state: populated
+
+render_evidence:
+  - card_id: BUILD-RF-001
+    screen_id: home
+    viewport_id: phone
+    theme: light
+    content_state: populated
+    route: /home
+    repo_head: aaaaaaaaaaaa
+    state_sha12: state00aabbcc
+    locked_packet_hash: pkt00112233aa
+    render_profile_hash: c7c416dfa9b0
+    tool_version: "cx-render/1.0.0"
+    command: "cx render collect --screen home"
+    generated_by: cx render collect
+    screenshot_path: render_shot.txt
+    screenshot_hash: 3e4f45cb0a7d
+    cannot_verify: true
+    measured_metrics:
+      viewport_width: 390
+      content_width: 390
+      has_horizontal_overflow: false
+      max_visible_right: 389.4
+      nonblank: true
+      app_ready: true
+      controls_in_frame:
+        - id: add_expense
+          in_frame: true
+    produced_at: "2026-06-22T09:00:00Z"

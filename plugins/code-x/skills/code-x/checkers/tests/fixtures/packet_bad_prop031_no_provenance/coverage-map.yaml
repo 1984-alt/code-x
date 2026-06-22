@@ -1,0 +1,81 @@
+categories:
+  - id: 1
+    name: "product vision / problem / users"
+    status: DONE
+    file: product-vision.md
+  - id: 2
+    name: "functional requirements"
+    status: DONE
+    file: PRD.md
+  - id: 3
+    name: "non-functional requirements"
+    status: DONE
+    file: PRD.md
+  - id: 4
+    name: "technical architecture"
+    status: DONE
+    file: TRD.md
+  - id: 5
+    name: "data model / schema"
+    status: N/A
+    na_because: "no data layer in this fixture project"
+  - id: 6
+    name: "internal API / function contracts"
+    status: N/A
+    na_because: "no internal APIs"
+  - id: 7
+    name: "external integration contracts"
+    status: N/A
+    na_because: "no external integrations"
+  - id: 8
+    name: "validation / errors / permissions / side-effects"
+    status: N/A
+    na_because: "no backend validation surface"
+  - id: 9
+    name: "pagination / retries / timeouts / caching / idempotency"
+    status: N/A
+    na_because: "no network calls"
+  - id: 10
+    name: "authn / authz / tenant isolation / RLS"
+    status: DONE
+    file: SECURITY-BASELINE.md
+  - id: 11
+    name: "secrets / privacy / PII / logging redaction"
+    status: DONE
+    file: SECURITY-BASELINE.md
+  - id: 12
+    name: "input validation / injection surfaces"
+    status: DONE
+    file: SECURITY-BASELINE.md
+  - id: 13
+    name: "retention / deletion / audit logs / admin access"
+    status: DONE
+    file: SECURITY-BASELINE.md
+  - id: 14
+    name: "UI / workflow locked designs"
+    status: DONE
+    file: PRODUCT-TASTE-LOCK.md
+  - id: 15
+    name: "CEO decision ledger"
+    status: DONE
+    file: CEO-DECISION-LEDGER.md
+  - id: 16
+    name: "requirements manifest + dispositions"
+    status: DONE
+    file: requirements-manifest.yaml
+  - id: 17
+    name: "business-logic validation worked examples"
+    status: N/A
+    na_because: "no money or business rules"
+  - id: 18
+    name: "CEO provisioning manifest"
+    status: N/A
+    na_because: "no external provisioning"
+  - id: 19
+    name: "production-readiness triggers answered"
+    status: DONE
+    file: production-readiness.md
+  - id: 20
+    name: "builder coding standard named"
+    status: DONE
+    file: builder-standard.md

@@ -27,7 +27,7 @@ from pathlib import Path
 
 from cx_common import findings_report, load_yaml, nested_get
 from cx_deck import _compute_packet_hash
-from cx_module_acceptance import has_blocking, validate_accepted_module
+from cx_module_acceptance import has_blocking, validate_accepted_module, registry_flag_true
 
 BUILD_MODES = {"MODULE_BUILD", "MODE_A_UI"}
 
@@ -235,6 +235,7 @@ def cmd_module_start(args) -> int:
     # and a list dependency_modules.
     ordered_ids = []
     deps = {}
+    live_slice = {}   # PROP-032: module_id -> is this a user-facing live page slice (frozen registry)
     for i, m in enumerate(modules):
         if not isinstance(m, dict):
             findings.append(("P0", registry_path,
@@ -256,6 +257,7 @@ def cmd_module_start(args) -> int:
             return findings_report(findings)
         ordered_ids.append(raw_mid.strip())
         deps[raw_mid.strip()] = [str(d).strip() for d in raw_deps]
+        live_slice[raw_mid.strip()] = registry_flag_true(m.get("live_slice"))
 
     # A DUPLICATE module_id lets `ordered_ids.index()` pick the FIRST occurrence and silently drop the
     # priors before a later occurrence — m2,m1,m2 makes a card for m2 see no priors (GPT R7 P0).
@@ -301,7 +303,8 @@ def cmd_module_start(args) -> int:
     for mid in ordered_ids:
         if mid not in required_prior:
             continue
-        prior_findings = validate_accepted_module(mid, state, state_path, repo_root=repo_root)
+        prior_findings = validate_accepted_module(mid, state, state_path, repo_root=repo_root,
+                                                  require_live_slice=live_slice.get(mid, False))
         # Advisory-only findings (P2/P3, e.g. a legacy_no_baseline migration-debt carve-out) do NOT
         # block the order wall — the prior module IS validly accepted, just with recorded debt
         # (locked spec: legacy_no_baseline is a non-blocking advisory).

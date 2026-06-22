@@ -24,3 +24,19 @@ module_registry:
       dependency_modules: [m2]
       card_ids: [BUILD-003]
       expected_acceptance_artifacts: [live_url, screenshots, quality_card]
+    - module_id: m_live
+      title: Home page slice (PROP-032 — the CEO drives the running home page)
+      requirement_ids: [REQ-005]
+      risk_flags: [ui]
+      live_slice: true
+      dependency_modules: [m3]
+      card_ids: [BUILD-004]
+      expected_acceptance_artifacts: [live_url, quality_card, live_slice_accept]
+    - module_id: m_qfalse
+      title: Quoted-false flag regression (PROP-032 built-code review P2 — string is not truthy-coerced)
+      requirement_ids: [REQ-006]
+      risk_flags: [ui]
+      live_slice: "false"
+      dependency_modules: [m_live]
+      card_ids: [BUILD-005]
+      expected_acceptance_artifacts: [quality_card]

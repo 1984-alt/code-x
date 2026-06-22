@@ -1,0 +1,8 @@
+# PROP-031: every user-facing screen declares its visual provenance.
+screens:
+  - id: home
+    user_facing: true
+    visual_provenance: original
+  - id: settings
+    user_facing: true
+    visual_provenance: derived_from_locked_style

@@ -1,0 +1,69 @@
+# PROP-033 render bundle — GOOD (passes cx check render-fidelity --repo-head aaaaaaaaaaaa, exit 0).
+# Pinned profile whose profile_hash BINDS the profile body (recomputed fp = c7c416dfa9b0),
+# fresh machine-generated evidence whose repo_head == the authoritative --repo-head, whose
+# screenshot_hash matches the real bytes of render_shot.txt, whose render_profile_hash == the
+# recomputed fp, and whose measured viewport_width == the pinned profile width for its viewport_id.
+# A frozen coverage matrix fully covered, and a golden_drift row UNDER tolerance (no advisory WARN).
+# current_repo_head is now IGNORED by the check (freshness comes from --repo-head); kept for docs.
+current_repo_head: aaaaaaaaaaaa
+
+render_profile:
+  chromium_revision: "1234.5"
+  device_pixel_ratio: 2
+  viewport: "390x844"
+  viewports:
+    - viewport_id: phone
+      width: 390
+  color_schemes: [light, dark]
+  reduced_motion: true
+  locale: en-US
+  timezone: UTC
+  fonts: bundled
+  animations: disabled
+  network: blocked
+  fixture: DESIGN_FIXTURE
+  profile_hash: c7c416dfa9b0
+
+coverage_matrix:
+  ui_card: true
+  required_rows:
+    - screen_id: home
+      viewport_id: phone
+      theme: light
+      content_state: populated
+
+render_evidence:
+  - card_id: BUILD-RF-001
+    screen_id: home
+    viewport_id: phone
+    theme: light
+    content_state: populated
+    route: /home
+    repo_head: aaaaaaaaaaaa
+    state_sha12: state00aabbcc
+    locked_packet_hash: pkt00112233aa
+    render_profile_hash: c7c416dfa9b0
+    tool_version: "cx-render/1.0.0"
+    command: "cx render collect --screen home"
+    generated_by: cx render collect
+    screenshot_path: render_shot.txt
+    screenshot_hash: 3e4f45cb0a7d
+    measured_metrics:
+      viewport_width: 390
+      content_width: 390
+      has_horizontal_overflow: false
+      max_visible_right: 389.4
+      nonblank: true
+      app_ready: true
+      controls_in_frame:
+        - id: add_expense
+          in_frame: true
+    produced_at: "2026-06-22T09:00:00Z"
+
+golden_drift:
+  - screen_id: home
+    viewport_id: phone
+    baseline_ref: render_golden/home-phone-light.png
+    baseline_hash: goldenhash0011
+    diff_score: 0.4
+    tolerance: 2.0

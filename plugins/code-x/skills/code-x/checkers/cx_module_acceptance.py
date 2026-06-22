@@ -52,6 +52,50 @@ def has_blocking(findings) -> bool:
     return any(sev in _BLOCKING for sev, _loc, _msg in findings)
 
 
+# PROP-032 (Live Slice Delivery): a live_slice module (a user-facing PAGE slice, flagged in the
+# FROZEN registry) must carry a typed live_slice_accept block proving the CEO DROVE the running
+# build live on the Mac — not a Mode A screenshot/shell accept or a module-level batch. Presence +
+# shape ONLY: the checker proves the running build existed (live_url) and the CEO recorded driving
+# it; whether it FELT right stays the CEO's accept (no over-claiming the experience — the cardinal sin).
+_LIVE_SLICE_ACCEPT_STRING_FIELDS = ("live_url", "ceo_turn_ref", "repo_sha")
+
+
+def registry_flag_true(v) -> bool:
+    """A frozen-registry boolean flag (live_slice / walking_skeleton) is True ONLY for a real boolean
+    True or an explicit 'true'/'yes' string — NOT a truthy-coerced bool('false')==True (built-code
+    review P2: a quoted live_slice: 'false' must not fire the live-drive gate on an honest build)."""
+    return v is True or (isinstance(v, str) and v.strip().lower() in ("true", "yes"))
+
+
+def validate_live_slice_accept(ma, receipt_loc):
+    """Validate the live_slice_accept block on a live_slice module's acceptance receipt. Returns a
+    list of P0 findings — EMPTY means the CEO live-drive accept is well-formed. Shared by the order
+    wall (via validate_accepted_module's require_live_slice path) and cx check module-quality (PROP-032)."""
+    lsa = ma.get("live_slice_accept") if isinstance(ma, dict) else None
+    if not isinstance(lsa, dict):
+        return [("P0", receipt_loc,
+            "live_slice module accepted with NO typed live_slice_accept block "
+            "{live_url, ceo_drove, ceo_turn_ref, repo_sha} — a Mode A screenshot/shell accept or a "
+            "module-level batch is not proof the CEO DROVE the running build live on the Mac (PROP-032)")]
+    findings = []
+
+    def _s(key):
+        v = lsa.get(key, "")
+        return v.strip() if isinstance(v, str) else ""  # a non-string is treated as ABSENT (fail closed)
+
+    missing = [k for k in _LIVE_SLICE_ACCEPT_STRING_FIELDS if not _s(k)]
+    if missing:
+        findings.append(("P0", receipt_loc,
+            f"live_slice_accept missing/blank {missing} — live_url (the running build the CEO opened) "
+            "+ ceo_turn_ref + repo_sha must each be a non-empty string (PROP-032)"))
+    drove = lsa.get("ceo_drove")
+    if drove is not True and str(drove).strip().lower() not in ("true", "yes"):
+        findings.append(("P0", receipt_loc,
+            "live_slice_accept.ceo_drove is not true — the CEO must record DRIVING the running build "
+            "live (not just seeing a screenshot); without it the live-drive gate is goodwill (PROP-032)"))
+    return findings
+
+
 def _sha12(path) -> str | None:
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
@@ -71,7 +115,8 @@ def _git(repo_root: str, *git_args) -> tuple[int, str]:
     return result.returncode, result.stdout.strip() + result.stderr.strip()
 
 
-def validate_accepted_module(module_id, state, state_loc, repo_root=None, acceptance_override=None):
+def validate_accepted_module(module_id, state, state_loc, repo_root=None, acceptance_override=None,
+                             require_live_slice=False):
     """The SINGLE source of truth for 'is module <module_id> validly accepted in <state>'.
 
     Returns a list of (severity, loc, message) findings — EMPTY means validly accepted.
@@ -257,6 +302,14 @@ def validate_accepted_module(module_id, state, state_loc, repo_root=None, accept
                 "module-acceptance receipt missing repo_sha_before — the build-baseline binding "
                 "needed to prove a real change shipped is absent (add it, or a typed "
                 "legacy_no_baseline carve-out reason) (PROP-028)"))
+
+    # ── PROP-032: live-slice CEO live-drive accept ──────────────────────────────────────────────
+    # require_live_slice is set by the order wall (cx check module-start) from the FROZEN registry's
+    # live_slice flag — so a live_slice prior with no valid live_slice_accept block is NOT validly
+    # accepted → the next slice cannot start (P0). The registry is the trusted source, never the
+    # receipt's self-declaration.
+    if require_live_slice:
+        findings.extend(validate_live_slice_accept(ma, receipt_path))
 
     return findings
 

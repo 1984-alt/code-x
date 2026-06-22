@@ -1,0 +1,10 @@
+# requirements-manifest.yaml — inside the frozen packet hash (PROP-007).
+# This fixture's BUILDING row has the acceptance_criterion block present, but pass_condition
+# is a NON-STRING (bool) — present-via-str-coercion must NOT pass (PROP-023b built-code review).
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: true
+      evidence_type: automated_test
+      verification_ref: "tests/test_login.py::test_valid_login_lands_dashboard"

@@ -37,7 +37,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -512,6 +512,67 @@ def _recipe_module_acceptance_inrepo_ref(tmp: str) -> tuple[str, str]:
     return _module_acceptance_ref_repo(tmp, external=False)
 
 
+# PROP-032: m1 is a live_slice in the FROZEN registry; m2 depends on m1. The order wall must read
+# live_slice from the registry and require m1's receipt to carry a live_slice_accept block before m2
+# can start — proving "no next slice until the CEO drove the prior" (P0).
+_MS_LIVE_REGISTRY = (
+    "module_registry:\n  frozen_packet_hash: g1-frozen\n  modules:\n"
+    "    - module_id: m1\n      live_slice: true\n      dependency_modules: []\n      card_ids: [BUILD-001]\n"
+    "    - module_id: m2\n      dependency_modules: [m1]\n      card_ids: [BUILD-002]\n")
+_LIVE_SLICE_ACCEPT_BLOCK = (
+    "  live_slice_accept:\n"
+    "    live_url: http://localhost:8000/home\n"
+    "    ceo_drove: true\n"
+    "    ceo_turn_ref: handoffs/2026-06-20-slice-home.md\n"
+    "    repo_sha: NONE_TEST_FIXTURE\n"
+    "    viewport: 390x844\n")
+
+
+def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]:
+    """m1 = a live_slice; m2 depends on m1. m1's acceptance receipt carries (with_drive) or omits a
+    live_slice_accept block. cx check module-start for m2 BLOCKS when m1 has no live-drive accept
+    (P0 — the next slice cannot start until the CEO drove the prior), PASSES when it does (PROP-032).
+    repo_sha_before uses the test-mode fresh-clone sentinel so the PROP-028 git leg is skipped."""
+    import hashlib
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    packet = os.path.join(repo, "packet")
+    os.makedirs(packet, exist_ok=True)
+    with open(os.path.join(packet, "requirements-manifest.yaml"), "w") as f:
+        f.write(_MS_MANIFEST)
+    with open(os.path.join(packet, "MODULE-REGISTRY.yaml"), "w") as f:
+        f.write(_MS_LIVE_REGISTRY)
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    body = ("module_acceptance:\n  module_id: m1\n  verdict: accepted\n  generated_by: cx-accept\n"
+            "  state_sha_before: abc123\n  quality_card_hash: qc0011223344\n"
+            "  repo_sha_before: NONE_TEST_FIXTURE\n")
+    if with_drive:
+        body += _LIVE_SLICE_ACCEPT_BLOCK
+    receipt = os.path.join(repo, "acc", "m1.yaml")
+    with open(receipt, "w") as f:
+        f.write(body)
+    sha = hashlib.sha256(open(receipt, "rb").read()).hexdigest()[:12]
+    with open(os.path.join(repo, "card.yaml"), "w") as f:
+        yaml.dump({"id": "BUILD-002", "mode": "MODULE_BUILD", "module_id": "m2",
+                   "source_map": {"locked_packet_hash": _packet_hash(packet)}}, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    _git_commit(repo, "live-slice fixture")
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "cx-live-slice-test", "protocol_stamp": "Code-X V1",
+                   "accepted_modules": [{"module_id": "m1", "acceptance_ref": "acc/m1.yaml",
+                                         "acceptance_sha12": sha}]}, f)
+    return repo, state
+
+
+def _recipe_module_start_live_slice_blocks(tmp: str) -> tuple[str, str]:
+    return _module_start_live_slice_repo(tmp, with_drive=False)
+
+
+def _recipe_module_start_live_slice_ok(tmp: str) -> tuple[str, str]:
+    return _module_start_live_slice_repo(tmp, with_drive=True)
+
+
 _CLOSE_TURN_BLOCK_OK = """## Close-turn block
 
 ```yaml
@@ -736,6 +797,8 @@ _RECIPES = {
     "module_start_symlink_ok": _recipe_module_start_symlink_ok,
     "module_acceptance_external_ref": _recipe_module_acceptance_external_ref,
     "module_acceptance_inrepo_ref": _recipe_module_acceptance_inrepo_ref,
+    "module_start_live_slice_blocks": _recipe_module_start_live_slice_blocks,
+    "module_start_live_slice_ok": _recipe_module_start_live_slice_ok,
     "boot_receipt_forged": _recipe_boot_receipt_forged,
     "close_turn_row_untyped": _recipe_close_turn_row_untyped,
     "close_turn_ok": _recipe_close_turn_ok,

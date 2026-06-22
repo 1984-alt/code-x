@@ -680,6 +680,111 @@ class TestDesignFidelityBlocks(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# render-fidelity (PROP-033, fold v1.14) — in-loop RENDERED-fidelity gate
+# Layer 1 = deterministic + BLOCKING; Layer 2 = golden-drift ADVISORY (WARN only).
+# ---------------------------------------------------------------------------
+class TestRenderFidelity(unittest.TestCase):
+    # PROP-033 xfam fold: the authoritative repo head is supplied by the rail via --repo-head
+    # (FIX 1), never read from the bundle. The good fixture's evidence repo_head == this sha.
+    _HEAD = "aaaaaaaaaaaa"
+    # The full set of Layer-1 clause ids — used to PROVE isolation (only the target clause fires).
+    _ALL_CLAUSES = [
+        "RENDER-FIT-PROFILE-UNPINNED", "RENDER-FIT-EVIDENCE-MISSING-OR-STALE",
+        "RENDER-FIT-RECEIPT-FORGED", "RENDER-FIT-COVERAGE-INCOMPLETE", "RENDER-FIT-OVERFLOW",
+        "RENDER-FIT-CONTROL-OFFSCREEN", "RENDER-FIT-BLANK-OR-ROUTE-FAIL", "RENDER-FIT-CANNOT-VERIFY",
+    ]
+
+    def test_good_bundle_passes(self):
+        rc, out = run_cx("check", "render-fidelity", fix("render_good.yaml"), "--repo-head", self._HEAD)
+        self.assertEqual(rc, 0, f"Expected PASS (exit 0), got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_missing_repo_head_arg_is_rejected(self):
+        # FIX 1: --repo-head is REQUIRED — argparse must reject the invocation without it (rc=2),
+        # so freshness can never be proven against an empty/absent authoritative head.
+        rc, out = run_cx("check", "render-fidelity", fix("render_good.yaml"))
+        self.assertEqual(rc, 2, f"Expected argparse usage error (exit 2), got {rc}.\n{out}")
+
+    def _bad(self, fixture, clause, sev):
+        rc, out = run_cx("check", "render-fidelity", fix(fixture), "--repo-head", self._HEAD)
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST (exit 1), got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn(clause, out)
+        self.assertIn(f"[{sev}]", out)
+        # REAL isolation (the contract harness only substring-matches): assert that NO non-target
+        # RENDER-FIT-* clause rode along on this fixture.
+        for other in self._ALL_CLAUSES:
+            if other != clause:
+                self.assertNotIn(other, out,
+                    f"{fixture}: non-target clause {other} rode along — fixture not isolated.\n{out}")
+
+    def test_profile_unpinned_blocks(self):
+        self._bad("render_bad_profile_unpinned.yaml", "RENDER-FIT-PROFILE-UNPINNED", "P0")
+
+    def test_profile_unbound_blocks(self):
+        # FIX 2: profile_hash present but != the recomputed fingerprint of the profile body.
+        self._bad("render_bad_profile_unbound.yaml", "RENDER-FIT-PROFILE-UNPINNED", "P0")
+
+    def test_evidence_stale_blocks(self):
+        self._bad("render_bad_evidence_stale.yaml", "RENDER-FIT-EVIDENCE-MISSING-OR-STALE", "P0")
+
+    def test_receipt_forged_blocks(self):
+        self._bad("render_bad_receipt_forged.yaml", "RENDER-FIT-RECEIPT-FORGED", "P0")
+
+    def test_missing_row_hash_is_forged(self):
+        # FIX 2: an evidence row with NO render_profile_hash can no longer dodge the profile pin.
+        self._bad("render_bad_missing_row_hash.yaml", "RENDER-FIT-RECEIPT-FORGED", "P0")
+
+    def test_wrong_viewport_is_forged(self):
+        # FIX 3: viewport_width that does not match the pinned profile width is P0 forgery.
+        self._bad("render_bad_wrong_viewport.yaml", "RENDER-FIT-RECEIPT-FORGED", "P0")
+
+    def test_coverage_incomplete_blocks(self):
+        self._bad("render_bad_coverage_incomplete.yaml", "RENDER-FIT-COVERAGE-INCOMPLETE", "P0")
+
+    def test_overflow_blocks(self):
+        self._bad("render_bad_overflow.yaml", "RENDER-FIT-OVERFLOW", "P1")
+
+    def test_control_offscreen_blocks(self):
+        self._bad("render_bad_control_offscreen.yaml", "RENDER-FIT-CONTROL-OFFSCREEN", "P1")
+
+    def test_blank_route_fail_blocks(self):
+        self._bad("render_bad_blank_route_fail.yaml", "RENDER-FIT-BLANK-OR-ROUTE-FAIL", "P1")
+
+    def test_cannot_verify_blocks(self):
+        self._bad("render_bad_cannot_verify.yaml", "RENDER-FIT-CANNOT-VERIFY", "P1")
+
+    def test_stale_head_mismatch_with_live_head(self):
+        # FIX 1 end-to-end: even a bundle whose OWN current_repo_head matches its evidence is STALE
+        # when the rail supplies a DIFFERENT authoritative --repo-head. The receipt cannot vouch for
+        # its own freshness — the live head is the only truth.
+        rc, out = run_cx("check", "render-fidelity", fix("render_good.yaml"), "--repo-head", "ffffffffffff")
+        self.assertEqual(rc, 1, f"A live-head mismatch must block, got {rc}.\n{out}")
+        self.assertIn("RENDER-FIT-EVIDENCE-MISSING-OR-STALE", out)
+
+    def test_same_commit_double_run_is_deterministic(self):
+        # The proposal demanded same-commit repeatability: render_good run twice → identical output.
+        rc1, out1 = run_cx("check", "render-fidelity", fix("render_good.yaml"), "--repo-head", self._HEAD)
+        rc2, out2 = run_cx("check", "render-fidelity", fix("render_good.yaml"), "--repo-head", self._HEAD)
+        self.assertEqual(rc1, rc2, "double-run exit codes differ")
+        self.assertEqual(out1, out2, "double-run output is not byte-identical (non-deterministic gate)")
+
+    def test_layer2_golden_drift_warns_but_does_not_block(self):
+        # Layer 2 ADVISORY: diff_score > tolerance prints a WARN line but the exit code stays 0.
+        with tempfile.TemporaryDirectory() as tmp:
+            body = fix_text("render_good.yaml").replace("diff_score: 0.4", "diff_score: 9.9")
+            bundle = Path(tmp) / "render_drift.yaml"
+            bundle.write_text(body, encoding="utf-8")
+            # screenshot_path is bundle-relative, so the shot must sit beside the bundle.
+            (Path(tmp) / "render_shot.txt").write_bytes(
+                (FIXTURES / "render_shot.txt").read_bytes())
+            rc, out = run_cx("check", "render-fidelity", str(bundle), "--repo-head", self._HEAD)
+        self.assertEqual(rc, 0, f"Layer-2 drift must NOT change the exit code, got {rc}.\n{out}")
+        self.assertIn("WARN: golden-drift", out)
+        self.assertIn("ADVISORY only", out)
+
+
+# ---------------------------------------------------------------------------
 # module-quality (V1.10) — the per-module professional bar
 # ---------------------------------------------------------------------------
 class TestModuleQualityBar(unittest.TestCase):
@@ -722,6 +827,54 @@ class TestModuleQualityBar(unittest.TestCase):
                          "--module-id", "m1")
         self.assertEqual(rc, 1)
         self.assertIn("--registry required", out)
+
+    # --- PROP-032: Live Slice Delivery (live-drive accept) ---
+    def test_live_slice_good_passes(self):
+        """A live_slice accepted WITH a valid live_slice_accept block passes the quality bar."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_live_slice_good.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m_live")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_live_slice_no_drive_block_fails(self):
+        """A live_slice (frozen registry) with NO live_slice_accept block is P0 — a Mode A
+        screenshot/shell accept is not proof the CEO drove the running build (PROP-032)."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_live_slice_missing.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m_live")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("NO typed live_slice_accept block", out)
+
+    def test_live_slice_ceo_drove_false_fails(self):
+        """live_slice_accept present but ceo_drove false → P0 (the CEO must record DRIVING it)."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_live_slice_not_driven.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m_live")
+        self.assertEqual(rc, 1)
+        self.assertIn("ceo_drove is not true", out)
+
+    def test_wrong_module_receipt_rejected(self):
+        """Built-code review F1: a live_slice receipt for m_live pointed at --module-id m3 must NOT
+        pass — the quality bar reads the receipt FOR the module it checks (closes the mis-point bypass)."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_live_slice_missing.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m3")
+        self.assertEqual(rc, 1)
+        self.assertIn("!= requested", out)
+
+    def test_quoted_false_live_slice_not_fired(self):
+        """Built-code review P2: a registry live_slice: 'false' (quoted string) must NOT be
+        truthy-coerced into firing the live-drive gate on an honest non-live build."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_quoted_false.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m_qfalse")
+        self.assertEqual(rc, 0, f"quoted live_slice:'false' must not fire the live-drive gate.\n{out}")
 
 
 # ---------------------------------------------------------------------------
@@ -1301,7 +1454,7 @@ class TestCheckConsistency(unittest.TestCase):
         self.assertIn("PASS", out)
 
     def test_drifted_fixture_fires_fix_first(self):
-        """A banned_negation phrase present in a shipping canon file must fire FIX-FIRST naming rule+file."""
+        """A registry with a reworded canonical must fire FIX-FIRST naming rule+file."""
         reg = fix("consistency_registry_drifted.yaml")
         rc, out = run_cx("check", "consistency", "--registry", reg)
         self.assertEqual(rc, 1, f"Expected FIX-FIRST (exit 1), got {rc}.\n{out}")
@@ -1365,6 +1518,54 @@ class TestCheckConsistency(unittest.TestCase):
         rc, out = run_cx("check", "consistency", "--strict")
         self.assertIn(rc, (0, 1),
             f"--strict must exit 0 or 1, got {rc}.\nOutput:\n{out}")
+
+
+# ---------------------------------------------------------------------------
+# EVAL-029 — prevention-first do-less ladder presence (PROP-024)
+# ---------------------------------------------------------------------------
+class TestDoLessLadderPresence(unittest.TestCase):
+    """The ordered pre-write do-less ladder must stay present in BUILDER-STANDARD.md, pinned by the
+    `prevention-first-ladder` rule-registry entry. Presence + anti-drift ONLY — never a mechanical
+    'did the builder build less' gate (that would over-claim; module reviews judge the actual call).
+    The registry canonical phrases are guarded against removal by TestCheckConsistency.test_real_tree_passes
+    (drop one from the standard → cx check consistency goes red — BUILDER-STANDARD.md carries NO [RULE:]
+    pointer, so the canonical phrases are genuinely required; built-code xfam P1-01); these tests
+    additionally pin the self-check row + the rejected-idea text, which the registry canonical does not cover."""
+
+    def test_ladder_and_selfcheck_present_in_builder_standard(self):
+        std = (CX_ROOT / "BUILDER-STANDARD.md").read_text(encoding="utf-8")
+        for anchor in (
+            "do-less ladder",                          # the gate's name
+            "decide what NOT to build first",          # the ordered-front-gate framing
+            "The ladder NEVER cuts",                   # the binding list intro
+            "CEO-locked design / UI",                  # the G3/G6 binding (synthesis hardening)
+            "Do-less ladder walked, built only what survived: PASS | FIX-FIRST | STOP",  # self-check row
+        ):
+            self.assertIn(anchor, std,
+                          f"BUILDER-STANDARD.md lost a do-less-ladder anchor: {anchor!r}")
+        # built-code xfam P1-01: no [RULE:] pointer may sneak back — a pointer would short-circuit
+        # the cx check consistency canonical check (full-pass), making EVAL-029's bite a no-op.
+        self.assertNotIn("[RULE:prevention-first-ladder]", std,
+                         "a [RULE:] pointer would defeat the consistency bite — keep the canonical phrases required")
+
+    def test_rejected_source_ideas_stay_rejected(self):
+        """The two ponytail ideas explicitly NOT imported must remain named as rejected — a future
+        edit that quietly adopts 'code-first/minimal-prose' or 'YAGNI-on-tests' would break the
+        verification spine + plain-English rule. (built-code xfam P2-01: assert BOTH explicit phrases,
+        not only the conclusion sentence.)"""
+        std = (CX_ROOT / "BUILDER-STANDARD.md").read_text(encoding="utf-8")
+        self.assertIn("minimal prose / code-first", std)
+        self.assertIn("YAGNI applies to tests too", std)
+        self.assertIn("Prose and tests are never what you cut", std)
+
+    def test_registry_entry_pins_the_ladder(self):
+        reg = (CX_ROOT / "checkers" / "rule-registry.yaml").read_text(encoding="utf-8")
+        self.assertIn("id: prevention-first-ladder", reg)
+        std = (CX_ROOT / "BUILDER-STANDARD.md").read_text(encoding="utf-8")
+        # every phrase the registry pins as canonical must really live in the standard
+        for canonical in ("do-less ladder", "decide what NOT to build first", "The ladder NEVER cuts"):
+            self.assertIn(canonical, std,
+                          f"registry pins {canonical!r} but BUILDER-STANDARD.md lacks it")
 
     def test_strict_mode_design_history_ignored(self):
         """P1-08: design-history/ files are excluded from --strict FAIL."""
@@ -1944,21 +2145,21 @@ class TestCheckFinalReadyBuiltAppAudit(unittest.TestCase):
 # v1.12 FIX-3: checker version identity must match the shipping protocol version
 # ---------------------------------------------------------------------------
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_12(self):
-        """The checker constant must equal the shipping protocol version (v1.12) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.12)."""
+    def test_protocol_version_constant_is_1_14(self):
+        """The checker constant must equal the shipping protocol version (v1.14) so cx identity
+        can never silently lag the ledger again (VERSION-HISTORY current = v1.14, PROP-033)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.12")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.14")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_12(self):
-        """`cx --version` surfaces V1.12."""
+    def test_cx_version_reports_1_14(self):
+        """`cx --version` surfaces V1.14."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.12", out)
+        self.assertIn("V1.14", out)
 
 
 # ---------------------------------------------------------------------------
@@ -2359,6 +2560,129 @@ class TestConsistencyScanScope(unittest.TestCase):
             if line.startswith("WARN"):
                 self.assertNotIn("rule-registry.yaml", line)
                 self.assertNotIn("checkers/tests/", line)
+
+
+# ---------------------------------------------------------------------------
+# cx check packet — PROP-031 external-visual-reference capture + lock (v1.13)
+# ---------------------------------------------------------------------------
+class TestCheckPacketProp031(unittest.TestCase):
+    def test_style_locked_still_passes_with_provenance(self):
+        """Regression: a cat-14-DONE packet passes once it declares visual_provenance."""
+        rc, out = run_cx("check", "packet", fix("packet_good_style_locked"))
+        self.assertEqual(rc, 0, f"style_locked should PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_external_reference_good_passes(self):
+        rc, out = run_cx("check", "packet", fix("packet_prop031_external_good"))
+        self.assertEqual(rc, 0, f"external_good should PASS, got {rc}.\n{out}")
+
+    def test_missing_provenance_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_prop031_no_provenance"))
+        self.assertEqual(rc, 1)
+        self.assertIn("look-source unstated (PROP-031)", out)
+
+    def test_external_uncaptured_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_prop031_uncaptured"))
+        self.assertEqual(rc, 1)
+        self.assertIn("the captured reference must be pinned inside the packet (PROP-031)", out)
+
+    def test_capture_hash_mismatch_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_prop031_capture_hash"))
+        self.assertEqual(rc, 1)
+        self.assertIn("file_hash mismatch", out)
+
+    def test_fidelity_language_warns_but_does_not_block(self):
+        rc, out = run_cx("check", "packet", fix("packet_warn_prop031_fidelity_lang"))
+        self.assertEqual(rc, 0, f"advisory WARN must not block, got {rc}.\n{out}")
+        self.assertIn("WARN:", out)
+        self.assertIn("reads like an external reference", out)
+
+    # built-code review hardening (GPT/Codex thread 019ee299, fix-first)
+    def test_empty_screens_list_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_prop031_empty_screens"))
+        self.assertEqual(rc, 1)
+        self.assertIn("declares no user-facing screen", out)
+
+    def test_short_hash_rejected(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_prop031_short_hash"))
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a lowercase-hex sha256 prefix", out)
+
+
+# ---------------------------------------------------------------------------
+# cx check packet — PROP-023 WRITING-stage front-end hardening (v1.13):
+#   (a) clarify-before-freeze  (b) testable acceptance criterion
+# ---------------------------------------------------------------------------
+class TestCheckPacketProp023(unittest.TestCase):
+    def test_good_packet_passes_with_sweep_and_acceptance(self):
+        """Regression: packet_good now carries clarification-sweep.md + a structured
+        acceptance_criterion on its BUILDING row, and still PASSes."""
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, f"packet_good should PASS, got {rc}.\n{out}")
+        self.assertIn("clarify-before-freeze", out)
+
+    def test_missing_sweep_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_clarify_no_sweep"))
+        self.assertEqual(rc, 1)
+        self.assertIn("absence of markers is not proof the sweep ran", out)
+
+    def test_open_marker_blocks_freeze(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_clarify_open_marker"))
+        self.assertEqual(rc, 1)
+        self.assertIn("unresolved '[NEEDS-CLARIFICATION", out)
+
+    def test_clarification_ref_must_resolve_to_ledger_row(self):
+        """A ceo_decision_ref that LOOKS valid (CEO-D-99999) but names no real ledger row
+        is rejected — built-code review P1: the presence-only check was not ledger-bound."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_clarify_inline_dismissal"))
+        self.assertEqual(rc, 1)
+        self.assertIn("does not resolve to a", out)
+
+    def test_acceptance_criterion_required_on_building(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_acceptance_missing"))
+        self.assertEqual(rc, 1)
+        self.assertIn("no 'acceptance_criterion' block", out)
+
+    def test_placeholder_acceptance_field_bites(self):
+        """Present-but-placeholder (pass_condition: TBD) is not a filled-in criterion."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_acceptance_placeholder"))
+        self.assertEqual(rc, 1)
+        self.assertIn("missing/placeholder/non-string", out)
+        self.assertIn("pass_condition", out)
+
+    def test_nonstring_acceptance_field_bites(self):
+        """A non-string acceptance value (pass_condition: true) must not pass via
+        str-coercion — built-code review P1."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_acceptance_nonstring"))
+        self.assertEqual(rc, 1)
+        self.assertIn("missing/placeholder/non-string", out)
+
+
+# ---------------------------------------------------------------------------
+# cx check design-fidelity — PROP-031 external_capture lock binding + receipt
+# ---------------------------------------------------------------------------
+class TestCheckDesignFidelityProp031(unittest.TestCase):
+    def _run(self, manifest):
+        return run_cx("check", "design-fidelity",
+                      "--manifest", fix(manifest),
+                      "--dom", fix("dom_good.html"),
+                      "--screenshot", fix("screenshot_good.png"))
+
+    def test_external_capture_lock_good_passes(self):
+        rc, out = self._run("ui_lock_manifest_external_good.yaml")
+        self.assertEqual(rc, 0, f"external_capture good lock should PASS, got {rc}.\n{out}")
+
+    def test_missing_side_by_side_receipt_bites_p0(self):
+        rc, out = self._run("ui_lock_manifest_external_no_receipt.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("no side_by_side_accept receipt", out)
+
+    def test_viewport_dimension_mismatch_bites_p1(self):
+        rc, out = self._run("ui_lock_manifest_external_dim_mismatch.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P1]", out)
+        self.assertIn("not judged at the same viewport", out)
 
 
 # ---------------------------------------------------------------------------

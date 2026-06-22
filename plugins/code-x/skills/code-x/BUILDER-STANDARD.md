@@ -44,6 +44,37 @@ handover. If you cannot tell how to implement the card without guessing, write t
 or blocker and STOP — never invent product, data, UX, security, privacy, money, legal,
 release, or architecture decisions.
 
+## The do-less ladder (PROP-024 — prevention, not review)
+
+Before writing code for a card, **decide what NOT to build first.** Walk these rungs in order;
+take the highest one that honestly satisfies the card, then stop climbing. This is a PREVENTION
+gate walked before the first edit — not the post-build anti-slop cure.
+
+1. **Need-to-exist.** Does this need to exist at all? If the card's goal is met without it,
+   build nothing (YAGNI on the feature, not just the abstraction).
+2. **Built-in toolkit.** Does the language / framework standard library already do it? Use it
+   rather than hand-roll it.
+3. **Native platform feature.** Does a native platform capability cover it — `<input
+   type="date">` over a picker library, CSS over JS, a database constraint over app code? Prefer it.
+4. **Installed dependency.** Does a dependency already in the project cover it? Reuse it; never
+   add a new one to dodge this rung (Rule 10 still governs every install).
+5. **Readable one-expression.** Can it be one readable expression instead of a new function,
+   class, or module? Write the small thing.
+6. **Minimum.** Build the smallest faithful slice that satisfies the card — nothing it did not
+   ask for, no scaffolding for a future that has not arrived.
+
+**The ladder NEVER cuts** these, even when a leaner rung would "save code": input validation at
+trust boundaries, error handling that protects against data loss, security, accessibility, the
+card's required tests, anything the card explicitly requested, and any **CEO-locked design / UI
+contract** (a native-feature rung must bow to a locked golden master — G3/G6 design-fidelity).
+If a leaner rung would break any of these, do not take it.
+
+Honest overlap: rung 1 ≈ Rule 1, rung 4 ≈ Rule 10, rung 6 ≈ Rule 6 — the NEW value is the
+ORDERED front gate (rungs 2/3/5) and the timing (decide-less *before* code). Two ideas are
+explicitly **NOT** imported from the source it came from: "minimal prose / code-first" (it
+fights plain-English for a non-coder CEO — `VOICE.md`) and "YAGNI applies to tests too" (it
+fights the verification spine — green ≠ enforcing). Prose and tests are never what you cut.
+
 ## The 12 rules
 
 1. **Build the smallest faithful implementation.** Do exactly the card's scope. No product
@@ -103,6 +134,7 @@ for **decisions you must not invent**:
 Builder standard self-check:
 Card ID:
 Standard file: Code-X-V1/BUILDER-STANDARD.md (hash: <sha256-12>)
+Do-less ladder walked, built only what survived: PASS | FIX-FIRST | STOP
 Smallest faithful implementation: PASS | FIX-FIRST | STOP
 Existing style followed: PASS | FIX-FIRST | STOP
 Architecture boundaries respected: PASS | FIX-FIRST | STOP
