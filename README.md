@@ -236,6 +236,7 @@ Code-X welcomes contributions. The headline open item is an **Autonomous Build/S
 **Thanks & influences — people and ideas the author learned from:**
 
 - **@mattmurphyai** (Instagram) — a genuine thank-you. His reels and ideas about working with AI were genuinely helpful; the author learned about observability, dependencies, and security from his content, and it shaped Code-X's thinking. An indirect but real influence.
+- **[ponytail](https://github.com/DietrichGebert/ponytail) by DietrichGebert** — Code-X's prevention-first build ladder (decide what *not* to build before writing any code) was shaped by evaluating this plugin; its idea — *"the best code is the code you never wrote"* — became the ladder's first rung. A real influence on how the builder is kept lean.
 - **The Toyota Way / Kaizen** — the continuous-improvement philosophy behind the protocol's self-improvement loop.
 
 **Built with — the AI that did the actual work:**
