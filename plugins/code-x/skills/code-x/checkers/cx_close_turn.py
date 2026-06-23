@@ -131,6 +131,62 @@ def _check_lock_pointer(block, state, repo_root, loc, findings):
     findings.extend(verify_lock_pointer(block.get("lock_pointer"), state, repo_root, loc))
 
 
+def _check_fix_questions(block, repo_root, loc, findings):
+    """[PROP-035 Lever B] Anti-amnesia reconcile at turn close. A turn that left FIX-stage questions open
+    declares them in close_turn.fix_questions {log_ref, open_questions:[{id, log_row}]}; every open
+    question must reconcile to a real row in the file-backed FIX-QUESTIONS-LOG. A declared open question
+    whose log_row is absent (or no log_ref at all) is an off-the-books re-ask — the omission the
+    decision-amnesia loop hides. Honest limit: a question never written ANYWHERE still escapes; this
+    makes a question that reached the handoff but not the log DETECTABLE, not silent."""
+    fq = block.get("fix_questions")
+    if fq is None:
+        return  # no open FIX-stage questions this turn
+    if not isinstance(fq, dict):
+        findings.append(("P1", loc,
+            "close_turn.fix_questions must be a mapping {log_ref, open_questions: [...]} (PROP-035 "
+            "Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+        return
+    open_qs = fq.get("open_questions") or []
+    if not isinstance(open_qs, list):
+        findings.append(("P1", loc,
+            "close_turn.fix_questions.open_questions must be a list (PROP-035 Lever B / "
+            "FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+        return
+    if not open_qs:
+        return  # nothing open to reconcile
+    log_ref = str(fq.get("log_ref", "") or "").strip()
+    if not log_ref:
+        findings.append(("P1", loc,
+            "close_turn.fix_questions has open_questions but no log_ref — every FIX-stage question must "
+            "be file-backed in a FIX-QUESTIONS-LOG (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+        return
+    # Parse the log as a TYPED FIX-QUESTIONS-LOG via the SAME validator cx_card uses (built-code review #6:
+    # a `row in log_text` substring match passes on any random mention — a typed row id is the reconcile key).
+    from cx_card import load_fix_questions_log
+    log_ids, logerr = load_fix_questions_log(repo_root, log_ref)
+    if logerr is not None or log_ids is None:
+        findings.append(("P1", loc,
+            f"close_turn.fix_questions.log_ref '{log_ref}' {logerr or 'is not a typed FIX-QUESTIONS-LOG'} "
+            "— the FIX-QUESTIONS-LOG must exist and be typed to reconcile against (PROP-035 Lever B / "
+            "FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+        return
+    for i, q in enumerate(open_qs):
+        if not isinstance(q, dict):
+            findings.append(("P1", loc, f"close_turn.fix_questions.open_questions[{i}] is not a mapping"))
+            continue
+        row = str(q.get("log_row", "") or "").strip()
+        if not row:
+            findings.append(("P1", loc,
+                f"close_turn.fix_questions.open_questions[{i}] has no log_row — name the FIX-QUESTIONS-LOG "
+                "row id it reconciles to (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+            continue
+        if row not in log_ids:
+            findings.append(("P1", loc,
+                f"close_turn.fix_questions.open_questions[{i}] log_row '{row}' is not a typed row id in the "
+                f"FIX-QUESTIONS-LOG '{log_ref}' — an open question with no reconciled log row is an "
+                "off-the-books re-ask (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+
+
 def cmd_close_turn(args) -> int:
     state_path = args.state
     handoff_path = args.handoff
@@ -241,6 +297,9 @@ def cmd_close_turn(args) -> int:
 
     # --- PROP-034 Lever B: lock-pointing handoff sub-block ---
     _check_lock_pointer(block, state, repo_root, loc, findings)
+
+    # --- PROP-035 Lever B: anti-amnesia FIX-QUESTIONS-LOG reconcile ---
+    _check_fix_questions(block, repo_root, loc, findings)
 
     # --- vault_sync enum (the 11.7h-zero-vault-syncs scar) ---
     vs = block.get("vault_sync")

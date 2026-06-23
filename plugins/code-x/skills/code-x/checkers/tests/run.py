@@ -2145,21 +2145,21 @@ class TestCheckFinalReadyBuiltAppAudit(unittest.TestCase):
 # v1.12 FIX-3: checker version identity must match the shipping protocol version
 # ---------------------------------------------------------------------------
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_15(self):
-        """The checker constant must equal the shipping protocol version (v1.15) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.15, PROP-034)."""
+    def test_protocol_version_constant_is_1_16(self):
+        """The checker constant must equal the shipping protocol version (v1.16) so cx identity
+        can never silently lag the ledger again (VERSION-HISTORY current = v1.16, PROP-035)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.15")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.16")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_15(self):
-        """`cx --version` surfaces V1.15."""
+    def test_cx_version_reports_1_16(self):
+        """`cx --version` surfaces V1.16."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.15", out)
+        self.assertIn("V1.16", out)
 
 
 # ---------------------------------------------------------------------------

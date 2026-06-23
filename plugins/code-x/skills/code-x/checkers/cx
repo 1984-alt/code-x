@@ -33,6 +33,7 @@ from cx_egress import cmd_egress
 from cx_class_sweep import cmd_class_sweep
 from cx_render_fidelity import cmd_render_fidelity
 from cx_drift import cmd_drift
+from cx_structure import cmd_structure
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -220,6 +221,13 @@ def main():
                       help="Module-acceptance mode: Layer-1 divergences BLOCK (exit 1); default (session-start) is advisory (exit 0)")
     p_dr.add_argument("--module-id", dest="module_id", default=None, help="Optional: the module whose acceptance is being gated (informational)")
 
+    # structure (PROP-035 Lever A: the STRUCTURE LOCK — Layer-1 deterministic file-tree freeze for fixes)
+    p_st = check_sub.add_parser("structure",
+                                help="Structure lock: a mode: FIX card must not restructure the file tree outside allowed_files vs a frozen forge-proof structure_lock (Layer-1 deterministic; same-file restructuring is Layer-2 advisory, not here yet)")
+    p_st.add_argument("card", help="Path to the WORK-ORDER YAML (mode: FIX carries structure_lock_ref + allowed_files)")
+    p_st.add_argument("--repo-root", dest="repo_root", required=True,
+                      help="Path to the git repo root (the live file tree + the structure_lock receipt resolve under it)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -245,6 +253,7 @@ def main():
         "class-sweep": cmd_class_sweep,
         "render-fidelity": cmd_render_fidelity,
         "drift": cmd_drift,
+        "structure": cmd_structure,
     }
 
     fn = dispatch.get(args.check_cmd)

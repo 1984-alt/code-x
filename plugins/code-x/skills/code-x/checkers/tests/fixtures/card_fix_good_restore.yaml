@@ -129,3 +129,8 @@ lock_anchor_ref:
   card_id: BUILD-001
   requirement_id: REQ-001
 deviation_class: RESTORE
+fix_targets:
+- target: business_rule
+  reason: restore the locked CX-CHECK subcommands
+  surfaces:
+  - checkers/*

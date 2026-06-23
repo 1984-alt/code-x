@@ -129,6 +129,9 @@ orchestrator:
   build_factory:
     claude_code: { model: fable, effort: medium }      # CEO 2026-06-11: orchestrator = fable med (window). From 2026-06-23 -> opus xhigh (fable_window)
     codex_app:   { model: gpt-5.5, effort: medium }    # GPT: reliable conductor; high only when a card marks high-risk/ambiguous
+  fixing_stage:                                        # PROP-035: the Fixing-stage conductor (preserve-posture). Same conductor tier as build_factory; a fix that touches a danger class escalates the per-card builder seat (high_risk row), not the orchestrator, and needs top_allowed_reason.
+    claude_code: { model: fable, effort: medium }      # mirrors build_factory (window). From 2026-06-23 -> opus xhigh (fable_window)
+    codex_app:   { model: gpt-5.5, effort: medium }    # reliable conductor; high only when a fix card marks high-risk/ambiguous
 
 # ── Role table (per-card seats; compiler picks the row by card mode + risk) ─────
 # claude_code.subagent = real agent types in the CEO's Claude Code roster (~/.claude/agents).

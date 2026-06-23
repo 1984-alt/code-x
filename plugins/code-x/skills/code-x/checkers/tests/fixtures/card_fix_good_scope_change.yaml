@@ -131,3 +131,8 @@ lock_anchor_ref:
 deviation_class: SCOPE_CHANGE
 ceo_decision_ref: CEO-D-LOCKFID-001
 packet_amendment_ref: packet/AMENDMENT-001.md
+fix_targets:
+- target: business_rule
+  reason: authorized scope expansion of the locked rule
+  surfaces:
+  - checkers/*

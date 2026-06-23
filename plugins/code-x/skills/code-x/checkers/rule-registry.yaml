@@ -387,3 +387,20 @@ rules:
     banned_negations: ["when unsure, RESTORE", "lock-fidelity is optional", "a handoff may paraphrase the lock", "drift alarm is advisory at module-acceptance", "RESTORE when in doubt"]
     appears_in:
       - GATES.md
+
+  - id: fixing-stage-preserve-posture
+    # Assertion (PROP-035, fold v1.16, FIXING-STAGE.md): the Fixing stage flips the posture to PRESERVE
+    # — change only the defect. The always-read hard rule is the always-on guardrail (mirrors
+    # prevention-first-ladder): its canonical phrases must stay PRESENT in the kernel + builder standard
+    # + the stage doc, so cx check consistency fails the moment the guardrail is removed/reworded out (a
+    # [RULE:] pointer would no-op it). Enforcement is PRESENCE + anti-drift, NOT mechanical over-edit
+    # detection — that is the structure lock (Lever A) + the opposite-family reviewer's job.
+    canonical:
+      - "create, rename, move, delete, or refactor"
+      - "for improvement"
+    key_phrases: ["create, rename, move, delete, or refactor", "for improvement"]
+    banned_negations: ["refactor for improvement is allowed", "may restructure freely", "improve the structure freely", "over-edit is fine", "fixing may improve"]
+    appears_in:
+      - KERNEL.md
+      - BUILDER-STANDARD.md
+      - FIXING-STAGE.md

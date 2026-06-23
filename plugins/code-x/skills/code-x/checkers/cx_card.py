@@ -471,6 +471,298 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
                     "Lever A / F3)"))
 
 
+def _packet_ledger_ids(args) -> tuple[set | None, str | None, str | None]:
+    """Resolve the frozen packet's CEO-DECISION-LEDGER row ids via --state.packet_dir (the SAME source
+    _check_lock_fidelity + the deck use). Returns (ledger_ids, repo_root, error). ledger_ids is a set of
+    real row ids — an empty set means the packet has no ledger (every ref is then a ghost). error
+    (non-None) means the ledger could not be resolved at all → the caller fails closed."""
+    from cx_lock_fidelity import path_is_unsafe, resolve_in_repo
+    from cx_deck import LEDGER_FILE, LEDGER_ROW_ID_RE
+    state_path = getattr(args, "state", None)
+    if not state_path:
+        return None, None, "--state not supplied — cannot resolve the CEO-DECISION-LEDGER to verify refs"
+    sd, _serr = load_yaml(state_path)
+    if not isinstance(sd, dict):
+        return None, None, f"state '{state_path}' unreadable — cannot resolve the ledger"
+    pdr = str(sd.get("packet_dir", "") or "").strip()
+    repo_root = str(Path(state_path).resolve().parent)
+    if not pdr or path_is_unsafe(pdr):
+        return None, repo_root, "state.packet_dir missing/unsafe — cannot resolve the ledger (fail closed)"
+    resolved, perr = resolve_in_repo(repo_root, pdr)
+    if perr or resolved is None:
+        return None, repo_root, perr or "packet unresolved"
+    lp = resolved / LEDGER_FILE
+    if not lp.is_file():
+        return set(), repo_root, None  # no ledger file = no known ids (refs will read as ghosts)
+    return set(LEDGER_ROW_ID_RE.findall(lp.read_text(encoding="utf-8", errors="replace"))), repo_root, None
+
+
+def load_fix_questions_log(repo_root: str, ref: str) -> tuple[set | None, str | None]:
+    """[PROP-035 Lever B] Load + parse a typed FIX-QUESTIONS-LOG, returning (row_ids, error). The log is a
+    YAML mapping carrying a fix_questions list of typed rows:
+        fix_questions:
+          - id: Q1
+            question: "..."
+            ...
+    SHARED by cx_card (clarification_provenance file-backing) AND cx_close_turn (open-question reconcile)
+    so both ends parse the SAME typed structure — never substring-matching free text (built-code review
+    #5/#6: a card receipt or a `row in log_text` substring is not proof the question was filed). Fails
+    closed: an unsafe ref / missing file / malformed YAML / non-typed shape returns an error; row_ids is
+    the set of non-empty `id` values."""
+    from cx_lock_fidelity import resolve_in_repo
+    resolved, perr = resolve_in_repo(repo_root, str(ref))
+    if perr is not None:
+        return None, perr
+    if resolved is None or not resolved.is_file():
+        return None, f"'{ref}' does not resolve to a real in-repo file"
+    doc, derr = load_yaml(str(resolved))
+    if derr or not isinstance(doc, dict):
+        return None, f"'{ref}' is not a typed FIX-QUESTIONS-LOG mapping {{fix_questions: [{{id, ...}}]}}"
+    rows = doc.get("fix_questions")
+    if not isinstance(rows, list) or not rows:
+        return None, f"'{ref}' carries no fix_questions list — a typed log is fix_questions: [{{id, ...}}]"
+    ids = {str(r.get("id", "") or "").strip() for r in rows if isinstance(r, dict)}
+    ids.discard("")
+    return ids, None
+
+
+def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
+    """[PROP-035 Lever B] Anti-amnesia: every FIX-stage CEO question must be FILE-BACKED and reconcile.
+    A mode: FIX card MAY carry a clarification_provenance block (a fix that asked no CEO questions has
+    none — close-turn catches an asked-but-unlogged one). When present, EVERY question row must carry
+    exactly one resolved path: (a) ledger_searched + related_ceo_d_refs that RESOLVE to real ledger rows,
+    (b) a new_ledger_row_ref that resolves (the new decision was actually appended), or (c)
+    contradicts_ceo_d + a resolved, path-safe ceo_override_ref for an answer that CHANGES a locked rule.
+    Ghost ref / dangling new row / unresolved contradiction / unsafe override = fail closed. Severity P1
+    default; P0 only when the card touches a danger class (the override changes money/auth/etc.)."""
+    from cx_lock_fidelity import card_high_risk, resolve_in_repo
+    if str(data.get("mode", "")) != "FIX":
+        return
+    cp = data.get("clarification_provenance")
+    if cp is None:
+        return  # no CEO questions to file-back (honest limit: close-turn reconciles an asked-but-unlogged one)
+    if not isinstance(cp, dict):
+        findings.append(("P1", loc,
+            "clarification_provenance must be a mapping {fix_questions_log, questions: [...]} "
+            "(PROP-035 Lever B)"))
+        return
+    questions = cp.get("questions")
+    if not isinstance(questions, list) or not questions:
+        findings.append(("P1", loc,
+            "clarification_provenance.questions must be a non-empty list — a clarification_provenance "
+            "block with no questions is meaningless (PROP-035 Lever B)"))
+        return
+
+    ledger_ids, repo_root, lerr = _packet_ledger_ids(args)
+    if lerr:
+        findings.append(("P1", loc,
+            f"mode: FIX card carries clarification_provenance but {lerr} — cannot verify the "
+            "anti-amnesia refs (PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+        return
+
+    # FIX-STAGE-AMNESIA-LOG-BACKED (built-code review #5): a card receipt is not file-backing. Require a
+    # fix_questions_log that resolves to a real TYPED log, and every question.id must be a real row in it —
+    # otherwise the question lived only on the card, defeating the close-turn reconcile that catches a
+    # re-ask. Same typed parser the close-turn reconcile uses (one shared validator).
+    log_ref = str(cp.get("fix_questions_log", "") or "").strip()
+    if not log_ref:
+        findings.append(("P1", loc,
+            "clarification_provenance carries questions but no fix_questions_log — every FIX-stage question "
+            "must be FILE-BACKED in a typed FIX-QUESTIONS-LOG, not a card-only receipt (PROP-035 Lever B / "
+            "FIX-STAGE-AMNESIA-LOG-BACKED)"))
+        return
+    log_ids, logerr = load_fix_questions_log(repo_root, log_ref)
+    if logerr is not None or log_ids is None:
+        findings.append(("P1", loc,
+            f"clarification_provenance.fix_questions_log {logerr} — the file-backed log must exist and be "
+            "typed to anchor the questions (PROP-035 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
+        return
+
+    high = card_high_risk(data)
+    for i, q in enumerate(questions):
+        if not isinstance(q, dict):
+            findings.append(("P1", loc, f"clarification_provenance.questions[{i}] is not a mapping"))
+            continue
+        qid = str(q.get("id", "") or f"#{i}").strip()
+        if qid not in log_ids:
+            findings.append(("P1", loc,
+                f"clarification_provenance question '{qid}' has no matching row in the FIX-QUESTIONS-LOG "
+                f"'{log_ref}' — a question put to the CEO must be a typed row in the file-backed log, not "
+                "declared only on the card (PROP-035 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
+            continue
+        searched = str(q.get("ledger_searched", "")).strip().lower() in ("true", "yes", "1")
+        related = q.get("related_ceo_d_refs") or []
+        related = [str(r).strip() for r in related if str(r).strip()] if isinstance(related, list) else []
+        new_ref = str(q.get("new_ledger_row_ref", "") or "").strip()
+        contra = str(q.get("contradicts_ceo_d", "") or "").strip()
+        override = str(q.get("ceo_override_ref", "") or "").strip()
+        contra_sev = "P0" if high else "P1"
+
+        if contra:
+            # (c) the answer CHANGES a locked rule — needs a resolved, path-safe override + a real target.
+            if not override:
+                findings.append((contra_sev, loc,
+                    f"clarification_provenance question '{qid}' contradicts {contra} with no "
+                    "ceo_override_ref — changing a locked decision needs a resolved override, never a "
+                    "silent second decision (PROP-035 Lever B / FIX-STAGE-AMNESIA-CONTRADICTION)"))
+            else:
+                _res, oerr = resolve_in_repo(repo_root, override)
+                if oerr is not None:
+                    findings.append(("P1", loc,
+                        f"clarification_provenance question '{qid}' ceo_override_ref {oerr} (PROP-035 "
+                        "Lever B / FIX-STAGE-AMNESIA-OVERRIDE-SAFE)"))
+                elif _res is None or not _res.is_file():
+                    findings.append((contra_sev, loc,
+                        f"clarification_provenance question '{qid}' ceo_override_ref '{override}' does not "
+                        "resolve to a real in-repo file — a missing override is not authorization (PROP-035 "
+                        "Lever B / FIX-STAGE-AMNESIA-CONTRADICTION)"))
+            if ledger_ids is not None and contra not in ledger_ids:
+                findings.append((contra_sev, loc,
+                    f"clarification_provenance question '{qid}' contradicts_ceo_d '{contra}' resolves to "
+                    "no real ledger row — a self-declared decision id is not a real prior decision "
+                    "(PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+        elif new_ref:
+            # (b) a genuinely new decision — the row must actually exist in the ledger.
+            if ledger_ids is not None and new_ref not in ledger_ids:
+                findings.append(("P1", loc,
+                    f"clarification_provenance question '{qid}' new_ledger_row_ref '{new_ref}' is dangling "
+                    "— a new decision must be appended to the CEO-DECISION-LEDGER, not merely named "
+                    "(PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+        elif searched and related:
+            # (a) an already-decided answer — every related ref must resolve to a real ledger row.
+            for r in related:
+                if ledger_ids is not None and r not in ledger_ids:
+                    findings.append(("P1", loc,
+                        f"clarification_provenance question '{qid}' related_ceo_d_ref '{r}' resolves to no "
+                        "real ledger row (ghost) — the search must point at a real prior decision (PROP-035 "
+                        "Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+        else:
+            findings.append(("P1", loc,
+                f"clarification_provenance question '{qid}' carries no resolution — a FIX-stage question "
+                "must reconcile via ledger_searched+related_ceo_d_refs, a new_ledger_row_ref, or "
+                "contradicts_ceo_d+ceo_override_ref; an unreconciled question is an off-the-books re-ask "
+                "(PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+
+
+def _check_fix_revert(data: dict, loc: str, findings: list) -> None:
+    """[PROP-035 Lever E] Revert-on-drift honesty. No checker runs git reset — but a mode: FIX card that
+    recovered from a Layer-1 lock drift must carry a typed revert_receipt {bad_head, restored_head,
+    post_revert_clean, wip_handling}, NOT fix the drift forward. A card that marks
+    drift_recovery_required but ships no (or a partial) revert_receipt is fixing forward in disguise."""
+    if str(data.get("mode", "")) != "FIX":
+        return
+    rr = data.get("revert_receipt")
+    needs = str(data.get("drift_recovery_required", "")).strip().lower() in ("true", "yes", "1")
+    if not needs and rr is None:
+        return  # no Layer-1 drift was recovered from — nothing to attest
+    if rr is None:
+        findings.append(("P1", loc,
+            "mode: FIX card marks drift_recovery_required but carries no revert_receipt — a Layer-1 lock "
+            "drift must be REVERTED then re-approached tighter, never fixed forward (PROP-035 Lever E / "
+            "FIX-STAGE-REVERT-RECEIPT)"))
+        return
+    if not isinstance(rr, dict):
+        findings.append(("P1", loc,
+            "revert_receipt must be a typed mapping {bad_head, restored_head, post_revert_clean, "
+            "wip_handling} (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+        return
+    missing = [k for k in ("bad_head", "restored_head", "post_revert_clean", "wip_handling")
+               if not str(rr.get(k, "") or "").strip()]
+    if missing:
+        findings.append(("P1", loc,
+            f"revert_receipt missing {missing} — a real revert names the bad head, the restored head, the "
+            "clean post-revert state, and how WIP was handled; a partial receipt is a fix-forward in "
+            "disguise (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+        return
+    for hk in ("bad_head", "restored_head"):
+        h = str(rr.get(hk)).strip().lower()
+        if len(h) < 7 or not all(c in "0123456789abcdef" for c in h):
+            findings.append(("P1", loc,
+                f"revert_receipt.{hk} '{rr.get(hk)}' is not a commit sha — the revert must name real "
+                "commits (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+    if str(rr.get("post_revert_clean")).strip().lower() not in ("true", "yes", "clean", "1"):
+        findings.append(("P1", loc,
+            "revert_receipt.post_revert_clean must assert the locked surfaces are CLEAN after the revert — "
+            "a non-clean revert did not restore the architecture (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+
+
+# PROP-035 Lever C — the per-target cross-lock taxonomy (closed set; two targets were too coarse, xfam P1-4).
+VALID_FIX_TARGETS = {"frontend", "business_rule", "data_schema_migration", "api_contract",
+                     "auth_security", "infra_config", "content_copy"}
+
+
+def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
+    """[PROP-035 Lever C] The cross-lock: a mode: FIX card names ONE fix_target (or explicitly declares
+    crossing layers); everything outside the declared targets' surfaces is a frozen assertion.
+      - FIX-STAGE-POSTURE-DECL: fix_targets missing/empty, or a target outside the closed taxonomy.
+      - FIX-STAGE-XLOCK-MULTI-ANCHOR: a MULTI-target fix must carry one lock_anchor_ref {card_id,
+        requirement_id} + reason PER target — no blanket 'declare everything to open everything'.
+      - FIX-STAGE-XLOCK-SURFACE: EVERY target must declare a non-empty `surfaces` list (built-code review
+        #4 — surfaces were optional, so a fix could declare backend allowed_files and pass by omitting
+        surfaces); and every allowed_files entry must fall within the union of declared surfaces. A target
+        with no surfaces, or an allowed_file outside all declared surfaces, is a silent layer-cross (P1
+        default, P0 on a danger-class card)."""
+    import fnmatch as _fnmatch
+    from cx_lock_fidelity import card_high_risk
+    if str(data.get("mode", "")) != "FIX":
+        return
+    targets = data.get("fix_targets")
+    if not isinstance(targets, list) or not targets:
+        findings.append(("P1", loc,
+            "mode: FIX card missing fix_targets — a fix must name ONE target from the cross-lock "
+            "taxonomy (or explicitly declare crossing layers); everything else freezes (PROP-035 "
+            "Lever C / FIX-STAGE-POSTURE-DECL)"))
+        return
+
+    multi = len(targets) >= 2
+    declared_surfaces = []
+    for i, t in enumerate(targets):
+        if not isinstance(t, dict):
+            findings.append(("P1", loc,
+                f"fix_targets[{i}] is not a mapping {{target, lock_anchor_ref, reason, surfaces}} "
+                "(PROP-035 Lever C / FIX-STAGE-POSTURE-DECL)"))
+            continue
+        name = str(t.get("target", "") or "").strip()
+        if name not in VALID_FIX_TARGETS:
+            findings.append(("P1", loc,
+                f"fix_targets[{i}].target '{name}' not in {sorted(VALID_FIX_TARGETS)} — the cross-lock "
+                "taxonomy is a closed set (PROP-035 Lever C / FIX-STAGE-POSTURE-DECL)"))
+            continue
+        if multi:
+            anchor = t.get("lock_anchor_ref")
+            ok_anchor = (isinstance(anchor, dict)
+                         and str(anchor.get("card_id", "") or "").strip()
+                         and str(anchor.get("requirement_id", "") or "").strip())
+            if not ok_anchor or not str(t.get("reason", "") or "").strip():
+                findings.append(("P1", loc,
+                    f"fix_targets[{i}] ('{name}') in a multi-target fix lacks its own lock_anchor_ref "
+                    "{card_id, requirement_id} + reason — a cross-layer fix declares each target out "
+                    "loud, no blanket open-everything (PROP-035 Lever C / FIX-STAGE-XLOCK-MULTI-ANCHOR)"))
+        # FIX-STAGE-XLOCK-SURFACE (surfaces REQUIRED — built-code review #4): every target must name the
+        # surfaces it opens, else a fix bypasses the cross-lock by omitting surfaces entirely.
+        surf = t.get("surfaces")
+        clean = [str(s).strip() for s in surf if str(s).strip()] if isinstance(surf, list) else []
+        if not clean:
+            findings.append(("P1", loc,
+                f"fix_targets[{i}] ('{name}') declares no surfaces — every target must name the allowed "
+                "surfaces it opens; an omitted surfaces list lets a fix touch files its declared targets "
+                "do not open, bypassing the cross-lock (PROP-035 Lever C / FIX-STAGE-XLOCK-SURFACE)"))
+        declared_surfaces.extend(clean)
+
+    if declared_surfaces:
+        new_outputs = {str(x) for x in (data.get("new_outputs") or [])}
+        sev = "P0" if card_high_risk(data) else "P1"
+        for f in (str(x) for x in (data.get("allowed_files") or [])):
+            if f in new_outputs:
+                continue
+            if not any(f == g or _fnmatch.fnmatch(f, g) for g in declared_surfaces):
+                findings.append((sev, loc,
+                    f"allowed_files entry '{f}' is OUTSIDE every declared fix_targets surface "
+                    f"{declared_surfaces} — a fix that edits a surface its declared targets do not open "
+                    "is silently crossing layers; declare the target or split the fix (PROP-035 Lever C / "
+                    "FIX-STAGE-XLOCK-SURFACE)"))
+
+
 def cmd_card(args) -> int:
     path = args.file
     data, err = load_yaml(path)
@@ -642,6 +934,13 @@ def cmd_card(args) -> int:
 
     # --- PROP-034 Lever A: re-anchor-before-fix on mode: FIX cards ---
     _check_lock_fidelity(data, args, loc, findings)
+
+    # --- PROP-035 Lever B/E: anti-amnesia file-backed questions + revert-on-drift honesty (mode: FIX) ---
+    _check_fix_amnesia(data, args, loc, findings)
+    _check_fix_revert(data, loc, findings)
+
+    # --- PROP-035 Lever C: per-target cross-lock taxonomy (mode: FIX) ---
+    _check_fix_targets(data, loc, findings)
 
     # --- actor_record: present + cross-family check ---
     ar = data.get("actor_record")

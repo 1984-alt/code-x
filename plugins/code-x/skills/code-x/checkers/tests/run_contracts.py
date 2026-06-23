@@ -37,7 +37,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -1156,8 +1156,267 @@ def _recipe_lf_handoff_ok(tmp: str) -> tuple[str, str]:
     return _lf_close_turn_repo(tmp, "REAL", "[BUILD-001, BUILD-002, BUILD-003]", "REAL")
 
 
+# ── PROP-035 fixing-stage recipes ───────────────────────────────────────────────
+_FS_LOCK_SRC_FILES = ("src/a.py", "src/b.py")
+
+
+def _fs_emit_lock(repo: str, *, generator="cx check structure --emit", bad_hash=False, roots=("src",),
+                  paths_override=None) -> None:
+    """Emit a structure_lock receipt at meta/sl.yaml bound to the repo's current HEAD (the same recipe
+    cx check structure recomputes). bad_hash forges the manifest_sha; a non-default generator forges the
+    machine marker; paths_override forges the paths LIST (omitting a real tracked file) while still
+    recomputing a self-consistent hash over the forged list — so only TREE-BOUND (ls-tree at commit) catches
+    the omission, not HASH-RECOMPUTE."""
+    sys.path.insert(0, str(CHECKERS_DIR))
+    from cx_structure import recompute_manifest_sha
+    head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    paths = list(paths_override) if paths_override is not None else list(_FS_LOCK_SRC_FILES)
+    sha = "deadbeef0000" if bad_hash else recompute_manifest_sha(head, paths)
+    os.makedirs(os.path.join(repo, "meta"), exist_ok=True)
+    lock = {"structure_lock": {"generator": generator, "accepted_at_commit": head,
+                               "roots": list(roots), "paths": paths, "manifest_sha": sha}}
+    with open(os.path.join(repo, "meta", "sl.yaml"), "w") as f:
+        yaml.safe_dump(lock, f)
+
+
+def _fs_struct_repo(tmp, *, ref="meta/sl.yaml", generator="cx check structure --emit", bad_hash=False,
+                    drift=False, forge_paths=None) -> tuple[str, str]:
+    """A git repo with src/{a,b}.py committed + a structure_lock + a mode: FIX card at cards/fix.yaml.
+    The structure clause references {REPO}/cards/fix.yaml + --repo-root {REPO} (state slot unused).
+    forge_paths: emit the lock with this paths list (omitting a real tracked file) to exercise TREE-BOUND."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "src"))
+    os.makedirs(os.path.join(repo, "cards"))
+    for f in _FS_LOCK_SRC_FILES:
+        with open(os.path.join(repo, f), "w") as fh:
+            fh.write("x = 1\n")
+    _git_init(repo)
+    subprocess.run(["git", "-C", repo, "add", "src"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "init"], check=True)
+    _fs_emit_lock(repo, generator=generator, bad_hash=bad_hash, paths_override=forge_paths)
+    card = {"id": "FIX-OVR", "mode": "FIX", "allowed_files": ["src/a.py"],
+            "fix_targets": [{"target": "business_rule"}]}
+    if ref is not None:
+        card["structure_lock_ref"] = ref
+    with open(os.path.join(repo, "cards", "fix.yaml"), "w") as f:
+        yaml.safe_dump(card, f)
+    if drift:  # an untracked file outside allowed_files → structural drift vs the frozen lock
+        with open(os.path.join(repo, "src", "sneaky.py"), "w") as f:
+            f.write("y = 2\n")
+    return repo, repo
+
+
+def _recipe_fs_struct_good(tmp): return _fs_struct_repo(tmp)
+def _recipe_fs_struct_nolockref(tmp): return _fs_struct_repo(tmp, ref=None)
+def _recipe_fs_struct_pathsafe(tmp): return _fs_struct_repo(tmp, ref="../../etc/passwd")
+def _recipe_fs_struct_forged(tmp): return _fs_struct_repo(tmp, generator="hand-authored")
+def _recipe_fs_struct_badhash(tmp): return _fs_struct_repo(tmp, bad_hash=True)
+def _recipe_fs_struct_manifest(tmp): return _fs_struct_repo(tmp, drift=True)
+# TREE-BOUND: the lock's paths OMIT src/b.py (a file still tracked at the commit) but recompute a
+# self-consistent hash over the forged list — HASH-RECOMPUTE passes; only the ls-tree binding catches it.
+def _recipe_fs_struct_paths_forged(tmp): return _fs_struct_repo(tmp, forge_paths=["src/a.py"])
+
+
+def _recipe_fs_struct_rail(tmp) -> tuple[str, str]:
+    """build-turn over a mode: FIX card whose structure_lock is FORGED → the structure sub-check fires
+    INSIDE build-turn = the rail is wired (FIX-STAGE-STRUCT-RAIL). The card passes its own card/scope/
+    evidence/tests sub-checks (built on the build_turn fixture), so structure is the sole failure."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    _fs_emit_lock(repo, generator="hand-authored")  # forged generator → structure bites before tree compare
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    card["mode"] = "FIX"
+    card["lock_anchor_ref"] = {"card_id": "BUILD-001", "requirement_id": "REQ-001"}
+    card["deviation_class"] = "RESTORE"
+    card["fix_targets"] = [{"target": "business_rule", "reason": "restore the locked module"}]
+    card["structure_lock_ref"] = "meta/sl.yaml"
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "fix card\n\nCode-X-Provenance: cx-test"], check=True)
+    return repo, state
+
+
+def _recipe_fs_struct_rail_ok(tmp) -> tuple[str, str]:
+    """GOOD (built-code review #9): a VALID mode: FIX card with a REAL structure_lock passes the full
+    build-turn rail (card · scope · structure · tests all green) — proves the rail's green path, not just
+    that a forgery bites. The lock is emitted bound to the PRIOR (build-turn) commit over the real src tree
+    {src/app.py}; the fix commits cleanly so the live tree matches the frozen lock (empty diff)."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    # The FIX card's lock-fidelity anchor resolves the packet from the STATE file's dir (Path(state).parent).
+    # _build_turn_repo parks state at tmp/ (the repo's PARENT), so packet_dir 'packet' would resolve to
+    # tmp/packet (missing). Re-home the state INSIDE the repo so 'packet' -> repo/packet resolves.
+    in_repo_state = os.path.join(repo, "state.yaml")
+    _shutil.copyfile(state, in_repo_state)
+    state = in_repo_state
+    # bind the lock to the build-turn commit (current HEAD) over the REAL src tree, not the default a/b.py
+    _fs_emit_lock(repo, roots=("src",), paths_override=["src/app.py"])
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    card["mode"] = "FIX"
+    card["lock_anchor_ref"] = {"card_id": "BUILD-001", "requirement_id": "REQ-001"}  # resolves in the packet
+    card["deviation_class"] = "RESTORE"
+    card["fix_targets"] = [{"target": "business_rule", "reason": "restore the locked module",
+                            "surfaces": ["src/*"]}]  # covers allowed_files src/app.py
+    card["structure_lock_ref"] = "meta/sl.yaml"
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "fix card\n\nCode-X-Provenance: cx-test"], check=True)
+    return repo, state
+
+
+_FS_QLOG_HANDOFF = """# Handoff — fixing-stage fixture
+
+```yaml
+close_turn:
+  findings_delta: []
+  evidence_paths: [evidence.txt]
+  next_prompt: |
+    Continue per the deck.
+  lock_pointer:
+    frozen_packet_hash: {hash}
+    open_cards: {open}
+    lock_restatement_assertion: "no requirement added/dropped since {hash}"
+  fix_questions:
+    log_ref: FIX-QUESTIONS-LOG.yaml
+    open_questions:
+      - id: Q1
+        log_row: {log_row}
+  vault_sync:
+    status: NOT_APPLICABLE
+    reason: contract-test
+    where_saved: committed in the fixture repo
+```
+"""
+
+
+def _fs_qlog_repo(tmp, row_in_log: bool) -> tuple[str, str]:
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    real = _lf_copy_packet(repo)
+    _git_init(repo)
+    with open(os.path.join(repo, "evidence.txt"), "w") as f:
+        f.write("evidence\n")
+    with open(os.path.join(repo, "FIX-QUESTIONS-LOG.yaml"), "w") as f:  # typed log (built-code review #6)
+        yaml.safe_dump({"fix_questions": [
+            {"id": "Q-IN-LOG", "question": "should the date format stay dd/mm?"}]}, f)
+    log_row = "Q-IN-LOG" if row_in_log else "Q-NOT-IN-LOG"
+    with open(os.path.join(repo, "handoff.md"), "w") as f:
+        f.write(_FS_QLOG_HANDOFF.format(hash=real, open="[BUILD-001, BUILD-002, BUILD-003]", log_row=log_row))
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "fs qlog\n\nCode-X-Provenance: cx-test"], check=True)
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.safe_dump({"project": "fs", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                        "accepted_modules": [],
+                        "open_findings": {"counts": {"p0": 0, "p1": 0, "p2": 0, "p3": 0}, "items": []}}, f)
+    return repo, state
+
+
+def _recipe_fs_qlog_unreconciled(tmp): return _fs_qlog_repo(tmp, row_in_log=False)
+def _recipe_fs_qlog_ok(tmp): return _fs_qlog_repo(tmp, row_in_log=True)
+
+
+# Card-level fix clauses — mutate the PROP-034 good restore card so ONLY the PROP-035 field is wrong.
+def _recipe_fs_posture_no_targets(tmp):
+    def m(c): c.pop("fix_targets", None)
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _recipe_fs_multi_anchor(tmp):
+    def m(c):
+        # both targets declare surfaces (required, built-code review #4) so ONLY MULTI-ANCHOR fires
+        c["fix_targets"] = [
+            {"target": "frontend", "lock_anchor_ref": {"card_id": "BUILD-001", "requirement_id": "REQ-001"},
+             "reason": "the button label", "surfaces": ["checkers/*"]},
+            {"target": "business_rule", "surfaces": ["checkers/*"]}]  # 2nd target lacks its own anchor + reason
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _recipe_fs_xlock_surface(tmp):
+    def m(c):
+        c["fix_targets"] = [{"target": "frontend", "surfaces": ["checkers/cx"]}]
+        c["allowed_files"] = ["checkers/cx", "checkers/tests/test_cx.py"]  # test_cx.py outside the surface
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _recipe_fs_revert_missing(tmp):
+    def m(c): c["drift_recovery_required"] = True  # no revert_receipt
+    return _lf_mutated_card_repo(tmp, m, bind_packet_hash=True)
+
+
+def _fs_amnesia_repo(tmp, cp, *, log_ids=("Q1",), write_log=True) -> tuple[str, str]:
+    """Build an lf card repo (card_fix_good_restore + the CEO-D-LOCKFID-001 packet ledger seed) with
+    clarification_provenance=cp and a typed FIX-QUESTIONS-LOG.yaml carrying log_ids (built-code review #5:
+    the file-backing is REAL now — a card receipt is not enough). write_log=False omits the log so the
+    LOG-BACKED bite fires. cp should set fix_questions_log: FIX-QUESTIONS-LOG.yaml to point at it."""
+    def m(c):
+        c["clarification_provenance"] = cp
+    repo, state = _lf_mutated_card_repo(tmp, m, bind_packet_hash=True,
+                                        seed_packet=_lf_seed_scope_authorization)
+    if write_log:
+        with open(os.path.join(repo, "FIX-QUESTIONS-LOG.yaml"), "w") as f:
+            yaml.safe_dump({"fix_questions": [{"id": rid, "question": f"q {rid}"} for rid in log_ids]}, f)
+    return repo, state
+
+
+_FS_AMNESIA_LOG = "FIX-QUESTIONS-LOG.yaml"
+
+
+def _recipe_fs_amnesia_ghost(tmp):
+    return _fs_amnesia_repo(tmp, {"fix_questions_log": _FS_AMNESIA_LOG, "questions": [
+        {"id": "Q1", "ledger_searched": True, "related_ceo_d_refs": ["CEO-D-GHOST-999"]}]})
+
+
+def _recipe_fs_amnesia_contradiction(tmp):
+    return _fs_amnesia_repo(tmp, {"fix_questions_log": _FS_AMNESIA_LOG, "questions": [
+        {"id": "Q1", "contradicts_ceo_d": "CEO-D-LOCKFID-001"}]})  # no ceo_override_ref
+
+
+def _recipe_fs_amnesia_override_unsafe(tmp):
+    return _fs_amnesia_repo(tmp, {"fix_questions_log": _FS_AMNESIA_LOG, "questions": [
+        {"id": "Q1", "contradicts_ceo_d": "CEO-D-LOCKFID-001", "ceo_override_ref": "../../etc/passwd"}]})
+
+
+def _recipe_fs_amnesia_unlogged(tmp):
+    # LOG-BACKED (built-code review #5): the question's id is NOT a row in the file-backed log (resolution
+    # is otherwise valid) → only FIX-STAGE-AMNESIA-LOG-BACKED fires.
+    return _fs_amnesia_repo(tmp, {"fix_questions_log": _FS_AMNESIA_LOG, "questions": [
+        {"id": "Q1", "ledger_searched": True, "related_ceo_d_refs": ["CEO-D-LOCKFID-001"]}]},
+        log_ids=("Q-OTHER",))
+
+
+def _recipe_fs_card_good_amnesia(tmp):
+    return _fs_amnesia_repo(tmp, {"fix_questions_log": _FS_AMNESIA_LOG, "questions": [
+        {"id": "Q1", "ledger_searched": True, "related_ceo_d_refs": ["CEO-D-LOCKFID-001"]}]})
+
+
 _RECIPES = {
     "ancestor_ok": _recipe_ancestor_ok,
+    "fs_struct_good": _recipe_fs_struct_good,
+    "fs_struct_nolockref": _recipe_fs_struct_nolockref,
+    "fs_struct_pathsafe": _recipe_fs_struct_pathsafe,
+    "fs_struct_forged": _recipe_fs_struct_forged,
+    "fs_struct_badhash": _recipe_fs_struct_badhash,
+    "fs_struct_manifest": _recipe_fs_struct_manifest,
+    "fs_struct_paths_forged": _recipe_fs_struct_paths_forged,
+    "fs_struct_rail": _recipe_fs_struct_rail,
+    "fs_struct_rail_ok": _recipe_fs_struct_rail_ok,
+    "fs_qlog_unreconciled": _recipe_fs_qlog_unreconciled,
+    "fs_qlog_ok": _recipe_fs_qlog_ok,
+    "fs_posture_no_targets": _recipe_fs_posture_no_targets,
+    "fs_multi_anchor": _recipe_fs_multi_anchor,
+    "fs_xlock_surface": _recipe_fs_xlock_surface,
+    "fs_revert_missing": _recipe_fs_revert_missing,
+    "fs_amnesia_ghost": _recipe_fs_amnesia_ghost,
+    "fs_amnesia_contradiction": _recipe_fs_amnesia_contradiction,
+    "fs_amnesia_override_unsafe": _recipe_fs_amnesia_override_unsafe,
+    "fs_amnesia_unlogged": _recipe_fs_amnesia_unlogged,
+    "fs_card_good_amnesia": _recipe_fs_card_good_amnesia,
     "lf_card_no_anchor": _recipe_lf_card_no_anchor,
     "lf_card_no_devclass": _recipe_lf_card_no_devclass,
     "lf_card_scope_unauth": _recipe_lf_card_scope_unauth,

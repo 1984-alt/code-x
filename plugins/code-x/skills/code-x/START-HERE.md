@@ -5,9 +5,10 @@
 ## What Code-X V1 is (one line)
 A lean, file-based system that turns a non-coder CEO's intent into shipped, working software — by handing each AI **one small work-order at a time**, building **module-by-module with CEO approval**, and **reviewing only what changed**. Soul: you direct the engineering system; it directs the AI; you never debug.
 
-## The two stages
+## The three stages
 - **PLANNING STUDIO** (hands-on with CEO · top models) → product taste · decisions · architecture · security baseline · looks-first design · money-rule sign-off · then the work-order deck (G1 card-compilation gate).
 - **BUILD FACTORY** (hands-off except approvals · cost-effective models by default) → Mode A → module (deterministic checks on every card) → demo → **one model review per module** → CEO approve → capsule → next module → P3-zero → final-ready certificate.
+- **FIXING STAGE** (PROP-035 · preserve-posture) → repair an existing surface and **change only the defect**: each fix names ONE `fix_target`, everything else cross-locks; `cx check structure` freezes the file tree, the anti-amnesia gate forces a ledger search before re-asking the CEO. Drift = failure. See `FIXING-STAGE.md`.
 
 ## Read order
 1. **Every session:** `KERNEL.md` + the project's `CODE-X-STATE.yaml` + your ONE work-order + only the files it names. Nothing else.
@@ -20,6 +21,7 @@ A lean, file-based system that turns a non-coder CEO's intent into shipped, work
 - `KERNEL.md` — house rules, read every session.
 - `VOICE.md` — plain-talk standard: how the AI talks to the CEO (plain, scannable, decisions decidable).
 - `GATES.md` — G1 card-compilation … G8 final-ready. Load-on-demand.
+- `FIXING-STAGE.md` — the 3rd stage (PROP-035): preserve-posture, the cross-lock, `fix_targets`, the five levers. Read when a session enters Fixing (`current_stage: FIXING_STAGE`).
 - `SEVERITY.md` — the P0–P3 ladder.
 - `ROUTING.md` — model tiers + per-family notes.
 - `BUILD-ENGINE-PROFILES.yaml` — exact model+effort per role for BOTH engines (Claude Code / Codex App); the compiler injects per-card `execution` blocks; switching engines = one state line. Load-on-demand (compiler + session start only).

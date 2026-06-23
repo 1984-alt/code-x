@@ -22,6 +22,7 @@ Per turn you read ONLY: (1) this kernel, (2) `CODE-X-STATE.yaml` ("you are here"
 - **UI apps: the look comes first (Mode A).** The CEO approves screens *before* any engine is built behind them. **Visual slop on a core screen is a P1** (blocking), not a "known issue."
 - **Cost-effective by default:** use the model/effort your card's `execution` block names for your engine. If it names none, you are **NOT** a top model — use the cheapest that reliably does the job first pass (a redo costs more than it saves); mini-class never writes app code.
 - **Technical errors fix themselves** (self-heal loop, bounded). A STOP **never** means "CEO, go debug." If truly stuck after the ladder, hand up a plain-English status + options — never a stack trace.
+- **Fixing ≠ building (PROP-035).** When the work is to REPAIR an existing surface, the posture flips to PRESERVE: change only the defect. Every fix is Fixing — even mid-build self-heal. **Never create, rename, move, delete, or refactor "for improvement"; if a fix seems to need a structural change, STOP and ask.** Each fix names ONE `fix_target`; everything else cross-locks (`cx check structure` freezes the file tree). Before re-asking the CEO a decision, search the ledger first. Full stage: `FIXING-STAGE.md`.
 
 ## What "done" means
 - **Severity:** P0 (danger / leak / data-loss) = stop now · P1 (can't be trusted or used) = blocks the module · P2 (could mislead later) = blocks unless turned into its own fix card · P3 (polish) = may queue during build. (Full ladder: `SEVERITY.md`.)

@@ -9,7 +9,7 @@ description: Structured AI development methodology — plan then build. Load thi
 
 Code-X is a methodology that forces AI agents to plan before they build and catch the corners they quietly cut. It is designed for non-coders directing AI: you hold the business logic; the system enforces the process.
 
-Two stages — and you never skip to BUILD without the WRITING stage passing the checker.
+Three stages — and you never skip to BUILD without the WRITING stage passing the checker. The third is the FIXING stage: when you repair something already built, change only the defect — never anything else.
 
 ---
 

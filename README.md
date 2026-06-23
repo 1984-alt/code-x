@@ -6,7 +6,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.15-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.16-orange.svg)
 
 **A way for non-coders to get software they can trust out of AI: you direct, the AI builds, and built-in checks catch the corners it quietly cuts.**
 
@@ -41,12 +41,13 @@ See [VALIDATION.md](VALIDATION.md) for what it's caught on real projects so far 
 
 ---
 
-## The two stages
+## The three stages
 
-Code-X has two distinct stages. You never start the second before the first is done and verified.
+Code-X has three distinct stages. You never start the next before the previous is done and verified.
 
 1. **Planning stage** — decide and lock *exactly* what to build before any code: requirements, decisions, design, and a security baseline — frozen and verified.
 2. **Building stage** — the AI builds *only* what the verified plan specifies, one small checkable work-order at a time, gated and reviewed. This stage is strict for a reason: without it, both Claude and Codex drifted from the author's specs; the gates and the `cx` checker make "build to spec" *enforceable* instead of merely hoped-for.
+3. **Fixing stage** — repairing something already built, with the posture flipped to *preserve*: change only the defect, nothing else. This stage carries equal weight, and it exists from hard experience: even with a locked plan and a gated build, drift still crept in during fixes — a file quietly deleted, a screen restyled, a past decision silently reversed "while we're in here." Fixing treats any change beyond the defect as a failure, freezes the file tree so nothing moves unseen, and won't let a settled decision be re-argued from memory. It's the stage that catches the drift the first two couldn't.
 
 **The rule: never build before the planning stage is done and verified.** Building on an unfrozen plan is the root of the drift Code-X exists to prevent.
 

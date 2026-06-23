@@ -8,7 +8,7 @@ Code-X was built by someone who can't read code fluently — using AI to build t
 
 ## What feedback is most useful
 
-**Design flaws** — does the two-stage planning → building flow make sense as described? Is the gate structure logically coherent? Does cross-family review (having a second AI family review the first's output) actually catch the things it claims to? Where is the reasoning broken?
+**Design flaws** — does the three-stage planning → building → fixing flow make sense as described? Is the gate structure logically coherent? Does cross-family review (having a second AI family review the first's output) actually catch the things it claims to? Where is the reasoning broken?
 
 **Security gaps** — the protocol was shaped by a non-coder; its security thinking was influenced by what could be learned, not by formal training. If you see naive assumptions, missing threat models, or patterns that look safe but aren't, please say so plainly.
 

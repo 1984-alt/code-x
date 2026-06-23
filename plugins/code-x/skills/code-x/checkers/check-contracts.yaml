@@ -2787,3 +2787,257 @@ clauses:
     good:
       git_fixture: lf_session_lock_pointer_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: structure / card / close-turn / state / consistency  (PROP-035 — the Fixing stage)
+  # 18 clauses; each pinned BAD fixture fails closed at the stated severity (so green = enforcing).
+  # (16 at first build + TREE-BOUND #17 / AMNESIA-LOG-BACKED #18 from the GPT-5.5 xhigh built-code review.)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: FIX-STAGE-STRUCT-RAIL
+    check: build-turn
+    kind: gate
+    clause: "a mode: FIX card runs through build-turn → cx check structure is INVOKED (rail wired); a forged structure_lock surfaces as a structure sub-check failure (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_rail
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-FORGED"
+    good:
+      git_fixture: fs_struct_rail_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-LOCK-REF
+    check: structure
+    kind: gate
+    clause: "a mode: FIX card with no structure_lock_ref fails closed — a fix must bind to the frozen architecture it preserves (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_nolockref
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-LOCK-REF"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-MANIFEST
+    check: structure
+    kind: gate
+    clause: "a fix that creates/renames/moves/deletes a file OUTSIDE allowed_files vs the frozen structure_lock is structural drift (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_manifest
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-MANIFEST"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-HASH-RECOMPUTE
+    check: structure
+    kind: gate
+    clause: "a structure_lock whose manifest_sha != the RECOMPUTED hash of its commit+paths is rejected — a self-declared structure hash is never trusted (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_badhash
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-HASH-RECOMPUTE"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-TREE-BOUND
+    check: structure
+    kind: gate
+    clause: "a structure_lock whose paths OMIT/ALTER a file that exists in git ls-tree at accepted_at_commit is rejected — the frozen side is recomputed from the REAL tree, never trusted from the self-declared paths list; a forger who deletes a tracked file and omits it from paths (recomputing a self-consistent hash so HASH-RECOMPUTE still passes) would otherwise empty the live-vs-frozen diff (PROP-035 Lever A, built-code review #1)"
+    source: PROP-035 §3 Lever A (built-code review #1)
+    git_fixture: fs_struct_paths_forged
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-TREE-BOUND"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-PATHSAFE
+    check: structure
+    kind: gate
+    clause: "a structure_lock_ref using an absolute path / '..' / symlink / outside-repo target is rejected (reuses the v1.10 path-safety shape) (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_pathsafe
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-PATHSAFE"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-STRUCT-FORGED
+    check: structure
+    kind: gate
+    clause: "a structure_lock that is not machine-generated (wrong generator marker) / not sha-bound to a real commit is forged (PROP-035 Lever A)"
+    source: PROP-035 §3 Lever A
+    git_fixture: fs_struct_forged
+    bad:
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-STRUCT-FORGED"
+    good:
+      git_fixture: fs_struct_good
+      args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-AMNESIA-QLOG-RECONCILE
+    check: close-turn
+    kind: gate
+    clause: "an open FIX-stage question in the handoff with no reconciled FIX-QUESTIONS-LOG row is an off-the-books re-ask (PROP-035 Lever B)"
+    source: PROP-035 §3 Lever B
+    git_fixture: fs_qlog_unreconciled
+    bad:
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-AMNESIA-QLOG-RECONCILE"
+    good:
+      git_fixture: fs_qlog_ok
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+
+  - id: FIX-STAGE-AMNESIA-LOG-BACKED
+    check: card
+    kind: gate
+    clause: "a clarification_provenance question that is not a typed row in the file-backed FIX-QUESTIONS-LOG (no fix_questions_log ref, an untyped/missing log, or a question.id absent from it) is a card-only receipt, not file-backed — a card receipt cannot prove a question was filed, undercutting the close-turn reconcile (PROP-035 Lever B, built-code review #5)"
+    source: PROP-035 §3 Lever B (built-code review #5)
+    git_fixture: fs_amnesia_unlogged
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-AMNESIA-LOG-BACKED"
+    good:
+      git_fixture: fs_card_good_amnesia
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-AMNESIA-GHOST-REF
+    check: card
+    kind: gate
+    clause: "a clarification_provenance related_ceo_d_ref (or new_ledger_row_ref) that resolves to no real CEO-DECISION-LEDGER row is a ghost (PROP-035 Lever B)"
+    source: PROP-035 §3 Lever B
+    git_fixture: fs_amnesia_ghost
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-AMNESIA-GHOST-REF"
+    good:
+      git_fixture: fs_card_good_amnesia
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-AMNESIA-CONTRADICTION
+    check: card
+    kind: gate
+    clause: "an answer that contradicts a locked decision with no resolved ceo_override_ref changes a locked rule silently (P1 default; P0 on a danger class) (PROP-035 Lever B)"
+    source: PROP-035 §3 Lever B
+    git_fixture: fs_amnesia_contradiction
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-AMNESIA-CONTRADICTION"
+    good:
+      git_fixture: fs_card_good_amnesia
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-AMNESIA-OVERRIDE-SAFE
+    check: card
+    kind: gate
+    clause: "a ceo_override_ref that is an absolute path / '..' / outside-repo is rejected (PROP-035 Lever B)"
+    source: PROP-035 §3 Lever B
+    git_fixture: fs_amnesia_override_unsafe
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-AMNESIA-OVERRIDE-SAFE"
+    good:
+      git_fixture: fs_card_good_amnesia
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-XLOCK-SURFACE
+    check: card
+    kind: gate
+    clause: "an allowed_files entry OUTSIDE every declared fix_targets surface is a silent layer-cross (P1 default; P0 on a danger-class card) (PROP-035 Lever C)"
+    source: PROP-035 §3 Lever C
+    git_fixture: fs_xlock_surface
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-XLOCK-SURFACE"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-XLOCK-MULTI-ANCHOR
+    check: card
+    kind: gate
+    clause: "a multi-target fix where any target lacks its own lock_anchor_ref + reason is a blanket open-everything (PROP-035 Lever C)"
+    source: PROP-035 §3 Lever C
+    git_fixture: fs_multi_anchor
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-XLOCK-MULTI-ANCHOR"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-POSTURE-DECL
+    check: card
+    kind: gate
+    clause: "a mode: FIX card with no fix_targets (or a target outside the closed 7-target taxonomy) fails the posture declaration (PROP-035 Lever C)"
+    source: PROP-035 §3 Lever C
+    git_fixture: fs_posture_no_targets
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-POSTURE-DECL"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-REVERT-RECEIPT
+    check: card
+    kind: gate
+    clause: "a mode: FIX card that marks drift_recovery_required but carries no (or a partial) revert_receipt is fixing a Layer-1 drift forward (PROP-035 Lever E)"
+    source: PROP-035 §3 Lever E
+    git_fixture: fs_revert_missing
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-REVERT-RECEIPT"
+    good:
+      git_fixture: lf_card_good_restore
+      args: ["{REPO}/card.yaml", "--state", "{STATE}"]
+
+  - id: FIX-STAGE-SEAT-PROFILE
+    check: state
+    kind: gate
+    clause: "current_stage: FIXING_STAGE with no fixing_stage orchestrator seat in BUILD-ENGINE-PROFILES leaves the seat cap invisible (PROP-035 §6 state-layer)"
+    source: PROP-035 §6 (xfam P1-3)
+    bad:
+      args: ["tests/fixtures/state_fixing_stage.yaml", "--profiles", "tests/fixtures/profiles_test.yaml"]
+      expect_severity: P1
+      expect_contains: "FIX-STAGE-SEAT-PROFILE"
+    good:
+      args: ["tests/fixtures/state_fixing_stage.yaml", "--profiles", "tests/fixtures/profiles_test_with_fixing.yaml"]
+
+  - id: FIX-STAGE-GUARDRAIL-PRESENCE
+    check: consistency
+    kind: gate
+    clause: "the always-read Fixing preserve-posture guardrail removed/reworded out of canon is caught by cx check consistency (presence bite; mirrors prevention-first-ladder). NOTE: the consistency mechanism emits P1 for a missing canonical — STRICTER than the proposal's nominal P2, the safe direction (PROP-035 Lever D)"
+    source: PROP-035 §3 Lever D
+    bad:
+      args: ["--registry", "tests/fixtures/consistency_registry_fixing_drifted.yaml"]
+      expect_severity: P1
+      expect_contains: "fixing-stage-preserve-posture"
+    good:
+      args: []

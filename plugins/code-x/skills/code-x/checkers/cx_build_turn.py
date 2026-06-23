@@ -286,4 +286,16 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE render-fidelity (card declares no render_bundle)")
 
+    # 10. structure — the STRUCTURE LOCK (PROP-035 Lever A). Every mode: FIX card must not restructure
+    #     the file tree outside its allowed_files vs the frozen structure_lock. Rail-wired here (not
+    #     opt-in, xfam P1-1) so the preserve-the-architecture gate bites on the normal fix path; a
+    #     mode: FIX card with no structure_lock_ref fails closed inside cx check structure. The RAIL
+    #     being wired is itself a contract clause (FIX-STAGE-STRUCT-RAIL) — a bad structure_lock here
+    #     surfaces as a build-turn sub-check failure. Non-FIX cards = NOT_APPLICABLE.
+    if card_mode == "FIX":
+        rc, out = _run_cx("check", "structure", card_path, "--repo-root", repo_root)
+        _sub("structure", rc, out, findings)
+    else:
+        print("  [INFO] NOT_APPLICABLE structure (non-FIX card)")
+
     return findings_report(findings)

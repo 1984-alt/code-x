@@ -10,6 +10,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.16.0]
+
+Syncs the public release up to protocol **v1.16**, folding in one protocol upgrade (PROP-035). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.
+
+### Added
+- **The Fixing Stage (PROP-035) — a third stage with a "preserve, don't drift" posture.** Until now the protocol had two stages: *Planning* (decide what to build) and *Building* (create it). But most real work after launch is *fixing* — and a fix is exactly where a build quietly drifts: a file gets deleted, a screen gets restyled, an earlier decision gets silently reversed "while we're in here." This release gives fixing its own stage whose default posture is **preserve**: anything that changes beyond the fix is treated as a failure, not a side effect. Two rules from the author shape it — *every fix is a fix* (the posture is on even for a quick mid-build repair), and *same rules, scaled ceremony* (the rules are always on, but the heavy gate only fires when you touch a locked, already-accepted piece). It builds on the previous release's lock-fidelity work (PROP-034) and gives the visual and scope drift guards a proper home. Five guardrails:
+  - **Structure lock.** When a surface is accepted, its real file tree is recorded straight from version control — not a list the AI types out — so a later "fix" can't quietly delete or move files without it showing up. Deeper component/route checks ship advisory-only for now.
+  - **No decision amnesia.** Questions raised and answered during a fix are written to a typed log file, and the end-of-turn check reconciles against it — so an answer given mid-fix can't silently evaporate by the next handoff.
+  - **Per-target cross-lock.** A fix card has to name what kind of thing it's touching (one of a fixed list of seven) and spell out the surfaces involved — you can't opt out of the check by leaving the target vague.
+  - **Always-on guardrails.** The preserve rules are present-and-enforced the same way the do-less ladder is, so they can't quietly drift out of the protocol.
+  - **Revert on drift.** When a fix does drift, the recovery is a recorded revert — no checker ever runs a destructive reset on its own.
+
+  Honest limit: the structure lock is bound to the real file tree, but the decision log is still checked at the record level — a question that is simply never written down escapes the log (it surfaces as an end-of-turn mismatch, not silently). The stage protects forward from a frozen baseline; it does not retroactively un-drift screens built before it existed.
+
+257 tests · 237 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.15.0]
 
 Syncs the public release up to protocol **v1.15**, folding in one protocol upgrade (PROP-034). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.

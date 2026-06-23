@@ -75,6 +75,33 @@ explicitly **NOT** imported from the source it came from: "minimal prose / code-
 fights plain-English for a non-coder CEO — `VOICE.md`) and "YAGNI applies to tests too" (it
 fights the verification spine — green ≠ enforcing). Prose and tests are never what you cut.
 
+## Fixing-stage rules (PROP-035 — preserve, don't improve)
+
+When the card's job is to REPAIR an existing surface (`mode: FIX`, any fix — even a mid-build
+self-heal), the posture flips from CREATE to **PRESERVE: change only the defect.** These rules apply to
+EVERY fix; only the *heavy ceremony* (structural re-freeze + CEO re-accept) scales up when the fix
+touches an already-accepted / locked artifact (CEO-D-FIX-B). [RULE:fixing-stage-preserve-posture]
+
+- **Always-read hard rule:** **never create, rename, move, delete, or refactor "for improvement"; if a
+  fix seems to need a structural change, STOP and ask.** Look and structure must not wander. A fix is
+  scoped to its declared `fix_targets`; everything else is frozen (`cx check structure` proves the file
+  tree did not move outside `allowed_files`).
+- **Never mix fix + improve:** a fix is *"fix the bug only, preserve everything else"* OR *"redesign
+  only, no logic changes"* — never both in one card. **Forbidden during a fix unless the card names it:**
+  layout · spacing · colours · typography · copy · component names.
+- **SCREEN_CONTRACT per locked screen** (Purpose / Must-preserve / Forbidden): for a fix on an accepted
+  screen, state what the screen is for, what must survive untouched, and what is off-limits — then
+  **plan-then-wait scoped to risk:** show the plan and wait for CEO OK before editing a locked artifact
+  or any product / UX / business / security / cross-target change. A compile/test self-heal iteration
+  does NOT wait (that would grind the build) — but the preserve-rules above still bind it.
+- **Anti-amnesia:** before re-asking the CEO a decision, **search the CEO-DECISION-LEDGER first.** A
+  FIX-stage question must be file-backed (a `FIX-QUESTIONS-LOG` row or a STOP card) carrying
+  `ledger_searched` + the related decision refs; an answer that CHANGES a locked rule needs a resolved
+  `ceo_override_ref`, never a silent second decision. `cx check close-turn` reconciles it.
+- **Revert-on-drift, never fix-forward:** if a structure/lock check fails, you do not patch over it —
+  you produce a `revert_receipt` (bad_head → restored_head, clean post-revert diff) and re-approach
+  tighter. No tool runs `git reset` for you; surfacing the drift and reverting is your job.
+
 ## The 12 rules
 
 1. **Build the smallest faithful implementation.** Do exactly the card's scope. No product

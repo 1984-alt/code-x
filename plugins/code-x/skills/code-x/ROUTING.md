@@ -9,6 +9,8 @@
 
 **Codex long autonomy** — for **bounded** backend/data/test cards only. NOT subjective UI taste. NOT unbounded fix loops.
 
+**FIXING STAGE (PROP-035)** — a fix card runs at the same tier its `fix_target` would (a `frontend` fix = UI-taste tier; a `business_rule` fix = money/business-rule TOP tier). The reviewer is the **opposite family** of the fixer, as always; a fix that touches money / a danger class is a **mandatory cross-family money review** (G5 high-risk foundation rule) — a preserve-posture fix is still a real diff. The `fixing_stage` seat profile in `BUILD-ENGINE-PROFILES.yaml` caps the orchestrator; `cx check state` bites if `current_stage: FIXING_STAGE` has no seat profile.
+
 **Default + escalation:** no `model_tier` on a card → not top model. Cheap worker fails once → may retry once; fails again → escalate a tier or raise a STOP card.
 
 ## Per-family notes (ONE protocol, tuned leashes — NOT two protocols)

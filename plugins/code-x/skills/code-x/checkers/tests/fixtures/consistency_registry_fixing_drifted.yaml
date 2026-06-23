@@ -1,0 +1,12 @@
+# Fixture: the fixing-stage preserve-posture guardrail REWORDED out of canon — the canonical no longer
+# appears in BUILDER-STANDARD.md, so cx check consistency must FIX-FIRST naming rule
+# 'fixing-stage-preserve-posture' + the file (FIX-STAGE-GUARDRAIL-PRESENCE). Proves the always-on
+# guardrail bites the moment it is removed.
+rules:
+  - id: fixing-stage-preserve-posture
+    canonical: "THIS PRESERVE-POSTURE GUARDRAIL TEXT WAS REMOVED FROM CANON AND APPEARS IN NO FILE"
+    key_phrases: ["create, rename, move, delete, or refactor", "for improvement"]
+    # KERNEL.md carries the guardrail phrase but NO [RULE:] pointer (BUILDER-STANDARD/FIXING-STAGE do —
+    # a pointer would short-circuit the canonical check to PASS), so a reworded canonical bites here.
+    appears_in:
+      - KERNEL.md

@@ -345,6 +345,21 @@ def validate_accepted_module(module_id, state, state_loc, repo_root=None, accept
             else:
                 findings.extend(l1)
 
+    # ── PROP-035 Lever A: module-acceptance fails closed on STRUCTURAL drift ──────────────────────
+    # The Andon wall also re-runs the structure Layer-1 validator over every mode: FIX card in the live
+    # deck (the SAME logic cx check structure uses), so a module cannot be accepted while a fix has
+    # restructured the file tree outside its allowed_files, or carries a forged / self-declared /
+    # path-unsafe structure_lock. Same cards_dir gating as the drift block above (direct command path
+    # only — avoids recursion on the order wall's per-prior calls).
+    if cards_dir is not None and repo_root:
+        from cx_structure import compute_structure_findings
+        sfindings, sfatal = compute_structure_findings(repo_root, Path(cards_dir))
+        if sfatal:
+            findings.append(("P1", state_loc,
+                f"module-acceptance cannot prove no structural drift — {sfatal} (PROP-035 Lever A)"))
+        else:
+            findings.extend(sfindings)
+
     return findings
 
 

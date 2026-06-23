@@ -561,7 +561,8 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
                     "BUILD-ENGINE-PROFILES.fix_escalation (PROP-021)"))
 
 
-_STAGE_TO_PROFILES_KEY = {"PLANNING_STUDIO": "planning_studio", "BUILD_FACTORY": "build_factory"}
+_STAGE_TO_PROFILES_KEY = {"PLANNING_STUDIO": "planning_studio", "BUILD_FACTORY": "build_factory",
+                          "FIXING_STAGE": "fixing_stage"}
 
 
 def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
@@ -573,6 +574,32 @@ def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
             f"active_build_engine '{engine}' missing or not in {sorted(VALID_BUILD_ENGINES)} — "
             "the session must declare which build engine it is driving"))
         return  # cannot resolve a seat without a valid engine
+
+    # FIX-STAGE-SEAT-PROFILE (PROP-035): a FIXING_STAGE session MUST have a fixing_stage orchestrator
+    # seat in BUILD-ENGINE-PROFILES, else the seat cap is invisible — an over-tier orchestrator in a
+    # fixing session would pass unchecked. This presence check runs INDEPENDENT of orchestrator_model
+    # (which the exceeds-check below skips when absent), so a fixing session can never silently lack a
+    # seat cap. Fail closed: a stage whose seat is unreadable/absent is a real gap, not a free pass.
+    if str(data.get("current_stage", "")) == "FIXING_STAGE":
+        profiles_path, env_err = resolve_profiles_path(args)
+        if env_err:
+            findings.append(("P1", loc, env_err))
+            return
+        profiles, perr = load_yaml(profiles_path)
+        if perr or not isinstance(profiles, dict):
+            findings.append(("P1", loc,
+                f"current_stage: FIXING_STAGE but BUILD-ENGINE-PROFILES is unreadable at {profiles_path} — "
+                "cannot verify the fixing_stage seat cap (fail closed) (PROP-035 / FIX-STAGE-SEAT-PROFILE)"))
+            return
+        branch_key = ENGINE_BRANCH_KEYS[str(engine)]
+        fix_seat = nested_get(profiles, "orchestrator", "fixing_stage", branch_key)
+        if not isinstance(fix_seat, dict) or not fix_seat.get("model"):
+            findings.append(("P1", loc,
+                f"current_stage: FIXING_STAGE but BUILD-ENGINE-PROFILES has no orchestrator.fixing_stage."
+                f"{branch_key} seat — the Fixing-stage seat cap is invisible (an over-tier orchestrator "
+                "would pass unchecked); add a fixing_stage seat for this engine (PROP-035 / "
+                "FIX-STAGE-SEAT-PROFILE)"))
+            return
 
     # clause: orchestrator_model must not exceed the profiles seat for engine + stage
     launched = data.get("orchestrator_model")
