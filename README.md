@@ -1,33 +1,25 @@
-> **Status: experimental.** Built by AI, directed by someone who can't read a single line of code — for non-coders and vibe-coders. It's worked far better for me than building without it — but I'm the only user and tester so far, so call it personally proven, not publicly proven. Take what's useful; judge it for yourself.
-
----
-
 # Code-X
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![protocol](https://img.shields.io/badge/protocol-v1.16-orange.svg)
 
-**A way for non-coders to get software they can trust out of AI: you direct, the AI builds, and built-in checks catch the corners it quietly cuts.**
+**A way for non-coders to get software out of AI that lands far closer to what they actually wanted — with built-in checks that catch the corners it quietly cuts.**
 
-Because a non-coder can't fix bugs by hand, Code-X tries to catch as many as it can — many layers of review, not few. The catch is cost: those AI reviews are metered and add up fast. So Code-X runs cheap mechanical checks first and stops the reviews from looping — cutting the review waste that makes heavy coverage expensive. **Keep the coverage, kill the loops.**
+Code-X is a build protocol for people who can't read code. You pin down exactly what you want and lock it; the AI builds *only that*, one small checkable piece at a time; and a plain Python checker — not another AI — refuses to pass work that's broken or has drifted from your locked plan. Then a second, different AI family double-checks what the first one built. The whole thing exists to fight one enemy: **drift** — the AI quietly wandering from what you actually pictured, which a non-coder can't see until it's already wrong.
 
----
+*The name is simply **Claude Code + Codex** — the two AI tools it's built for, and the two AIs that check each other's work.*
 
-## What is this
+**What backs that up — today, in this repo:**
 
-Code-X started from real vibe-coding across many attempted projects — some worked, many failed. The failures kept exposing the same pattern: the AI drifting from the plan, skipping evidence, calling things "done" too early, and burning time in repeated review loops. Fixing that by vibes alone didn't work — so it became a **protocol**, shaped by those scars, with one job: to make what you vibe-code come out **as close to your original vision as possible.** The current public version was then tested on fresh rebuilds of two real personal projects, where it finally landed much closer to what the author wanted than earlier attempts did.
+- **237 gate clauses, and every one is proven to bite.** Code-X doesn't just run checks — a meta-test layer feeds each gate a deliberately broken input and confirms the gate *rejects* it. A green checkmark that doesn't actually enforce anything is the failure mode this is built to kill: **"green ≠ enforcing."**
+- **257 self-tests, green in CI** (the badge above is live). The checker is mechanical Python with a single dependency — clone it and run it yourself in a minute.
+- **It caught a real bug in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *correctly thrown out* when cross-family review surfaced a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
+- **A checker an AI can't talk its way past**, plus opposite-family review (a *different* vendor, not the AI grading its own work), plus a human who owns every decision. No single layer is forge-proof; the protection is the stack.
 
-The thing it fights is **drift** — the AI quietly wandering away from what you actually pictured. If you can't read code, you won't notice until it's already wrong. Code-X fights drift from both ends:
+This was built by AI and directed by someone who can't read a single line of code — that's the whole experiment: can a non-coder direct AI rigorously enough that the software comes out the way they intended? The proof above is the answer so far.
 
-- **You pin your vision down first — and lock it.** Long, meticulous planning before any code: what it should do, the decisions, how it looks, what "safe" means. This is the heart of Code-X — most of the effort lives here, because an AI can't build faithfully to a fuzzy idea.
-- **Then the AI builds only that — and is kept honest.** Small pieces at a time; a plain checker program (not another AI) won't pass work that's broken or has drifted from your locked plan; and a second, different AI double-checks.
-
-The result isn't "perfect software you never look at." It's software that lands **far closer to what you actually wanted** than vibe-coding alone ever got — even if you can't read a line of the code.
-
-*(Honest: it's experimental, proven so far mostly on the author's own projects — personally proven, not publicly proven. The rest of this page is how it works.)*
-
-The name is simply **Claude Code + Codex** — the two AI tools it's built for, and the two AIs that check each other's work.
+**The honest limit, stated once:** Code-X is experimental and single-operator — proven on the author's own projects, not yet independently reproduced by other people. If the missing independent proof bothers you, that's fair — take what's useful and judge it for yourself. (Full honesty, including what is *not* yet proven, in [VALIDATION.md](VALIDATION.md).)
 
 ---
 
@@ -35,7 +27,7 @@ The name is simply **Claude Code + Codex** — the two AI tools it's built for, 
 
 It came from repeated, painful experience — AI coding assistants (both Claude and Codex) would not build to the author's specs: they drifted, cut corners, skipped requirements, then cheerfully reported "all tests pass" and "looks good" on work that was broken or half-finished. If you can't read code, you can't catch that.
 
-Code-X is an attempt to put guardrails around the AI so a non-coder can trust the output: a planning stage that pins down exactly what to build, a building stage that forces the AI to build *only that* — one small, checkable work-order at a time — deterministic checks that can't be talked around ("green ≠ enforcing"), and cross-family review so one AI's blind spots get caught by another. It was shaped by using it on real projects and folding every failure back into the rules.
+Code-X's answer was to wrap the AI in guardrails — and to keep adding them: every new kind of failure that showed up got folded back into the rules as a check that stops it recurring, shaped by real use rather than designed up front.
 
 See [VALIDATION.md](VALIDATION.md) for what it's caught on real projects so far — and the honest limits of that (single-operator, not yet publicly reproduced). The "cross-reviewed by both AI families" claim is inspectable too: [reviews/](reviews/) is a summarised trail of real reviews and what they caught.
 
@@ -59,7 +51,7 @@ A practical tip: use **`/plan`** — available in both Claude Code and Codex —
 
 ## Who this is for & how you can help
 
-I'm an Indonesian vibe-coder who can't read a single line of code. I didn't build Code-X — I *directed* it: I told Claude what I wanted, Claude did the actual building, and Codex/GPT cross-reviewed the work and drove improvements along the way. That's the whole idea — directing AI to build software you can trust, without writing the code yourself. I think of the role as an **AI build director**: like a film director who directs the cast and crew and owns the final cut without operating the camera, you direct the build and own the result without writing the code. If that's you too, this is for you.
+I'm an Indonesian vibe-coder who can't read a single line of code. I didn't build Code-X — I *directed* it: I told Claude what I wanted, Claude did the actual building, and Codex/GPT cross-reviewed the work and drove improvements along the way. That's the whole idea — directing AI to build the software you actually wanted, without writing the code yourself. I think of the role as an **AI build director**: like a film director who directs the cast and crew and owns the final cut without operating the camera, you direct the build and own the result without writing the code. If that's you too, this is for you.
 
 **If you're a vibe-coder or non-coder:** here's a way of working you can try today. Install, read `START-HERE.md`, build something. The checker runs on your machine with Python 3.
 
