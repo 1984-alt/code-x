@@ -387,6 +387,118 @@ clauses:
       git_fixture: module_start_live_slice_ok
       args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
+  # ── PROP-036 fold: Verify-App Gate — a live_slice's runtime behavior is machine-verified before the CEO live-drive ──
+  - id: VERIFY-APP-MISSING
+    check: verify-app
+    kind: gate
+    clause: "a live_slice acceptance receipt with NO verify_app block is rejected — the verify-app agent must DRIVE the running build and check its acceptance criteria at runtime BEFORE the CEO live-drive; without it the accept is offered on behavior never machine-exercised (P0) [PROP-036]"
+    source: "PROP-036 (Verify-App Gate); precondition to the live_slice CEO live-drive accept"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_missing.yaml"]
+      expect_severity: P0
+      expect_contains: "NO typed verify_app block"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
+
+  - id: VERIFY-APP-NOT-PASSED
+    check: verify-app
+    kind: gate
+    clause: "a verify_app block whose passed is not true is rejected — the verify-app agent drove the running build and its runtime acceptance-criteria check did NOT pass; the slice cannot be accepted and the live-drive is not offered (P1) [PROP-036]"
+    source: "PROP-036 (Verify-App Gate); honest behavior-fail"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_not_passed.yaml"]
+      expect_severity: P1
+      expect_contains: "verify_app.passed is not true"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
+
+  - id: VERIFY-APP-UNBOUND-SHA
+    check: verify-app
+    kind: gate
+    clause: "a verify_app block whose repo_sha is not hex-shaped (>=12 hex chars) is rejected — the receipt fails to even RECORD which build was driven in a commit-shaped field (shape only; the checker does NOT verify it is HEAD/a real commit — honest scope, mirrors live_slice_accept.repo_sha) (P0) [PROP-036]"
+    source: "PROP-036 (Verify-App Gate); recorded-binding presence guard (NOT a freshness proof)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_unbound_sha.yaml"]
+      expect_severity: P0
+      expect_contains: "not a hex commit"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
+
+  - id: VERIFY-APP-PASSED-NOT-BOOL
+    check: verify-app
+    kind: gate
+    clause: "a verify_app block whose passed is a \"true\"/\"yes\" STRING (not a real boolean true) is rejected — passed is a MACHINE verdict, not a human attestation like live_slice_accept.ceo_drove, so a quoted/coerced truthy value must fail closed (P1) [PROP-036 xfam]"
+    source: "PROP-036 xfam (GPT-5.5); closes the truthy-coercion class on the gate's core verdict"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_passed_string.yaml"]
+      expect_severity: P1
+      expect_contains: "verify_app.passed is not true"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
+
+  - id: MODULE-QUALITY-NONMAPPING-BLOCK
+    check: module-quality
+    kind: gate
+    clause: "a module-quality acceptance receipt whose module_acceptance block is a list/scalar (not a mapping) fails closed — a non-mapping block + top-level fields must NOT fall back to the bare receipt and bypass the live_slice/verify_app precondition on the last-slice path (P1) [PROP-036 xfam]"
+    source: "PROP-036 xfam (GPT-5.5); mirrors the cx_module_acceptance R12 non-mapping fail-closed onto the module-quality path"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_quality_nonmapping_block.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "is not a mapping"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: VERIFY-APP-REF-SYMLINK-ESCAPE
+    check: build-turn
+    kind: gate
+    clause: "build-turn rejects a card.verify_app_ref that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo verify_app receipt (path-safety, mirrors the acceptance_ref guard) (P1) [PROP-036 xfam]"
+    source: "PROP-036 xfam (GPT-5.5); build-turn verify_app_ref path-safety"
+    git_fixture: build_turn_verify_app_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:
+      git_fixture: build_turn_verify_app_rail_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  # ── PROP-037: build-turn-WIDE path-safety — the PROP-036 verify_app_ref symlink/resolved-escape guard,
+  #    factored into the shared cx_common.safe_repo_ref helper and applied to EVERY build-turn root/ref
+  #    read. The safe-ref (non-symlink, in-repo) pass path is field-agnostic and proven by the verify-app
+  #    good fixture above (build_turn_verify_app_rail_ok), so these siblings carry the bad bite only. ──
+  - id: DEP-SCAN-REF-SYMLINK-ESCAPE
+    check: build-turn
+    kind: gate
+    clause: "build-turn rejects a state.dependency_scan_receipt_ref that is a symlink / resolves OUTSIDE the repo — the rail must not scan arbitrary external bytes as an in-repo dependency receipt (shared path-safety, mirrors the acceptance_ref guard) (P1) [PROP-037]"
+    source: "PROP-037 build-turn-wide path-safety (PROP-036 xfam residual)"
+    git_fixture: build_turn_dep_scan_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+
+  - id: RENDER-BUNDLE-REF-SYMLINK-ESCAPE
+    check: build-turn
+    kind: gate
+    clause: "build-turn rejects a card.render_bundle that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo render bundle (shared path-safety, mirrors the acceptance_ref guard) (P1) [PROP-037]"
+    source: "PROP-037 build-turn-wide path-safety (PROP-036 xfam residual)"
+    git_fixture: build_turn_render_bundle_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+
+  - id: CODERABBIT-RECEIPT-REF-SYMLINK-ESCAPE
+    check: build-turn
+    kind: gate
+    clause: "build-turn rejects a card.coderabbit.receipt that is a symlink / resolves OUTSIDE the repo — this read previously carried NO path-safety at all (the worst build-turn root/ref read), so a symlinked receipt let the rail read arbitrary external bytes as a CodeRabbit review (shared path-safety) (P1) [PROP-037]"
+    source: "PROP-037 build-turn-wide path-safety (previously-unguarded coderabbit receipt read)"
+    git_fixture: build_turn_coderabbit_receipt_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+
   # ── V1.10 fix-fold (GPT built-code cross-review) — the bypass cases the first fold missed ──
   - id: MODULE-START-PRIOR-NO-RECEIPT
     check: module-start
@@ -2806,6 +2918,20 @@ clauses:
       expect_contains: "FIX-STAGE-STRUCT-FORGED"
     good:
       git_fixture: fs_struct_rail_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: VERIFY-APP-BUILD-TURN-RAIL
+    check: build-turn
+    kind: gate
+    clause: "a card declaring verify_app_ref runs through build-turn → cx check verify-app is INVOKED (rail wired); a failing verify_app receipt (passed != true) surfaces as a verify-app sub-check failure at slice completion, before the screen is surfaced (PROP-036)"
+    source: PROP-036 (Verify-App Gate); build-turn early-catch, mirror of the render-fidelity / structure rails
+    git_fixture: build_turn_verify_app_rail
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "verify_app.passed is not true"
+    good:
+      git_fixture: build_turn_verify_app_rail_ok
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
   - id: FIX-STAGE-STRUCT-LOCK-REF

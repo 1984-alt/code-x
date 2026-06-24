@@ -39,8 +39,19 @@ def cmd_module_quality(args) -> int:
     if rerr or not isinstance(receipt, dict):
         print(f"FIX-FIRST\n  [P1] {acceptance_path} — {rerr or 'not a mapping'}")
         return 1
-    ma = nested_get(receipt, "module_acceptance")
-    if not isinstance(ma, dict):
+    # A `module_acceptance:` block, when present, MUST be a mapping. Falling back to the bare receipt on a
+    # non-mapping block (e.g. `module_acceptance: []`) let a list/scalar block + top-level fields slip the
+    # typed quality / live_slice_accept / verify_app checks on the LAST-slice path (PROP-036 xfam, GPT-5.5;
+    # mirrors the cx_module_acceptance R12 fix). Only a receipt with NO module_acceptance key uses the bare
+    # mapping. Fail closed here so the verify_app precondition can't be bypassed via a non-mapping block.
+    if "module_acceptance" in receipt:
+        ma = nested_get(receipt, "module_acceptance")
+        if not isinstance(ma, dict):
+            print(f"FIX-FIRST\n  [P1] {acceptance_path} — acceptance receipt 'module_acceptance' is not a "
+                  "mapping; a list/scalar block cannot carry the typed quality / live_slice_accept / "
+                  "verify_app fields (fail-closed) [PROP-036 xfam]")
+            return 1
+    else:
         ma = receipt
     loc = acceptance_path
 

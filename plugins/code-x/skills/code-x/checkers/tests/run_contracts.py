@@ -37,7 +37,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -380,6 +380,113 @@ def _recipe_build_turn_module_start_blocks(tmp: str) -> tuple[str, str]:
     return _build_turn_repo(tmp, with_test_cmd=True, module_id="m2")
 
 
+def _build_turn_verify_app_repo(tmp: str, passed: bool) -> tuple[str, str]:
+    """PROP-036: build-turn over a card declaring `verify_app_ref` pointing at a verify_app receipt
+    (passed True/False). The verify-app sub-check fires INSIDE build-turn = the rail is wired. The card
+    passes its own card/scope/evidence/tests sub-checks (built on the build_turn fixture, m1 = first
+    module so the order wall is clear), so verify-app is the sole variable: a failing receipt is the
+    only thing that blocks the turn (proves the step fires, not silently NOT_APPLICABLE-passes)."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    receipt = ("module_acceptance:\n  module_id: m1\n"
+               f"  verify_app:\n    passed: {'true' if passed else 'false'}\n"
+               "    repo_sha: abcdef012345\n    generated_by: verify-app-agent\n"
+               "    criteria_ref: cards/m1-card.yaml#acceptance_criteria\n")
+    with open(os.path.join(repo, "acc", "verify.yaml"), "w") as f:
+        f.write(receipt)
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    card["verify_app_ref"] = "acc/verify.yaml"
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "verify-app rail fixture\n\nCode-X-Provenance: cx-test"], check=True)
+    return repo, state
+
+
+def _recipe_build_turn_verify_app_rail(tmp: str) -> tuple[str, str]:
+    return _build_turn_verify_app_repo(tmp, passed=False)
+
+
+def _recipe_build_turn_verify_app_rail_ok(tmp: str) -> tuple[str, str]:
+    return _build_turn_verify_app_repo(tmp, passed=True)
+
+
+def _recipe_build_turn_verify_app_symlink(tmp: str) -> tuple[str, str]:
+    """PROP-036 xfam (GPT-5.5): card.verify_app_ref is a SYMLINK to a passing receipt OUTSIDE the repo.
+    Without the symlink/resolved-escape guard the rail would read arbitrary external bytes as an in-repo
+    receipt; build-turn must P1 the ref (path-safety), not read through it. Proves the F3 guard bites."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    # external passing receipt OUTSIDE the repo (in tmp, the repo's parent)
+    ext = os.path.join(tmp, "external_passing.yaml")
+    with open(ext, "w") as f:
+        f.write("module_acceptance:\n  module_id: m1\n  verify_app:\n    passed: true\n"
+                "    repo_sha: abcdef012345\n    generated_by: verify-app-agent\n    criteria_ref: c\n")
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    os.symlink(ext, os.path.join(repo, "acc", "verify.yaml"))  # in-repo symlink -> external bytes
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    card["verify_app_ref"] = "acc/verify.yaml"
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "verify-app symlink fixture\n\nCode-X-Provenance: cx-test"], check=True)
+    return repo, state
+
+
+def _build_turn_ref_symlink_repo(tmp: str, field: str) -> tuple[str, str]:
+    """PROP-037: a build-turn root/ref read whose ref is an in-repo SYMLINK to bytes OUTSIDE the repo.
+    field ∈ {'render_bundle', 'dep_scan', 'coderabbit'}. Built on the passing build_turn base (m1 = first
+    module so the order wall is clear, tests pass) so the symlink ref is the SOLE failure — proves the
+    shared safe_repo_ref guard bites at that step (mirror of the verify_app symlink fixture). Without the
+    guard the rail would read arbitrary external bytes as an in-repo artifact. The safe-ref (non-symlink)
+    pass path is field-agnostic and already proven by build_turn_verify_app_rail_ok."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    ext = os.path.join(tmp, "external_artifact.yaml")  # OUTSIDE the repo (repo's parent)
+    with open(ext, "w") as f:
+        f.write("external: bytes pretending to be an in-repo artifact\n")
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    os.symlink(ext, os.path.join(repo, "acc", "ref.yaml"))  # in-repo symlink -> external bytes
+    ref = "acc/ref.yaml"
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    if field == "render_bundle":
+        card["render_bundle"] = ref
+    elif field == "coderabbit":
+        card["coderabbit"] = {"required": "yes", "receipt": ref}
+    elif field == "dep_scan":
+        with open(state) as f:
+            sdoc = yaml.safe_load(f)
+        sdoc["dependency_scan_receipt_ref"] = ref
+        with open(state, "w") as f:
+            yaml.safe_dump(sdoc, f)
+    else:
+        raise ValueError(f"unknown field {field}")
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    f"prop037 {field} symlink fixture\n\nCode-X-Provenance: cx-test"], check=True)
+    return repo, state
+
+
+def _recipe_build_turn_render_bundle_symlink(tmp: str) -> tuple[str, str]:
+    return _build_turn_ref_symlink_repo(tmp, "render_bundle")
+
+
+def _recipe_build_turn_dep_scan_symlink(tmp: str) -> tuple[str, str]:
+    return _build_turn_ref_symlink_repo(tmp, "dep_scan")
+
+
+def _recipe_build_turn_coderabbit_receipt_symlink(tmp: str) -> tuple[str, str]:
+    return _build_turn_ref_symlink_repo(tmp, "coderabbit")
+
+
 _MS_MANIFEST = ("requirements:\n  - id: REQ-001\n    disposition: BUILDING\n"
                 "  - id: REQ-003\n    disposition: BUILDING\n")
 _MS_FULL_REGISTRY = (
@@ -644,6 +751,15 @@ _LIVE_SLICE_ACCEPT_BLOCK = (
     "    ceo_turn_ref: handoffs/2026-06-20-slice-home.md\n"
     "    repo_sha: NONE_TEST_FIXTURE\n"
     "    viewport: 390x844\n")
+# PROP-036: a valid live_slice acceptance also needs a passing verify_app block (precondition to the
+# CEO live-drive). verify_app.repo_sha is presence+hex-shape only (honest scope, like live_slice_accept),
+# so a real hex value is used here — not the NONE_TEST_FIXTURE git-leg sentinel.
+_VERIFY_APP_BLOCK = (
+    "  verify_app:\n"
+    "    passed: true\n"
+    "    repo_sha: abcdef012345\n"
+    "    generated_by: verify-app-agent\n"
+    "    criteria_ref: cards/m1-card.yaml#acceptance_criteria\n")
 
 
 def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]:
@@ -665,7 +781,7 @@ def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]
             "  state_sha_before: abc123\n  quality_card_hash: qc0011223344\n"
             "  repo_sha_before: NONE_TEST_FIXTURE\n")
     if with_drive:
-        body += _LIVE_SLICE_ACCEPT_BLOCK
+        body += _LIVE_SLICE_ACCEPT_BLOCK + _VERIFY_APP_BLOCK
     receipt = os.path.join(repo, "acc", "m1.yaml")
     with open(receipt, "w") as f:
         f.write(body)
@@ -1465,6 +1581,12 @@ _RECIPES = {
     "build_turn_no_test": _recipe_build_turn_no_test,
     "build_turn_test_fails": _recipe_build_turn_test_fails,
     "build_turn_module_start_blocks": _recipe_build_turn_module_start_blocks,
+    "build_turn_verify_app_rail": _recipe_build_turn_verify_app_rail,
+    "build_turn_verify_app_rail_ok": _recipe_build_turn_verify_app_rail_ok,
+    "build_turn_verify_app_symlink": _recipe_build_turn_verify_app_symlink,
+    "build_turn_render_bundle_symlink": _recipe_build_turn_render_bundle_symlink,
+    "build_turn_dep_scan_symlink": _recipe_build_turn_dep_scan_symlink,
+    "build_turn_coderabbit_receipt_symlink": _recipe_build_turn_coderabbit_receipt_symlink,
     "module_start_symlink_registry": _recipe_module_start_symlink_registry,
     "module_start_symlink_root": _recipe_module_start_symlink_root,
     "module_start_symlink_ancestor": _recipe_module_start_symlink_ancestor,

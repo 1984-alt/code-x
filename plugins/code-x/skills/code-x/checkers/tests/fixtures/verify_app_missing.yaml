@@ -1,0 +1,6 @@
+# BAD (PROP-036): a live_slice acceptance receipt with NO verify_app block. The verify-app agent
+# never drove the running build, so the CEO live-drive accept would be offered on behavior that was
+# never machine-exercised. `cx check verify-app` must P0.
+module_acceptance:
+  module_id: m_live
+  verdict: accepted

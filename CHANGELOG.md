@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.17.0]
+
+Syncs the public release up to protocol **v1.17**, folding in two upgrades (PROP-036, plus a follow-up PROP-037). Each was cross-family reviewed before landing.
+
+### Added
+- **The Verify-App Gate (PROP-036) — a screen's behavior is machine-checked before any human drives it.** A previous release made sure the author personally drove each page of a build. But the author was still the *first* thing to actually exercise the screen at runtime — a page could be built, all-green, and offered for review while its behavior had never once been run and checked by a machine. (The visual version of this gap once shipped a 617-pixel-wide screen onto a 390-pixel phone and passed every green check, because no check ever rendered it; the behavior version is a flow the tests never clicked through.) This gate closes the behavior half: before a user-facing page can be accepted, a verify-app agent must drive the running build and confirm its acceptance criteria at runtime, recorded in a typed receipt. It is a precondition to the author's own live-drive — no passing runtime receipt, no acceptance, and the next page can't start. Honest limit: the check proves a machine-stamped receipt recorded a pass for a commit-shaped build id; it does not re-run the app itself, does not verify the id is the live HEAD, and never claims the screen *felt* right — that stays the author's call.
+
+### Fixed
+- **Path-safety closed across the whole build step (PROP-037).** The cross-family review of the verify-app gate noticed that one file-reference the build checker reads had just been hardened against a path trick — a symbolic link pointing outside the project, which would make the checker read foreign bytes and trust them — but its sibling references had not been, and one carried no such guard at all. This release factors the check into a single shared helper and applies it to *every* file reference the build step reads, with a meta-test proving each one now rejects the trick. No change for honest inputs; it only closes a way to feed the checker an out-of-project file. The review came back clean.
+
+257 tests · 247 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.16.0]
 
 Syncs the public release up to protocol **v1.16**, folding in one protocol upgrade (PROP-035). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.

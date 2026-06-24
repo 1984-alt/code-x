@@ -24,4 +24,24 @@ module_acceptance:
   conformance_evidence_refs: []   # money/login/data: the extracted-actuals-vs-manifest diff(s)
   state_sha_before:           # sha12 of CODE-X-STATE BEFORE this acceptance was recorded (anti-forge binding)
   repo_sha_before:            # PROP-028: repo HEAD commit (hex, >=12) at the moment this module's BUILD STARTED — an empty diff vs HEAD = phantom completion (nothing shipped). Omit only with a typed legacy_no_baseline carve-out reason.
+  # PROP-032: REQUIRED when the FROZEN registry flags this module live_slice (a user-facing page slice).
+  # Proves the CEO DROVE the real running build live on the local machine — not a Mode A screenshot/shell. Presence
+  # + shape only; whether it felt right stays the CEO's accept. Missing/blank on a live_slice = P0 (the
+  # next slice cannot start). A walking_skeleton slice still needs this (the CEO taps through the running shell).
+  live_slice_accept:
+    live_url:                 # REQUIRED — the running build URL the CEO opened + drove (served locally; the local-serve pattern)
+    ceo_drove:                # REQUIRED — true: the CEO DROVE the running build live (not just saw a screenshot)
+    ceo_turn_ref:             # REQUIRED — the handoff/turn where the CEO drove it + recorded the live accept
+    repo_sha:                 # REQUIRED — the slice's shipped HEAD the CEO drove (hex commit)
+    viewport:                 # the device/viewport the CEO drove it at (e.g. 390x844 phone, or desktop)
+  # PROP-036 verify-app gate: REQUIRED on a live_slice module — a PRECONDITION to the CEO live-drive above.
+  # Proves the verify-app agent DROVE the running build and checked its acceptance criteria at runtime
+  # BEFORE the CEO drove it, so behavior is machine-verified before the CEO live-drive. Presence + binding
+  # + verdict only; the checker does NOT re-run the app (the agent's job) and never claims the behavior was
+  # perfect (the CEO live-drive still judges). Missing/forged/unbound = P0; an honest behavior-fail = P1.
+  verify_app:
+    passed:                   # REQUIRED — a real boolean true (NOT a "true"/"yes" string): the verify-app agent's runtime acceptance-criteria check PASSED (an honest false = P1, the slice is not accepted)
+    repo_sha:                 # REQUIRED — the build commit the agent drove (hex-shaped, >=12) — RECORDS which build was driven; shape only, NOT verified to be HEAD/a real commit (mirrors live_slice_accept.repo_sha); non-hex = P0
+    generated_by:             # REQUIRED — the verify-app runner that produced this receipt (machine-stamped; empty = model-authored text, not a runtime gate)
+    criteria_ref:             # REQUIRED — where the checked acceptance criteria came from (e.g. the slice card's acceptance_criteria)
   ts:                         # ISO timestamp the receipt was generated

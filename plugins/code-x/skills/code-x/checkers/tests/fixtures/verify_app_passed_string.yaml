@@ -1,0 +1,11 @@
+# BAD (PROP-036 xfam, GPT-5.5): passed is the STRING "yes", not a real boolean true. verify_app.passed
+# is a MACHINE verdict (the receipt is generated_by a verify-app runner), not a human attestation — a
+# quoted/coerced truthy value must fail closed (closes the truthy-coercion class on the core verdict).
+module_acceptance:
+  module_id: m_live
+  verdict: accepted
+  verify_app:
+    passed: "yes"
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_live-home-card.yaml#acceptance_criteria

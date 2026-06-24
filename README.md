@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.16-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.17-orange.svg)
 
 **A way for non-coders to get software out of AI that lands far closer to what they actually wanted — with built-in checks that catch the corners it quietly cuts.**
 
@@ -12,7 +12,7 @@ Code-X is a build protocol for people who can't read code. You pin down exactly 
 
 **What backs that up — today, in this repo:**
 
-- **237 gate clauses, and every one is proven to bite.** Code-X doesn't just run checks — a meta-test layer feeds each gate a deliberately broken input and confirms the gate *rejects* it. A green checkmark that doesn't actually enforce anything is the failure mode this is built to kill: **"green ≠ enforcing."**
+- **247 gate clauses, and every one is proven to bite.** Code-X doesn't just run checks — a meta-test layer feeds each gate a deliberately broken input and confirms the gate *rejects* it. A green checkmark that doesn't actually enforce anything is the failure mode this is built to kill: **"green ≠ enforcing."**
 - **257 self-tests, green in CI** (the badge above is live). The checker is mechanical Python with a single dependency — clone it and run it yourself in a minute.
 - **It caught a real bug in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *correctly thrown out* when cross-family review surfaced a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
 - **A checker an AI can't talk its way past**, plus opposite-family review (a *different* vendor, not the AI grading its own work), plus a human who owns every decision. No single layer is forge-proof; the protection is the stack.

@@ -1,0 +1,13 @@
+# BAD (PROP-036 xfam, GPT-5.5): module_acceptance is a LIST, not a mapping. A non-mapping block + the
+# top-level decoy fields below must NOT fall back to the bare receipt (that fallback bypassed the
+# live_slice / verify_app precondition on the LAST-slice module-quality path). cx check module-quality
+# must fail closed P1 (mirrors the cx_module_acceptance R12 non-mapping fail-closed).
+module_acceptance: []
+# top-level decoys the old fallback would have read as the acceptance block:
+module_id: m1
+verdict: accepted
+verify_app:
+  passed: true
+  repo_sha: 7d1408c9aa21
+  generated_by: verify-app-agent
+  criteria_ref: cards/m1.yaml#acceptance_criteria

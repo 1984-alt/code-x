@@ -404,3 +404,23 @@ rules:
       - KERNEL.md
       - BUILDER-STANDARD.md
       - FIXING-STAGE.md
+
+  - id: verify-app-gate
+    # Assertion (PROP-036, fold v1.17, GATES.md + SEVERITY.md): a live_slice's runtime behavior is
+    # machine-verified ONCE per completed slice — the verify-app agent drives the running build and
+    # checks its acceptance criteria at runtime — as a PRECONDITION to the CEO live-drive accept. The
+    # checker proves a bound (repo_sha hex >=12), generator-stamped verify_app receipt recorded
+    # passed:true; it does NOT re-run the app (the agent's job) and never claims the behavior was perfect
+    # (the CEO live-drive still judges the experience — no over-claiming, the cardinal sin). Enforcement
+    # rides validate_verify_app INSIDE validate_live_slice_accept — the shared chokepoint of the order
+    # wall + module-quality — so it adds NO new gate family. This entry is the standing presence/anti-drift
+    # bite (mirrors render-fidelity-gate): the canonical phrases must stay PRESENT in GATES.md + SEVERITY.md,
+    # so cx check consistency fails the moment any is removed/reworded out (a [RULE:] pointer would no-op it).
+    canonical:
+      - "verify-app gate"
+      - "machine-verified before the CEO live-drive"
+    key_phrases: ["verify-app gate", "verify_app receipt"]
+    banned_negations: ["verify-app is optional", "verify-app may be skipped", "verify-app is advisory", "the CEO live-drive alone is enough", "skip the verify-app", "a passing verify_app is not required"]
+    appears_in:
+      - GATES.md
+      - SEVERITY.md

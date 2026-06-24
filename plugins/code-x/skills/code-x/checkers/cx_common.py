@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.16"    # Code-X V1 protocol version (V1.16 = PROP-035 the Fixing Stage; v1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
+PROTOCOL_VERSION = "1.17"    # Code-X V1 protocol version (V1.17 = PROP-036 Verify-App Gate; v1.16 = PROP-035 the Fixing Stage; v1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
@@ -154,6 +154,35 @@ def nested_get(d: dict, *keys, default=None):
             return default
         cur = cur[k]
     return cur
+
+
+def safe_repo_ref(ref: str, root) -> tuple[Path | None, str | None]:
+    """Path-safety for a model/state-authored ref a checker reads as `root / ref`.
+
+    The SHARED guard the build-turn rail applies to every artifact ref it reads
+    (dep-scan receipt · render bundle · verify_app receipt · CodeRabbit receipt +
+    its egress receipt). It mirrors the canonical acceptance_ref guard in
+    cx_module_acceptance.validate_accepted_module — the Andon-wall path-safety the
+    v1.10 R4/R11 folds landed (PROP-037 factors it into one place so every
+    build-turn read carries the FULL class, not just the absolute/'..' half).
+
+    Returns (resolved_path, None) for a SAFE ref, or (None, reason) when the ref is
+    absolute, contains a '..' segment, is a symlink (final component), or resolves
+    OUTSIDE `root` — any of which lets the rail read arbitrary EXTERNAL bytes as an
+    in-repo artifact. `reason` is a message suffix the caller appends after its own
+    '<field> <ref>' label, so each step keeps its own finding location while sharing
+    one security check. Substrings 'repo-relative path' and 'symlink or resolves
+    OUTSIDE the repo' are load-bearing (contract clauses assert on them)."""
+    p = Path(ref)
+    if p.is_absolute() or ".." in p.parts:
+        return None, ("must be a repo-relative path (no absolute path / '..' escape) — the rail "
+                      "reads only artifacts committed inside the repo")
+    rp = Path(root) / ref
+    if rp.is_symlink() or not rp.resolve().is_relative_to(Path(root).resolve()):
+        return None, ("is a symlink or resolves OUTSIDE the repo — the rail must not read arbitrary "
+                      "external bytes as an in-repo artifact (path-safety, mirrors the Andon wall's "
+                      "acceptance_ref guard)")
+    return rp, None
 
 
 def scan_secrets(content: str) -> list[str]:

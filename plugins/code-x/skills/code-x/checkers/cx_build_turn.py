@@ -19,7 +19,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, field_present
+from cx_common import findings_report, load_yaml, field_present, safe_repo_ref
 from cx_dep_scan import discover_manifests
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -193,8 +193,16 @@ def cmd_build_turn(args) -> int:
     xfam_declared = bool(str((state.get("review_boundary") or {}).get("xfam_capability", "")).strip())
     if isinstance(cr, dict) and str(cr.get("required", "no")).lower() in ("yes", "true"):
         receipt = cr.get("receipt")
-        receipt_path = (root / str(receipt)) if receipt else None
-        if not receipt or not receipt_path.is_file():
+        # PROP-037: the receipt ref is card-authored — path-safety it (absolute / '..' / symlink /
+        # resolved-escape) BEFORE the .is_file() read, or a symlink/escaping ref reads arbitrary
+        # external bytes as a "review" (this read previously carried NO guard at all — the worst
+        # of the build-turn root/ref reads). Shared helper, mirrors the Andon wall acceptance_ref.
+        safe_receipt, crerr = safe_repo_ref(str(receipt), root) if receipt else (None, None)
+        receipt_path = safe_receipt
+        if crerr:
+            findings.append(("P1", "coderabbit-receipt",
+                f"card coderabbit.receipt '{receipt}' {crerr}"))
+        elif not receipt or not receipt_path.is_file():
             findings.append(("P1", "coderabbit-receipt",
                 f"card requires a CodeRabbit review but receipt '{receipt}' is missing — "
                 "build-turn verifies receipts, it never invokes the review"))
@@ -216,11 +224,12 @@ def cmd_build_turn(args) -> int:
                         "(PROP-026 / GPT #8)"))
                 else:
                     eref = str(cblk.get("egress_receipt_ref"))
-                    if Path(eref).is_absolute() or ".." in Path(eref).parts:
+                    safe_eref, eerr = safe_repo_ref(eref, root)
+                    if eerr:
                         findings.append(("P1", "coderabbit-receipt",
-                            f"CodeRabbit receipt egress_receipt_ref '{eref}' must be a repo-relative path"))
+                            f"CodeRabbit receipt egress_receipt_ref '{eref}' {eerr}"))
                     else:
-                        edoc, _eerr = load_yaml(str(root / eref)) if (root / eref).is_file() else (None, "x")
+                        edoc, _eerr = load_yaml(str(safe_eref)) if safe_eref.is_file() else (None, "x")
                         if not (isinstance(edoc, dict) and (isinstance(edoc.get("egress_scrub"), dict)
                                 or isinstance(edoc.get("sensitive_code_carveout"), dict))):
                             findings.append(("P1", "coderabbit-receipt",
@@ -243,12 +252,14 @@ def cmd_build_turn(args) -> int:
     #    but no receipt is declared, fail closed — a package-manager root must be scanned.
     dep_ref = str(state.get("dependency_scan_receipt_ref", "") or "").strip()
     if dep_ref:
-        if Path(dep_ref).is_absolute() or ".." in Path(dep_ref).parts:
+        # PROP-037: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
+        # dep_ref slipped through and let the rail scan an external receipt as in-repo. Full class now.
+        safe_dep, derr = safe_repo_ref(dep_ref, root)
+        if derr:
             findings.append(("P1", "dep-scan",
-                f"state.dependency_scan_receipt_ref '{dep_ref}' must be a repo-relative path "
-                "(no absolute path / .. escape)"))
+                f"state.dependency_scan_receipt_ref '{dep_ref}' {derr}"))
         else:
-            rc, out = _run_cx("check", "dep-scan", str(root / dep_ref), "--repo-root", repo_root)
+            rc, out = _run_cx("check", "dep-scan", str(safe_dep), "--repo-root", repo_root)
             _sub("dep-scan", rc, out, findings)
     else:
         found = discover_manifests(root)
@@ -266,10 +277,12 @@ def cmd_build_turn(args) -> int:
     #    A card with no render_bundle is NOT_APPLICABLE (non-UI cards / functions-only modules).
     rb_ref = str(card.get("render_bundle", "") or "").strip()
     if rb_ref:
-        if Path(rb_ref).is_absolute() or ".." in Path(rb_ref).parts:
+        # PROP-037: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
+        # render_bundle slipped through. Full class now (the rail reads only an in-repo bundle).
+        safe_rb, rberr = safe_repo_ref(rb_ref, root)
+        if rberr:
             findings.append(("P1", "render-fidelity",
-                f"card.render_bundle '{rb_ref}' must be a repo-relative path (no absolute path / .. "
-                "escape) — build-turn reads only the render bundle committed inside the repo"))
+                f"card.render_bundle '{rb_ref}' {rberr}"))
         else:
             # FIX 1 (stale render): supply the AUTHORITATIVE live repo HEAD from --repo-root (the
             # same git rev-parse HEAD source cx check boot binds) — the render check no longer trusts
@@ -280,7 +293,7 @@ def cmd_build_turn(args) -> int:
                 findings.append(("P1", "render-fidelity",
                     f"cannot read live repo HEAD for render-fidelity freshness: {head.stderr.strip()}"))
             else:
-                rc, out = _run_cx("check", "render-fidelity", str(root / rb_ref),
+                rc, out = _run_cx("check", "render-fidelity", str(safe_rb),
                                   "--repo-head", head.stdout.strip())
                 _sub("render-fidelity", rc, out, findings)
     else:
@@ -297,5 +310,28 @@ def cmd_build_turn(args) -> int:
         _sub("structure", rc, out, findings)
     else:
         print("  [INFO] NOT_APPLICABLE structure (non-FIX card)")
+
+    # 11. verify-app — the runtime-behavior gate (PROP-036). The MECHANICAL guarantee ("every live_slice,
+    #     once, before the CEO live-drive") is the module-acceptance PRECONDITION (validate_verify_app
+    #     inside validate_live_slice_accept) — NOT this step. This build-turn step is an OPT-IN EARLY-CATCH:
+    #     a card declaring `verify_app_ref` (mirror of render_bundle) has its verify_app receipt validated
+    #     HERE so a malformed/forged/failing receipt is caught at slice completion, before the screen is
+    #     surfaced, not only later at the wall. HONEST SCOPE (PROP-036 xfam, GPT-5.5): a slice-completion
+    #     card that OMITS verify_app_ref is NOT_APPLICABLE here — the wall still catches it, so this step
+    #     does not (and is not claimed to) mechanically force the check; it is the convenience early-catch.
+    va_ref = str(card.get("verify_app_ref", "") or "").strip()
+    if va_ref:
+        # PROP-036 xfam landed the absolute/'..'/symlink/resolved-escape guard inline here; PROP-037
+        # moves it onto the shared safe_repo_ref helper so all build-turn root/ref reads carry the
+        # identical class (mirrors the Andon wall acceptance_ref path-safety).
+        safe_va, vaerr = safe_repo_ref(va_ref, root)
+        if vaerr:
+            findings.append(("P1", "verify-app",
+                f"card.verify_app_ref '{va_ref}' {vaerr}"))
+        else:
+            rc, out = _run_cx("check", "verify-app", "--acceptance", str(safe_va))
+            _sub("verify-app", rc, out, findings)
+    else:
+        print("  [INFO] NOT_APPLICABLE verify-app (card declares no verify_app_ref)")
 
     return findings_report(findings)

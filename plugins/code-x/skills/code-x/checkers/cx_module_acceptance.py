@@ -69,15 +69,21 @@ def registry_flag_true(v) -> bool:
 
 def validate_live_slice_accept(ma, receipt_loc):
     """Validate the live_slice_accept block on a live_slice module's acceptance receipt. Returns a
-    list of P0 findings — EMPTY means the CEO live-drive accept is well-formed. Shared by the order
-    wall (via validate_accepted_module's require_live_slice path) and cx check module-quality (PROP-032)."""
+    list of findings — EMPTY means the CEO live-drive accept is well-formed. Shared by the order
+    wall (via validate_accepted_module's require_live_slice path) and cx check module-quality (PROP-032).
+
+    PROP-036: a passing verify_app receipt is a PRECONDITION — validate_verify_app runs alongside the
+    live_slice_accept checks (in BOTH return paths) so a live_slice module cannot be validly accepted
+    unless the verify-app agent already drove the running build and passed its acceptance-criteria check
+    at slice completion, BEFORE the CEO live-drive."""
+    va_findings = validate_verify_app(ma, receipt_loc)
     lsa = ma.get("live_slice_accept") if isinstance(ma, dict) else None
     if not isinstance(lsa, dict):
-        return [("P0", receipt_loc,
+        return va_findings + [("P0", receipt_loc,
             "live_slice module accepted with NO typed live_slice_accept block "
             "{live_url, ceo_drove, ceo_turn_ref, repo_sha} — a Mode A screenshot/shell accept or a "
             "module-level batch is not proof the CEO DROVE the running build live on the Mac (PROP-032)")]
-    findings = []
+    findings = list(va_findings)
 
     def _s(key):
         v = lsa.get(key, "")
@@ -93,6 +99,68 @@ def validate_live_slice_accept(ma, receipt_loc):
         findings.append(("P0", receipt_loc,
             "live_slice_accept.ceo_drove is not true — the CEO must record DRIVING the running build "
             "live (not just seeing a screenshot); without it the live-drive gate is goodwill (PROP-032)"))
+    return findings
+
+
+# PROP-036 (Verify-App Gate): runtime behavior is machine-verified once per completed slice. A
+# live_slice module must carry a verify_app receipt proving the verify-app agent DROVE the running
+# build and checked its acceptance criteria at runtime — a PRECONDITION run before the CEO live-drive,
+# so the CEO never drives (or accepts) a build whose behavior was never machine-exercised. Presence +
+# shape-binding + verdict ONLY: the checker proves a generator-stamped verify_app block carrying a
+# hex-SHAPED repo_sha recorded passed == True; it does NOT re-run the app (the agent's job), does NOT
+# verify repo_sha is HEAD / a real commit (no commit-graph check, mirroring live_slice_accept.repo_sha),
+# and never claims the behavior was perfect (the CEO live-drive still judges the experience — no
+# over-claiming, the cardinal sin per PROP-032).
+_VERIFY_APP_STRING_FIELDS = ("repo_sha", "generated_by", "criteria_ref")
+
+
+def validate_verify_app(ma, receipt_loc):
+    """Validate the verify_app block on a live_slice module's acceptance receipt (PROP-036). Returns a
+    list of findings — EMPTY means the verify-app runtime gate passed. Called from
+    validate_live_slice_accept so the order wall AND cx check module-quality enforce it at the SAME
+    chokepoint as the CEO live-drive accept, making a passing verify_app a precondition to acceptance."""
+    va = ma.get("verify_app") if isinstance(ma, dict) else None
+    if not isinstance(va, dict):
+        return [("P0", receipt_loc,
+            "live_slice module accepted with NO typed verify_app block "
+            "{passed, repo_sha, generated_by, criteria_ref} — the verify-app agent must DRIVE the "
+            "running build and check its acceptance criteria at runtime BEFORE the CEO live-drive; "
+            "without it the live-drive accept is offered on behavior that was never machine-exercised "
+            "(PROP-036)")]
+    findings = []
+
+    def _s(key):
+        v = va.get(key, "")
+        return v.strip() if isinstance(v, str) else ""  # a non-string is treated as ABSENT (fail closed)
+
+    missing = [k for k in _VERIFY_APP_STRING_FIELDS if not _s(k)]
+    if missing:
+        findings.append(("P0", receipt_loc,
+            f"verify_app missing/blank {missing} — repo_sha (the build commit the agent drove, recorded "
+            "in a hex-shaped field) + generated_by (the verify-app runner, machine-stamped) + criteria_ref "
+            "(where the checked acceptance criteria came from) must each be a non-empty string; a verify_app "
+            "block with no recorded binding is model-authored text, not a runtime gate (PROP-036)"))
+    elif not _HEX12_RE.match(_s("repo_sha")):
+        # HONEST SCOPE (PROP-036 xfam, GPT-5.5): presence + hex SHAPE only — the checker does NOT verify
+        # repo_sha is HEAD or a real commit (no commit-graph/ancestry check), mirroring
+        # live_slice_accept.repo_sha. A valid-hex but stale/forged repo_sha WILL pass shape; the field
+        # records WHICH build the agent claims it drove, it is not a freshness proof. So the message must
+        # not over-claim "bound to the built code" (the cardinal sin).
+        findings.append(("P0", receipt_loc,
+            f"verify_app.repo_sha '{_s('repo_sha')}' is not a hex commit id of >=12 chars — the receipt "
+            "does not even RECORD which build the agent drove in a commit-shaped field (hex shape only; "
+            "the checker does not verify it is HEAD or a real commit) (PROP-036)"))
+
+    # verify_app.passed is a MACHINE verdict (the receipt is generated_by a verify-app runner) — NOT a
+    # human attestation like live_slice_accept.ceo_drove, so it must be a real boolean True, not a
+    # "true"/"yes" STRING. A quoted passed: "yes" on a machine receipt is malformed/suspect → fails closed
+    # (PROP-036 xfam, GPT-5.5: closes the truthy-coercion class on the gate's core verdict).
+    if va.get("passed") is not True:
+        findings.append(("P1", receipt_loc,
+            "verify_app.passed is not true — the verify-app agent drove the running build and its "
+            "runtime acceptance-criteria check did NOT pass (or passed was not recorded as a real boolean "
+            "true); the slice cannot be accepted and the CEO live-drive is not offered until the behavior "
+            "passes (PROP-036)"))
     return findings
 
 
@@ -406,3 +474,35 @@ def cmd_module_acceptance(args) -> int:
     # the module is validly accepted WITH migration debt (locked spec — legacy_no_baseline carve-out).
     rc = findings_report(findings)
     return rc if has_blocking(findings) else 0
+
+
+def cmd_verify_app(args) -> int:
+    """PROP-036: validate a verify_app receipt block standalone. The build-turn runs this when a
+    live_slice slice completes — after the verify-app agent drives the running build, before the CEO
+    live-drive — so a malformed/forged/failing verify_app receipt is caught at slice completion, not
+    only later at the Andon wall. Reuses validate_verify_app (single source of truth with the
+    precondition enforced inside validate_live_slice_accept). READ-ONLY: never runs the app itself."""
+    acceptance_path = getattr(args, "acceptance", None)
+    if not acceptance_path:
+        print("FIX-FIRST\n  [P0] --acceptance required for cx check verify-app")
+        return 1
+    receipt, rerr = load_yaml(acceptance_path)
+    if rerr or not isinstance(receipt, dict):
+        print(f"FIX-FIRST\n  [P0] {acceptance_path} — {rerr or 'not a mapping'}")
+        return 1
+    if "module_acceptance" in receipt:
+        ma = nested_get(receipt, "module_acceptance")
+        if not isinstance(ma, dict):
+            print("FIX-FIRST\n  [P0] acceptance receipt 'module_acceptance' is not a mapping — it "
+                  "cannot carry the typed verify_app block (PROP-036)")
+            return 1
+    else:
+        ma = receipt
+    findings = validate_verify_app(ma, acceptance_path)
+    if not findings:
+        print("PASS")
+        print("  [INFO] verify_app receipt present, generator-stamped, repo_sha hex-shaped (recorded, "
+              "not freshness-verified), passed:true — the verify-app agent drove the running build and "
+              "its acceptance-criteria check passed")
+        return 0
+    return findings_report(findings)

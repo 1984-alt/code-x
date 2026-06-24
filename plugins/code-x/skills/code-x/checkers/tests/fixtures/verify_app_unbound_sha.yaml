@@ -1,0 +1,11 @@
+# BAD (PROP-036): a verify_app block present and passed:true, but repo_sha is NOT a hex commit
+# (>=12 chars) — the pass is not bound to the built code, so a stale/forged verify_app pass cannot be
+# told from a real one. `cx check verify-app` must P0 (binding-forgery guard).
+module_acceptance:
+  module_id: m_live
+  verdict: accepted
+  verify_app:
+    passed: true
+    repo_sha: not-a-real-sha
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_live-home-card.yaml#acceptance_criteria

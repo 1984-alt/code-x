@@ -1,0 +1,11 @@
+# BAD (PROP-036): a verify_app block present and bound, but passed is NOT true — the verify-app agent
+# drove the running build and its runtime acceptance-criteria check FAILED. The slice cannot be
+# accepted and the CEO live-drive is not offered. `cx check verify-app` must P1.
+module_acceptance:
+  module_id: m_live
+  verdict: accepted
+  verify_app:
+    passed: false
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_live-home-card.yaml#acceptance_criteria

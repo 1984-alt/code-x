@@ -26,7 +26,7 @@ from cx_close_turn import cmd_close_turn
 from cx_evals import cmd_evals
 from cx_design_fidelity import cmd_design_fidelity
 from cx_module_start import cmd_module_start
-from cx_module_acceptance import cmd_module_acceptance
+from cx_module_acceptance import cmd_module_acceptance, cmd_verify_app
 from cx_module_quality import cmd_module_quality
 from cx_dep_scan import cmd_dep_scan
 from cx_egress import cmd_egress
@@ -211,6 +211,11 @@ def main():
     p_rf.add_argument("--repo-head", dest="repo_head", required=True,
                       help="The AUTHORITATIVE live repo HEAD (git rev-parse HEAD), supplied by the rail — every evidence row's repo_head must equal this. Freshness is proven against the live head, never against the bundle's own self-declared current_repo_head (PROP-033 xfam FIX 1)")
 
+    # verify-app (PROP-036: runtime behavior gate — the verify-app agent's receipt for a live_slice slice)
+    p_va = check_sub.add_parser("verify-app",
+                                help="Validate a verify_app receipt: the verify-app agent drove the running build and its runtime acceptance-criteria check passed (bound by repo_sha, generator-stamped). Fires once per completed live_slice slice; a passing receipt is a PRECONDITION to the CEO live-drive accept (PROP-036)")
+    p_va.add_argument("--acceptance", required=True, help="Path to the MODULE-ACCEPTANCE.yaml receipt carrying the verify_app block")
+
     # drift (PROP-034 Lever C: the drift alarm — Layer 1 deterministic BITES + Layer 2 advisory WARN)
     p_dr = check_sub.add_parser("drift",
                                 help="Drift alarm: Layer-1 deterministic divergences over the working set (BLOCKING at --at-acceptance) + Layer-2 advisory WARN; session-start = advisory (never blocks a boot)")
@@ -252,6 +257,7 @@ def main():
         "egress": cmd_egress,
         "class-sweep": cmd_class_sweep,
         "render-fidelity": cmd_render_fidelity,
+        "verify-app": cmd_verify_app,
         "drift": cmd_drift,
         "structure": cmd_structure,
     }
