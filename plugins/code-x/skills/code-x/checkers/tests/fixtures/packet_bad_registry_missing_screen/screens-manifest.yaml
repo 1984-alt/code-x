@@ -1,0 +1,5 @@
+screens:
+- id: home
+  user_facing: true
+- id: settings
+  user_facing: true

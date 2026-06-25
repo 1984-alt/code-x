@@ -26,6 +26,18 @@
 
 - **Core value (CEO): the Toyota Way / Kaizen — applied to the WHOLE protocol, not just tokens.** Continuous improvement on three fronts: eliminate waste (tokens), **learn from every pipeline/protocol mistake**, and **streamline the protocol over time**. Make problems *visible* (cost log + incidents + evals), fix the root cause, then lock the fix in as a lesson AND a mistake-proofing eval so it can never recur. (Engine: §4 "The Kaizen engine.") *"I am the system, and the system is part of me — it must learn and evolve from every mistake."*
 
+### 2.1 The house analogy + the three stages (PROP-039)
+
+Building software is building a house. **Planning** = the client (CEO) + the architect: ONE plan yields TWO outputs — (a) **full construction docs**, what the AI *builder* reads and builds from (the Code-X packet + cards); and (b) the **Master Blueprint**, the architect's render the *client* reviews to see the finished thing before any building (= `MASTER-BLUEPRINT.md`; a render-never-re-type projection of the docs, the CEO's single review-and-drive surface). **Building** = the contractor builds faithfully from the construction docs; the gates stop slop + drift; a module is buildable only after the CEO approves it on the blueprint. **Fixing** = repair, posture flipped to preserve.
+
+**🔒 The three-stage narrative below is COPIED WORD-FOR-WORD from the public GitHub README (`1984-alt/code-x`, README §"The three stages") — the same-as-github rule (CEO 2026-06-25): canon and the public face tell ONE story; copy it, never paraphrase. The Fixing stage especially must read the same as GitHub.** [RULE:same-as-github-three-stage]
+
+1. **Planning stage** — decide and lock *exactly* what to build before any code: requirements, decisions, design, and a security baseline — frozen and verified.
+2. **Building stage** — the AI builds *only* what the verified plan specifies, one small checkable work-order at a time, gated and reviewed.
+3. **Fixing stage** — repairing something already built, with the posture flipped to *preserve*: change only the defect, nothing else. It exists from hard experience: even with a locked plan and a gated build, drift still crept in during fixes — a file quietly deleted, a screen restyled, a past decision silently reversed "while we're in here." Fixing treats any change beyond the defect as a failure, freezes the file tree so nothing moves unseen, and won't let a settled decision be re-argued from memory. It's the stage that catches the drift the first two couldn't.
+
+The rule: **never build before the planning stage is done and verified.** Spend as much time and effort as you can in the planning stage — every question resolved there is friction you won't hit while building. (Stage canon: PLANNING → `MASTER-BLUEPRINT.md` · BUILDING → `KERNEL.md`/`GATES.md` · FIXING → `FIXING-STAGE.md`.)
+
 ## 3. The architecture
 
 ```

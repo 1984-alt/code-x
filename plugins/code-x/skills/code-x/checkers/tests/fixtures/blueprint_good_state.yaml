@@ -1,0 +1,8 @@
+project: blueprint-test
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []

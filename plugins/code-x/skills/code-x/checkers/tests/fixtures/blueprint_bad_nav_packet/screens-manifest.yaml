@@ -1,0 +1,7 @@
+screens:
+- id: home
+  user_facing: true
+  nav:
+  - to: ghostscreen
+- id: detail
+  user_facing: true

@@ -3167,3 +3167,305 @@ clauses:
       expect_contains: "fixing-stage-preserve-posture"
     good:
       args: []
+
+  # ──────────────────────────────────────────────────────────────
+  # check: blueprint  (PROP-039 v1.18 — the per-module BLUEPRINT-READY gate)
+  # Each clause = a pinned BAD fixture rejected at the stated severity (recomputed
+  # from source, never a written flag) + a GOOD fixture that passes.
+  # ──────────────────────────────────────────────────────────────
+
+  - id: BLUEPRINT-MANIFEST-HASH-BOUND
+    check: blueprint
+    kind: gate
+    clause: "the --approval receipt's manifest_hash + packet_hash must equal the recomputed manifest + frozen-packet hashes — a stale receipt for a different/older packet is caught (P1-2, no self-referential in-packet hash)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §5.2"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_manifest_hash_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "BLUEPRINT-MANIFEST-HASH-BOUND"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-ANCHOR-RESOLVES
+    check: blueprint
+    kind: gate
+    clause: "every anchor {file,line,source_hash} resolves to real source and the recomputed span hash matches — a tampered/stale anchor span is caught"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_anchor_resolves_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_anchor_resolves_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-ANCHOR-RESOLVES"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-ANCHOR-COVERAGE
+    check: blueprint
+    kind: gate
+    clause: "the manifest's anchor set EQUALS the expected set derived from registry+requirements+controls+nav — a missing OR duplicate anchor fails (the omitted-requirement-still-hashes-clean hole, P1-3)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_anchor_coverage_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_anchor_coverage_packet_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "BLUEPRINT-ANCHOR-COVERAGE"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-SCREEN-DESIGN-LOCKED
+    check: blueprint
+    kind: gate
+    clause: "each kind: screen module has a hash-bound ui_lock_manifest (style+provenance) — a missing/unbound locked design fails; N/A for shared_logic"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_design_lock_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_design_lock_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-SCREEN-DESIGN-LOCKED"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-NAV-COMPLETE
+    check: blueprint
+    kind: gate
+    clause: "every nav to_screen resolves to a registered screen — a dangling/orphan target fails; N/A for shared_logic"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_nav_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_nav_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-NAV-COMPLETE"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-CONTROL-HAS-CONTRACT
+    check: blueprint
+    kind: gate
+    clause: "every control's contract_id resolves in behaviour-contracts.yaml to a full contract (tap_outcome/state_change/error_empty/done_test_ref) — a missing/placeholder contract fails (P1-4; never synthesized from a data-fn attribute)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.5"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_control_contract_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_control_contract_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-CONTROL-HAS-CONTRACT"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-FEATURE-HAS-DONE-TEST
+    check: blueprint
+    kind: gate
+    clause: "every BUILDING requirement in the module resolves to an acceptance_criterion done-test — a BUILDING req with no done-test fails"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_done_test_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_done_test_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-FEATURE-HAS-DONE-TEST"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-NO-OPEN-CLARIFICATION
+    check: blueprint
+    kind: gate
+    clause: "no surviving [NEEDS-CLARIFICATION] marker in the module's anchored scope — an open question blocks readiness"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.8"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_clarification_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_clarification_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-NO-OPEN-CLARIFICATION"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-APPROVAL-CURRENT
+    check: blueprint
+    kind: gate
+    clause: "the receipt has a ceo_approval for the module AND approved_source_hash == the recomputed current source-hash — a STALE approval after a plan edit is auto-invalidated (P1-1, the auto-invalidation)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_stale_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "BLUEPRINT-APPROVAL-CURRENT"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-REVIEW-RECEIPT
+    check: blueprint
+    kind: gate
+    clause: "a registry-risk-flagged module (money/auth/shared-data/secrets) must carry a typed opposite-family review receipt (reviewer_family + verdict + reviewed_source_hash == approved_source_hash + path-safe ref) — a manifest boolean never satisfies it (P1-5)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §5.2"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_no_review_receipt.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-REVIEW-RECEIPT"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-NO-HIDDEN-SEVERITY
+    check: blueprint
+    kind: gate
+    clause: "requires --state; no open P0–P3 mapped to the module (fail-closed to global findings when attribution is absent) (P1-6)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.8"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_hidden_severity_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-NO-HIDDEN-SEVERITY"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-PER-KIND-FIELDS
+    check: blueprint
+    kind: gate
+    clause: "required field set enforced per kind; a screen-only field N/A on shared_logic must carry an explicit reason, never a silent skip (P2-3)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.1"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_per_kind_packet", "--module", "rounding", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_per_kind_packet_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-PER-KIND-FIELDS"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "rounding", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  # ── packet-floor (cx check packet) — registry coverage before freeze (P1-7) ──
+
+  - id: PACKET-MODULE-REGISTRY-COVERS-SCREENS
+    check: packet
+    kind: gate
+    clause: "the planning MODULE-REGISTRY must cover every screen in screens-manifest before the packet freezes — an uncovered screen drifts unbuilt (PROP-039 P1-7)"
+    source: "PACKET-CONTENTS.md / PROP-039 §5.2"
+    bad:
+      args: ["tests/fixtures/packet_bad_registry_missing_screen"]
+      expect_severity: P1
+      expect_contains: "PACKET-MODULE-REGISTRY-COVERS-SCREENS"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS
+    check: packet
+    kind: gate
+    clause: "the planning MODULE-REGISTRY must cover every BUILDING requirement id before the packet freezes — an uncovered requirement has no module to build it (PROP-039 P1-7)"
+    source: "PACKET-CONTENTS.md / PROP-039 §5.2"
+    bad:
+      args: ["tests/fixtures/packet_bad_registry_missing_requirement"]
+      expect_severity: P1
+      expect_contains: "PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  # ── order-wall rider (proven THROUGH build-turn, P2-1) ──
+
+  - id: MODULE-START-BLUEPRINT-READY
+    check: build-turn
+    kind: gate
+    clause: "a MODULE/MODE_A card whose target module is NOT BLUEPRINT-READY (stale/missing blueprint approval) is BLOCKED via cx check module-start at build-turn — the build-blocker rides the order wall, not a new gate family (PROP-039 P2-1)"
+    source: "MASTER-BLUEPRINT.md / GATES.md / PROP-039 §5.2"
+    git_fixture: build_turn_blueprint_not_ready
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "module-start"
+    good:
+      git_fixture: build_turn_blueprint_ready
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: blueprint — built-code xfam fold (CXBP-001, -003, -004)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: BLUEPRINT-COVERAGE-OMITTED-CONTROL
+    check: blueprint
+    kind: gate
+    clause: "CXBP-001: expected controls are derived from the INDEPENDENT behaviour-contracts source, not the manifest field being validated — a manifest that OMITS a control the contracts source declares fails coverage (closes the circularity)"
+    source: "PROP-039 built-code xfam CXBP-001"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_omit_control_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_omit_control_packet_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "control:add_entry"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-COVERAGE-OMITTED-NAV
+    check: blueprint
+    kind: gate
+    clause: "CXBP-001: expected nav edges are derived from the INDEPENDENT screens-manifest, not the manifest field being validated — a manifest that OMITS a nav edge the screens-manifest declares fails coverage"
+    source: "PROP-039 built-code xfam CXBP-001"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_omit_nav_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_omit_nav_packet_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "nav:home->detail"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-REVIEW-REF-MISSING-FILE
+    check: blueprint
+    kind: gate
+    clause: "CXBP-003: review_ref must path-safe-resolve to a review file that EXISTS next to the approval — a non-existent review_ref is not a review (good fixture now points at a real file)"
+    source: "PROP-039 built-code xfam CXBP-003"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_review_ref_missing.yaml"]
+      expect_severity: P1
+      expect_contains: "no real review file"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-REVIEW-SAME-FAMILY
+    check: blueprint
+    kind: gate
+    clause: "CXBP-003: reviewer_family must be the OPPOSITE cross-family group of the builder — a same-family review (builder anthropic, reviewer claude) is a blind-spot, not a cross-family catch"
+    source: "PROP-039 built-code xfam CXBP-003"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_review_same_family.yaml"]
+      expect_severity: P1
+      expect_contains: "SAME cross-family group"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-HIDDEN-SEVERITY-NO-OPEN-FINDINGS
+    check: blueprint
+    kind: gate
+    clause: "CXBP-004: NO-HIDDEN-SEVERITY fails CLOSED when state has no open_findings mapping — a missing tally cannot prove there is no hidden open severity"
+    source: "PROP-039 built-code xfam CXBP-004"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_state_no_open_findings.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "open_findings is missing or not a mapping"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  - id: BLUEPRINT-HIDDEN-SEVERITY-MALFORMED-ITEMS
+    check: blueprint
+    kind: gate
+    clause: "CXBP-004: NO-HIDDEN-SEVERITY fails CLOSED when open_findings.items is not a list — a non-list items can no longer silently become an empty, passing state"
+    source: "PROP-039 built-code xfam CXBP-004"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_state_items_malformed.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "items is missing or not a list"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
+  # ── standalone order-wall P0 (CXBP-006) — module-start fails at P0 directly, not only the
+  #    build-turn aggregator's P1 wrapper (mirrors VERIFY-APP-BUILD-TURN-RAIL split) ──
+
+  - id: MODULE-START-BLUEPRINT-READY-STANDALONE
+    check: module-start
+    kind: gate
+    clause: "CXBP-006: cx check module-start directly fails at P0 for a module that is not BLUEPRINT-READY (stale approval) — the build-blocker's true severity, distinct from the build-turn aggregator wrapper which surfaces it at its honest P1 rail severity"
+    source: "PROP-039 built-code xfam CXBP-006 / EVAL-035"
+    git_fixture: build_turn_blueprint_not_ready
+    bad:
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "MODULE-START-BLUEPRINT-READY"
+    good:
+      git_fixture: build_turn_blueprint_ready
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  # ── rider path-safety through build-turn (CXBP-005) — a symlinked/escaping blueprint_approval_ref
+  #    is rejected at the order wall, proven through the build-turn rail ──
+
+  - id: MODULE-START-BLUEPRINT-APPROVAL-REF-PATHSAFE
+    check: build-turn
+    kind: gate
+    clause: "CXBP-005: state.blueprint_approval_ref is routed through safe_repo_ref — a symlinked / resolved-escape ref (the PROP-037 class, not just absolute/'..') is rejected at the order wall, proven through build-turn"
+    source: "PROP-039 built-code xfam CXBP-005"
+    git_fixture: build_turn_blueprint_approval_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:
+      git_fixture: build_turn_blueprint_ready
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]

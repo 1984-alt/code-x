@@ -2145,21 +2145,21 @@ class TestCheckFinalReadyBuiltAppAudit(unittest.TestCase):
 # v1.12 FIX-3: checker version identity must match the shipping protocol version
 # ---------------------------------------------------------------------------
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_17(self):
-        """The checker constant must equal the shipping protocol version (v1.17) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.17, PROP-036)."""
+    def test_protocol_version_constant_is_1_18(self):
+        """The checker constant must equal the shipping protocol version (v1.18) so cx identity
+        can never silently lag the ledger again (VERSION-HISTORY current = v1.18, PROP-039)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.17")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.18")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_17(self):
-        """`cx --version` surfaces V1.17."""
+    def test_cx_version_reports_1_18(self):
+        """`cx --version` surfaces V1.18."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.17", out)
+        self.assertIn("V1.18", out)
 
 
 # ---------------------------------------------------------------------------
@@ -2974,6 +2974,246 @@ class TestLockFidelityDeviationBlocksAcceptance(unittest.TestCase):
             rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
                              "--state", state, "--repo-root", repo)
             self.assertEqual(rc, 0, f"absent lock_deviations must not block (back-compat).\n{out}")
+
+
+# ---------------------------------------------------------------------------
+# blueprint (PROP-039 v1.18 — the per-module BLUEPRINT-READY gate)
+# ---------------------------------------------------------------------------
+class TestCheckBlueprint(unittest.TestCase):
+    """PROP-039: cx check blueprint recomputes module readiness from canonical sources — a complete +
+    CEO-approved + source-current + reviewed-where-required module is BLUEPRINT-READY; every soft spot
+    (stale receipt, missing anchor, omitted control, unreviewed high-risk, hidden finding) bites."""
+
+    GOOD = "blueprint_good_packet"
+    STATE = "blueprint_good_state.yaml"
+    APPROVAL = "blueprint_good_approval.yaml"
+
+    @classmethod
+    def setUpClass(cls):
+        # Regenerate the fixture tree deterministically (correct recomputed hashes) so the tests
+        # are self-healing and never depend on stale committed fixtures.
+        subprocess.run([sys.executable, str(FIXTURES / "_gen_blueprint_fixtures.py")], check=True)
+
+    def _run(self, packet, module, state=None, approval=None):
+        return run_cx("check", "blueprint", fix(packet), "--module", module,
+                      "--state", fix(state or self.STATE), "--approval", fix(approval or self.APPROVAL))
+
+    def test_good_screen_module_ready(self):
+        rc, out = self._run(self.GOOD, "home")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+        self.assertIn("BLUEPRINT-READY", out)
+
+    def test_good_shared_logic_module_ready(self):
+        rc, out = self._run(self.GOOD, "rounding")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_all_modules_ready(self):
+        rc, out = run_cx("check", "blueprint", fix(self.GOOD), "--all",
+                         "--state", fix(self.STATE), "--approval", fix(self.APPROVAL))
+        self.assertEqual(rc, 0, f"Expected PASS for --all, got {rc}.\n{out}")
+
+    def test_missing_manifest_fails(self):
+        rc, out = run_cx("check", "blueprint", fix("blueprint_bad_no_manifest_packet"),
+                         "--module", "home", "--state", fix(self.STATE), "--approval", fix(self.APPROVAL))
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("manifest", out.lower())
+
+    def test_stale_approval_fails_p0(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_stale_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("BLUEPRINT-APPROVAL-CURRENT", out)
+        self.assertIn("STALE", out)
+
+    def test_missing_ceo_approval_fails_p0(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_no_ceo_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("no CEO approval", out)
+
+    def test_wrong_manifest_hash_fails_p0(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_manifest_hash_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("BLUEPRINT-MANIFEST-HASH-BOUND", out)
+
+    def test_anchor_coverage_fails_p0(self):
+        rc, out = self._run("blueprint_bad_anchor_coverage_packet", "home",
+                            approval="blueprint_bad_anchor_coverage_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("BLUEPRINT-ANCHOR-COVERAGE", out)
+        self.assertIn("INCOMPLETE", out)
+
+    def test_anchor_resolves_fails(self):
+        rc, out = self._run("blueprint_bad_anchor_resolves_packet", "home",
+                            approval="blueprint_bad_anchor_resolves_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-ANCHOR-RESOLVES", out)
+
+    def test_design_lock_mismatch_fails(self):
+        rc, out = self._run("blueprint_bad_design_lock_packet", "home",
+                            approval="blueprint_bad_design_lock_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-SCREEN-DESIGN-LOCKED", out)
+
+    def test_dangling_nav_fails(self):
+        rc, out = self._run("blueprint_bad_nav_packet", "home",
+                            approval="blueprint_bad_nav_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-NAV-COMPLETE", out)
+
+    def test_control_without_contract_fails(self):
+        rc, out = self._run("blueprint_bad_control_contract_packet", "home",
+                            approval="blueprint_bad_control_contract_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-CONTROL-HAS-CONTRACT", out)
+
+    def test_feature_without_done_test_fails(self):
+        rc, out = self._run("blueprint_bad_done_test_packet", "home",
+                            approval="blueprint_bad_done_test_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-FEATURE-HAS-DONE-TEST", out)
+
+    def test_open_clarification_fails(self):
+        rc, out = self._run("blueprint_bad_clarification_packet", "home",
+                            approval="blueprint_bad_clarification_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-NO-OPEN-CLARIFICATION", out)
+
+    def test_high_risk_without_review_receipt_fails(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_no_review_receipt.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-REVIEW-RECEIPT", out)
+
+    def test_hidden_severity_fails(self):
+        rc, out = self._run(self.GOOD, "home", state="blueprint_bad_hidden_severity_state.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-NO-HIDDEN-SEVERITY", out)
+
+    def test_per_kind_fields_fails(self):
+        rc, out = self._run("blueprint_bad_per_kind_packet", "rounding",
+                            approval="blueprint_bad_per_kind_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-PER-KIND-FIELDS", out)
+
+    def test_missing_module_flag_fails(self):
+        rc, out = run_cx("check", "blueprint", fix(self.GOOD),
+                         "--state", fix(self.STATE), "--approval", fix(self.APPROVAL))
+        self.assertEqual(rc, 1)
+        self.assertIn("--module", out)
+
+    def test_unknown_module_fails(self):
+        rc, out = self._run(self.GOOD, "does_not_exist")
+        self.assertEqual(rc, 1)
+        self.assertIn("not in the blueprint-manifest", out)
+
+    # ── built-code xfam fold (CXBP-001/003/004) ──
+    def test_omitted_control_fails_coverage(self):
+        rc, out = self._run("blueprint_bad_omit_control_packet", "home",
+                            approval="blueprint_bad_omit_control_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-ANCHOR-COVERAGE", out)
+        self.assertIn("control:add_entry", out)
+
+    def test_omitted_nav_fails_coverage(self):
+        rc, out = self._run("blueprint_bad_omit_nav_packet", "home",
+                            approval="blueprint_bad_omit_nav_packet_approval.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-ANCHOR-COVERAGE", out)
+        self.assertIn("nav:home->detail", out)
+
+    def test_review_ref_missing_file_fails(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_review_ref_missing.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("no real review file", out)
+
+    def test_same_family_reviewer_fails(self):
+        rc, out = self._run(self.GOOD, "home", approval="blueprint_bad_review_same_family.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("SAME cross-family group", out)
+
+    def test_hidden_severity_fail_closed_no_open_findings(self):
+        rc, out = self._run(self.GOOD, "home", state="blueprint_bad_state_no_open_findings.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("open_findings is missing or not a mapping", out)
+
+    def test_hidden_severity_fail_closed_malformed_items(self):
+        rc, out = self._run(self.GOOD, "home", state="blueprint_bad_state_items_malformed.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("items is missing or not a list", out)
+
+
+# ---------------------------------------------------------------------------
+# packet-floor: registry coverage (PROP-039 P1-7)
+# ---------------------------------------------------------------------------
+class TestPacketRegistryCoverage(unittest.TestCase):
+    """PROP-039: for a screen/module-first packet (a planning MODULE-REGISTRY present), the registry
+    must cover every screen + every BUILDING requirement before freeze; a legacy packet (no registry)
+    keeps these clauses silent."""
+
+    @classmethod
+    def setUpClass(cls):
+        subprocess.run([sys.executable, str(FIXTURES / "_gen_blueprint_fixtures.py")], check=True)
+
+    def test_legacy_packet_no_registry_silent(self):
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, f"packet_good (no registry) must still PASS.\n{out}")
+
+    def test_uncovered_screen_fails(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_registry_missing_screen"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-MODULE-REGISTRY-COVERS-SCREENS", out)
+
+    def test_uncovered_requirement_fails(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_registry_missing_requirement"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS", out)
+
+
+# ---------------------------------------------------------------------------
+# contract-harness robustness (CXBP-007): resolve_args spares ONLY known non-path flag values;
+# a genuinely-missing path-valued flag value is still resolved (so MISSING FIXTURE still catches it).
+# ---------------------------------------------------------------------------
+class TestContractHarnessResolveArgs(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("run_contracts", str(THIS_DIR / "run_contracts.py"))
+        cls.rc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.rc)
+
+    def test_module_value_is_spared(self):
+        out = self.rc.resolve_args(["--module", "home"])
+        self.assertEqual(out, ["--module", "home"],
+                         "a bare --module value must be left unresolved, not mangled to a path")
+
+    def test_path_flag_value_is_resolved(self):
+        # --state takes a PATH; a relative value must be resolved to absolute so a missing path is
+        # still detectable (NOT spared like an identifier flag).
+        out = self.rc.resolve_args(["--state", "tests/fixtures/nope_missing.yaml"])
+        self.assertTrue(out[1].endswith("tests/fixtures/nope_missing.yaml"))
+        self.assertTrue(os.path.isabs(out[1]),
+                        "a --state path value must be resolved absolute, never spared as an identifier")
+
+    def test_missing_path_flag_value_would_be_reported(self):
+        # Simulate the MISSING-FIXTURE coverage check: a genuinely-missing path-valued flag value is
+        # still flagged (the CXBP-007 regression guard — the heuristic must not hide a real typo).
+        bad_args = self.rc.resolve_args(["--state", "tests/fixtures/definitely_absent.yaml"])
+        flagged = []
+        for idx, a in enumerate(bad_args):
+            if a.startswith("-"):
+                continue
+            prev = bad_args[idx - 1] if idx > 0 else ""
+            if not os.path.isabs(a) and prev in self.rc._NON_PATH_VALUE_FLAGS:
+                continue
+            if not os.path.exists(a):
+                flagged.append(a)
+        self.assertEqual(len(flagged), 1,
+                         "a missing path-valued flag value must still be reported MISSING FIXTURE")
 
 
 # ---------------------------------------------------------------------------

@@ -23,13 +23,30 @@
 #
 # READ-ONLY: never builds, routes actors, edits source, or creates evidence (CHARTER §4).
 import os
+import subprocess
+import sys
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, nested_get
+from cx_common import findings_report, load_yaml, nested_get, safe_repo_ref
 from cx_deck import _compute_packet_hash
 from cx_module_acceptance import has_blocking, validate_accepted_module, registry_flag_true
 
 BUILD_MODES = {"MODULE_BUILD", "MODE_A_UI"}
+
+# PROP-039 (v1.18): the per-module BLUEPRINT-READY precondition. The order wall gains the precondition
+# "target module is BLUEPRINT-READY" — same chokepoint pattern PROP-032/036 used; NO new gate family.
+# It fires ONLY for screen/module-first projects (a blueprint-manifest.yaml present inside the frozen
+# packet) so legacy build-wave-first packets are untouched. A non-ready module is hard-blocked here, so
+# build-turn (which calls module-start) proves the rider fires on the normal build path.
+_THIS_DIR = Path(__file__).resolve().parent
+_CX = str(_THIS_DIR / "cx")
+BLUEPRINT_MANIFEST_NAME = "blueprint-manifest.yaml"
+
+
+def _run_cx(*cx_args) -> tuple[int, str]:
+    result = subprocess.run([sys.executable, _CX] + list(cx_args),
+                            capture_output=True, text=True)
+    return result.returncode, result.stdout + result.stderr
 
 
 def _symlink_in_path_chain(repo_root, packet_dir):
@@ -313,6 +330,41 @@ def cmd_module_start(args) -> int:
             findings.append(("P0", loc,
                 f"prior required module '{mid}' is not validly accepted — module '{module_id}' "
                 f"cannot start (order wall, V1.10). Acceptance check: {reasons}"))
+
+    # ── MODULE-START-BLUEPRINT-READY (PROP-039 v1.18) ───────────────────────────────────────────
+    # For a screen/module-first project (a blueprint-manifest INSIDE the frozen packet), the target
+    # module must be BLUEPRINT-READY before its build can start — the build-blocker rides the order
+    # wall (no new gate family). Calls cx check blueprint, recomputing readiness from source. Legacy
+    # build-wave-first packets (no blueprint-manifest) are untouched: the precondition is silent.
+    if (pkt / BLUEPRINT_MANIFEST_NAME).is_file():
+        bp_args = ["check", "blueprint", str(pkt), "--module", module_id, "--state", state_path]
+        bp_ref = str(state.get("blueprint_approval_ref", "") or "").strip() if isinstance(state, dict) else ""
+        if not bp_ref:
+            findings.append(("P0", loc,
+                f"module '{module_id}' is a screen/module-first build (the packet carries "
+                f"{BLUEPRINT_MANIFEST_NAME}) but state has no blueprint_approval_ref — the BLUEPRINT-READY "
+                "precondition reads the out-of-packet approval/review receipts and cannot run without it "
+                "(fail-closed, MODULE-START-BLUEPRINT-READY, PROP-039)"))
+        else:
+            # CXBP-005: route blueprint_approval_ref through the SHARED safe_repo_ref guard — the full
+            # PROP-037 class (absolute / '..' / symlink / resolved-escape), not just absolute/'..'. A
+            # symlinked or escaping approval ref must not let the rider read arbitrary external bytes
+            # as an in-repo approval receipt (mirrors every other build-turn root/ref read).
+            safe_approval, ref_err = safe_repo_ref(bp_ref, repo_root)
+            if ref_err:
+                findings.append(("P0", loc,
+                    f"state.blueprint_approval_ref '{bp_ref}' {ref_err} "
+                    "(MODULE-START-BLUEPRINT-READY, PROP-039)"))
+                safe_approval = None
+            if safe_approval is not None:
+                bp_args += ["--approval", str(safe_approval)]
+                rc_bp, out_bp = _run_cx(*bp_args)
+                if rc_bp != 0:
+                    tail = " | ".join(out_bp.strip().splitlines()[1:4]) or out_bp.strip()[:200]
+                    findings.append(("P0", loc,
+                        f"module '{module_id}' is NOT BLUEPRINT-READY — it cannot start until its plan is "
+                        f"complete + CEO-approved + source-current + reviewed-where-required "
+                        f"(MODULE-START-BLUEPRINT-READY, PROP-039). cx check blueprint: {tail}"))
 
     if not findings:
         print("PASS")

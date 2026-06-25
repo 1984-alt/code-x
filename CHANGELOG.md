@@ -10,6 +10,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.18.0]
+
+Syncs the public release up to protocol **v1.18**, folding in one upgrade (PROP-039, the Master Blueprint). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.
+
+### Added
+- **The Master Blueprint (PROP-039) — the planning stage made reviewable by a non-coder.** Planning used to emit a scatter of separate files no non-coder could read as one thing, so the plan you *thought* you approved could quietly drift from the plan that was actually written — invisible until build or demo. This release makes planning **screen-first** and gives it a single review surface: the **Master Blueprint**, one auto-generated page that projects the whole locked plan in plain language. It is *render-never-re-type* — never hand-typed, always a projection of the real source — and it **embeds the live locked screen designs**, so you see the finished software before any of it is built. It carries an always-on completeness checklist (locked design · a navigation map · a behaviour contract for every control · a done-test for every feature), a glossary for unfamiliar words, source anchors, and an approval cockpit with risk callouts. A module becomes buildable only when `cx check blueprint` **recomputes** it ready straight from source — never from a written flag, a badge, or a manifest boolean — *and* you approve it; the build gate then blocks any module whose blueprint isn't ready. No new gate family — it rides the existing build-order wall. Your approval and any required opposite-family review live in hash-bound receipts kept *outside* the frozen plan, so recording an approval never disturbs the plan's seal.
+
+  Honest limit: the page is a view — the real gated objects are the immutable plan plus the approval/review receipts, and the source is always the ground truth. A receipt proves the plan hasn't changed since you approved it and that the review happened against that exact version; it can't prove the plan is *good* — that stays your judgment and the reviewer's. The plain-language and glossary checks are presence checks, not a grammar grade.
+
+288 tests · 270 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.17.0]
 
 Syncs the public release up to protocol **v1.17**, folding in two upgrades (PROP-036, plus a follow-up PROP-037). Each was cross-family reviewed before landing.

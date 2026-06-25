@@ -1,0 +1,10 @@
+project: blueprint-test
+open_findings:
+  counts:
+    p0: 0
+    p1: 1
+    p2: 0
+    p3: 0
+  items:
+  - severity: P1
+    finding: something open, no module

@@ -37,7 +37,8 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app",
+                        "blueprint"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -1511,7 +1512,109 @@ def _recipe_fs_card_good_amnesia(tmp):
         {"id": "Q1", "ledger_searched": True, "related_ceo_d_refs": ["CEO-D-LOCKFID-001"]}]})
 
 
+def _build_turn_blueprint_repo(tmp: str, *, blueprint_ready: bool) -> tuple[str, str]:
+    """PROP-039: a build-turn over a module-advancing card whose target module 'm1' is the first
+    module (no priors, so the v1.10 order wall is clear) — the SOLE variable is BLUEPRINT-READY. The
+    frozen packet carries a blueprint-manifest (screen/module-first project) so cx check module-start
+    runs the MODULE-START-BLUEPRINT-READY precondition (= cx check blueprint). blueprint_ready=False
+    pins a STALE approved_source_hash → the precondition fails → build-turn surfaces it via the
+    module-start sub-check (proves the rider fires THROUGH build-turn, P2-1). blueprint_ready=True =
+    correct hashes → PASS."""
+    import hashlib
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    with open(FIXTURES / "card_good.yaml") as f:
+        card = yaml.safe_load(f)
+    os.makedirs(os.path.join(repo, "src"), exist_ok=True)
+    with open(os.path.join(repo, "src", "app.py"), "w") as f:
+        f.write("# build-turn blueprint fixture module\n")
+    with open(os.path.join(repo, "evidence.txt"), "w") as f:
+        f.write("build-turn blueprint fixture evidence: src/app.py exists\n")
+
+    # ── frozen packet: requirements + registry + blueprint-manifest (single shared_logic module m1) ──
+    packet = os.path.join(repo, "packet")
+    os.makedirs(packet, exist_ok=True)
+    req_src = "REQ-001: m1 does the thing\n"
+    with open(os.path.join(packet, "req-source.md"), "w") as f:
+        f.write(req_src)
+    with open(os.path.join(packet, "requirements-manifest.yaml"), "w") as f:
+        yaml.safe_dump({"requirements": [
+            {"id": "REQ-001", "disposition": "BUILDING",
+             "acceptance_criterion": {"pass_condition": "m1 renders", "evidence_type": "screenshot",
+                                      "verification_ref": "cards/m1#ac"}}]}, f, sort_keys=False)
+    with open(os.path.join(packet, "MODULE-REGISTRY.yaml"), "w") as f:
+        yaml.safe_dump({"module_registry": {"frozen_packet_hash": "bp", "modules": [
+            {"module_id": "m1", "kind": "shared_logic", "requirement_ids": ["REQ-001"],
+             "risk_flags": [], "dependency_modules": []}]}}, f, sort_keys=False)
+    line1_hash = hashlib.sha256(req_src.splitlines()[0].encode()).hexdigest()
+    anchors = [{"anchor_id": "req:REQ-001", "file": "req-source.md", "section": "REQ-001",
+                "line": 1, "requirement_id": "REQ-001", "source_hash": line1_hash}]
+    with open(os.path.join(packet, "blueprint-manifest.yaml"), "w") as f:
+        yaml.safe_dump({"blueprint_manifest": {"generator_version": "0.1.0", "modules": [
+            {"module_id": "m1", "screen_id": None, "kind": "shared_logic", "title": "m1",
+             "design_nav_na_reason": "shared_logic — no screen", "anchors": anchors,
+             "user_journeys": [], "risk_callouts": []}]}}, f, sort_keys=False)
+
+    card.setdefault("source_map", {})["locked_packet_hash"] = _packet_hash(packet)
+    card["allowed_files"] = ["src/app.py"]
+    card["evidence_required"] = ["evidence.txt"]
+    card["module_id"] = "m1"
+    card["test_command"] = "git --version"
+    with open(os.path.join(repo, "card.yaml"), "w") as f:
+        yaml.safe_dump(card, f)
+
+    # ── approval receipt OUTSIDE the packet (committed in repo, repo-relative ref) ──
+    manifest_hash = hashlib.sha256(
+        Path(os.path.join(packet, "blueprint-manifest.yaml")).read_bytes()).hexdigest()
+    packet_hash = _packet_hash(packet)
+    src_hash = hashlib.sha256(f"req:REQ-001:{line1_hash}".encode()).hexdigest()
+    approved = src_hash if blueprint_ready else ("deadbeef" * 8)
+    os.makedirs(os.path.join(repo, "approvals"), exist_ok=True)
+    with open(os.path.join(repo, "approvals", "BLUEPRINT-APPROVAL.yaml"), "w") as f:
+        yaml.safe_dump({"blueprint_approval": {
+            "packet_hash": packet_hash, "manifest_hash": manifest_hash,
+            "modules": [{"module_id": "m1", "approved_source_hash": approved,
+                         "ceo_approval": {"approved_by": "CEO", "approved_at": "2026-06-25"}}]}},
+            f, sort_keys=False)
+
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    sha = _git_commit(repo, "build-turn blueprint fixture")
+    state = os.path.join(tmp, "state.yaml")
+    _write_state(state, sha, overrides={"packet_dir": "packet",
+                                        "module_registry_ref": "packet/MODULE-REGISTRY.yaml",
+                                        "blueprint_approval_ref": "approvals/BLUEPRINT-APPROVAL.yaml"})
+    return repo, state
+
+
+def _recipe_build_turn_blueprint_not_ready(tmp: str) -> tuple[str, str]:
+    return _build_turn_blueprint_repo(tmp, blueprint_ready=False)
+
+
+def _recipe_build_turn_blueprint_ready(tmp: str) -> tuple[str, str]:
+    return _build_turn_blueprint_repo(tmp, blueprint_ready=True)
+
+
+def _recipe_build_turn_blueprint_approval_symlink(tmp: str) -> tuple[str, str]:
+    """CXBP-005: a BLUEPRINT-READY repo where state.blueprint_approval_ref points at a SYMLINK whose
+    target is OUTSIDE the repo — the rider's safe_repo_ref must reject it (the PROP-037 class, not just
+    absolute/'..'). The plan itself is ready, so the symlink ref is the SOLE failure."""
+    repo, state = _build_turn_blueprint_repo(tmp, blueprint_ready=True)
+    # an external file the symlink will point at (outside the repo)
+    external = os.path.join(tmp, "outside-approval.yaml")
+    with open(external, "w") as f:
+        f.write("blueprint_approval: {}\n")
+    # replace the in-repo approval with a symlink to the external file
+    link = os.path.join(repo, "approvals", "BLUEPRINT-APPROVAL.yaml")
+    os.remove(link)
+    os.symlink(external, link)
+    # state.blueprint_approval_ref already = approvals/BLUEPRINT-APPROVAL.yaml (now a symlink)
+    return repo, state
+
+
 _RECIPES = {
+    "build_turn_blueprint_not_ready": _recipe_build_turn_blueprint_not_ready,
+    "build_turn_blueprint_ready": _recipe_build_turn_blueprint_ready,
+    "build_turn_blueprint_approval_symlink": _recipe_build_turn_blueprint_approval_symlink,
     "ancestor_ok": _recipe_ancestor_ok,
     "fs_struct_good": _recipe_fs_struct_good,
     "fs_struct_nolockref": _recipe_fs_struct_nolockref,
@@ -1621,16 +1724,31 @@ def run_cx(*args, env_overrides: dict | None = None):
     )
     return result.returncode, result.stdout + result.stderr
 
+
+# CXBP-007: the ONLY flags in any clause that take a non-path (identifier) value. A bare value
+# following one of these is left unresolved; EVERY other token (positional or value of a path-flag
+# like --state/--approval/--repo-root/--registry/--packet-dir) is still resolved to an absolute
+# fixture path — so a genuinely-missing path-valued flag value is still reported MISSING FIXTURE.
+_NON_PATH_VALUE_FLAGS = {"--module", "--module-id", "--target", "--repo-head"}
+
+
 def resolve_args(args_list):
-    """Resolve relative fixture paths to absolute (relative to CHECKERS_DIR)."""
+    """Resolve relative fixture PATHS to absolute (relative to CHECKERS_DIR). A bare VALUE that follows
+    one of the KNOWN non-path-value flags (_NON_PATH_VALUE_FLAGS, e.g. `--module home`) is left
+    UNCHANGED, so an identifier flag value is never mangled into a phantom fixture path. Every other
+    token resolves as before — a path-flag's value (--state/--approval/...) still resolves, so a typo'd
+    missing path is still caught."""
     resolved = []
+    prev = ""
     for a in args_list:
         p = Path(a)
-        if not p.is_absolute() and not a.startswith("--"):
+        is_non_path_flag_value = prev in _NON_PATH_VALUE_FLAGS and not a.startswith("-")
+        if not p.is_absolute() and not a.startswith("--") and not is_non_path_flag_value:
             p = (CHECKERS_DIR / a).resolve()
             resolved.append(str(p))
         else:
             resolved.append(a)
+        prev = a
     return resolved
 
 def substitute_tokens(args_list: list[str], repo: str, state: str) -> list[str]:
@@ -1647,16 +1765,23 @@ def main():
     heuristic_count = 0
     subcommands_covered = set()
 
-    # Coverage check: every bad fixture file must exist (skip git_fixture clauses)
+    # Coverage check: every bad fixture file must exist (skip git_fixture clauses). resolve_args
+    # leaves bare flag VALUES (e.g. `--module home`) unresolved/relative — they are not fixture
+    # paths, so a still-relative token after a `--flag` is a flag value, not a missing fixture.
     for clause in clauses:
         if clause.get("git_fixture"):
             continue
-        bad_args = resolve_args(clause["bad"]["args"])
-        for a in bad_args:
-            if not a.startswith("-"):
-                p = Path(a)
-                if not p.exists():
-                    failures.append(f"MISSING FIXTURE [{clause['id']}]: {a}")
+        raw = clause["bad"]["args"]
+        bad_args = resolve_args(raw)
+        for idx, a in enumerate(bad_args):
+            if a.startswith("-"):
+                continue
+            prev = bad_args[idx - 1] if idx > 0 else ""
+            if not Path(a).is_absolute() and prev in _NON_PATH_VALUE_FLAGS:
+                continue  # identifier flag value (e.g. --module home) — not a fixture path
+            p = Path(a)
+            if not p.exists():
+                failures.append(f"MISSING FIXTURE [{clause['id']}]: {a}")
 
     for clause in clauses:
         cid = clause["id"]

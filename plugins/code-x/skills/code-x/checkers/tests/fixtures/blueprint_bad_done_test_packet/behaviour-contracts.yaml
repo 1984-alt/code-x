@@ -1,0 +1,9 @@
+behaviour_contracts:
+  contracts:
+  - contract_id: c_add_entry
+    control_id: add_entry
+    screen: home
+    tap_outcome: opens the new-entry form
+    state_change: creates a draft entry
+    error_empty: shows 'name required' when blank
+    done_test_ref: REQ-002

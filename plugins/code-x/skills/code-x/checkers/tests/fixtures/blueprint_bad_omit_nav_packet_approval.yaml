@@ -1,0 +1,32 @@
+blueprint_approval:
+  packet_hash: 641ea0f3afaffc23f4a477f0a3a8da493f06dcd2f567e2546816e2a909a73cab
+  manifest_hash: 7299bd503ee6a8d41e2086d66665e3ef2865a20d39babead4325a01c16b08c86
+  builder_family: anthropic
+  modules:
+  - module_id: home
+    approved_source_hash: d6eb61113efaea84cb1848cf8235d77f0d2296614a56b3e1f20f9d2145bec1b8
+    ceo_approval:
+      approved_by: CEO
+      approved_at: '2026-06-25'
+    review_receipt:
+      reviewer_family: GPT
+      three_leg_ask: CONTINUITY+PROBLEMS+APPROACH
+      verdict: PASS
+      reviewed_source_hash: d6eb61113efaea84cb1848cf8235d77f0d2296614a56b3e1f20f9d2145bec1b8
+      review_ref: reviews/home-review.md
+  - module_id: rounding
+    approved_source_hash: ad71a8643f6f4176371f5d53b297c64716ff7aecdaa7ca15f3f16682097af2f0
+    ceo_approval:
+      approved_by: CEO
+      approved_at: '2026-06-25'
+    review_receipt:
+      reviewer_family: GPT
+      three_leg_ask: CONTINUITY+PROBLEMS+APPROACH
+      verdict: PASS
+      reviewed_source_hash: ad71a8643f6f4176371f5d53b297c64716ff7aecdaa7ca15f3f16682097af2f0
+      review_ref: reviews/rounding-review.md
+  - module_id: detail
+    approved_source_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    ceo_approval:
+      approved_by: CEO
+      approved_at: '2026-06-25'

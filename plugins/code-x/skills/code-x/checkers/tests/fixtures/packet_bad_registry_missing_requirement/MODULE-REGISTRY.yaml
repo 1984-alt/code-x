@@ -1,0 +1,9 @@
+module_registry:
+  frozen_packet_hash: pf2
+  modules:
+  - module_id: home
+    screen_id: home
+    kind: screen
+    requirement_ids: []
+    risk_flags: []
+    dependency_modules: []

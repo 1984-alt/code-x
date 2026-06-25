@@ -51,6 +51,7 @@ scan_scope:
     - checkers/CX-CHECK-SPEC.md
     - VOICE.md
     - BUILT-APP-AUDIT.md
+    - MASTER-BLUEPRINT.md
 
 rules:
   - id: cross-family-substitution
@@ -424,3 +425,45 @@ rules:
     appears_in:
       - GATES.md
       - SEVERITY.md
+
+  - id: master-blueprint-gate
+    # Assertion (PROP-039, fold v1.18, MASTER-BLUEPRINT.md + GATES.md): the PLANNING-stage Master Blueprint
+    # is the CEO's single review/drive surface; a module is buildable only after the CEO approves it on the
+    # blueprint, and cx check blueprint RECOMPUTES readiness from source (never a written flag / HTML badge /
+    # manifest boolean). The per-module build-blocker rides the v1.10 order wall (cx check module-start) — NO
+    # new gate family. Mutable approval/review state lives in hash-bound receipts OUTSIDE the frozen packet.
+    # Standing presence/anti-drift bite: the canonical phrases must stay PRESENT in MASTER-BLUEPRINT.md;
+    # GATES.md carries the [RULE:master-blueprint-gate] pointer.
+    canonical:
+      - "BLUEPRINT-READY"
+      - "recomputes readiness from source"
+    key_phrases: ["BLUEPRINT-READY", "Master Blueprint"]
+    banned_negations: ["blueprint is optional", "build before approval", "trust the written flag", "the HTML badge is authoritative", "a manifest boolean is enough", "blueprint approval may be skipped"]
+    appears_in:
+      - MASTER-BLUEPRINT.md
+      - GATES.md
+
+  - id: render-never-retype
+    # Assertion (PROP-039, MASTER-BLUEPRINT.md): the Master Blueprint is a PROJECTION (render) of the locked
+    # source files — never hand-typed, never hand-edited; change the plan, regenerate. A hand-written
+    # blueprint is a 4th drifting truth. Presence/anti-drift bite in MASTER-BLUEPRINT.md.
+    canonical:
+      - "RENDER, NEVER RE-TYPE"
+      - "projection"
+    key_phrases: ["RENDER, NEVER RE-TYPE", "projection"]
+    banned_negations: ["hand-write the blueprint", "type into the blueprint", "edit the blueprint directly", "the blueprint may be edited by hand"]
+    appears_in:
+      - MASTER-BLUEPRINT.md
+
+  - id: same-as-github-three-stage
+    # Assertion (PROP-039, CEO 2026-06-25, CHARTER.md): the plain-language three-stage narrative
+    # (Planning/Building/Fixing) in canon must match the public GitHub README word-for-word — copy it, never
+    # paraphrase; the Fixing stage especially. Canon and the public face tell ONE story. Presence/anti-drift
+    # bite in CHARTER.md.
+    canonical:
+      - "same-as-github"
+      - "never paraphrase"
+    key_phrases: ["same-as-github", "three stages"]
+    banned_negations: ["paraphrase the public README", "canon may diverge from github", "the public wording is just a summary"]
+    appears_in:
+      - CHARTER.md

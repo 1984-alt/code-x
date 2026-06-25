@@ -1,0 +1,80 @@
+blueprint_manifest:
+  generator_version: 0.1.0
+  modules:
+  - module_id: home
+    screen_id: home
+    kind: screen
+    title: Home screen
+    anchors:
+    - anchor_id: req:REQ-001
+      file: requirements-source.md
+      section: REQ-001
+      line: 3
+      requirement_id: REQ-001
+      source_hash: fed38c85c43e3f12d8ba351019c4d1d300e0f027bb267a17048e8d081a58e15c
+    - anchor_id: req:REQ-002
+      file: requirements-source.md
+      section: REQ-002
+      line: 4
+      requirement_id: REQ-002
+      source_hash: 10537da58bfbfc645e8f3823f1377f089e061ed5a772135ff2f7d6045823653c
+    - anchor_id: control:add_entry
+      file: screens/home.html
+      section: add button
+      line: 1
+      requirement_id: REQ-002
+      source_hash: 917851eb3d0b23d2efcc78a24f8d63c736a668756ae07fe40f5a0f32c4b2e4bf
+    - anchor_id: nav:home->ghostscreen
+      file: screens/home.html
+      section: detail link
+      line: 2
+      requirement_id: null
+      source_hash: 57bdff7b80740ceae5691f5bcee136840c6925acbcbbfa3301766b2476b2d1b4
+    ui_lock_manifest: ui-locks/home.lock.yaml
+    ui_lock_hash: c40f5e663a90ef1e4cbb58682d2bc36dc512d462db51ab2b31f4b676903826ba
+    controls:
+    - control_id: add_entry
+      anchor_id: control:add_entry
+      label: Add entry
+      contract_id: c_add_entry
+    nav:
+    - from_screen: home
+      to_screen: ghostscreen
+      trigger_control_id: add_entry
+    user_journeys:
+    - journey: I tap Add entry, the app opens the form
+      done_test_ref: REQ-002
+    risk_callouts:
+    - kind: money
+      note: balance is money
+      proof_ref: REQ-001
+  - module_id: rounding
+    screen_id: null
+    kind: shared_logic
+    title: Shared rounding rule
+    design_nav_na_reason: "shared_logic has no screen \u2014 design+nav are N/A"
+    anchors:
+    - anchor_id: req:REQ-003
+      file: requirements-source.md
+      section: REQ-003
+      line: 5
+      requirement_id: REQ-003
+      source_hash: 643347fb91d9545b599479698e1c23212f7c7ecf41a43d2d3c28145301505f53
+    user_journeys:
+    - journey: money rounds the same everywhere
+      done_test_ref: REQ-003
+    risk_callouts:
+    - kind: money
+      note: rounding affects totals
+      proof_ref: REQ-003
+  - module_id: detail
+    screen_id: detail
+    kind: screen
+    title: Detail screen
+    anchors: []
+    ui_lock_manifest: ui-locks/home.lock.yaml
+    ui_lock_hash: c40f5e663a90ef1e4cbb58682d2bc36dc512d462db51ab2b31f4b676903826ba
+    controls: []
+    nav: []
+    user_journeys: []
+    risk_callouts: []

@@ -1,0 +1,19 @@
+requirements:
+- id: REQ-001
+  disposition: BUILDING
+  acceptance_criterion:
+    pass_condition: balance renders on home
+    evidence_type: screenshot
+    verification_ref: cards/home#ac1
+- id: REQ-002
+  disposition: BUILDING
+  acceptance_criterion:
+    pass_condition: add-entry form opens on tap
+    evidence_type: playwright
+    verification_ref: cards/home#ac2
+- id: REQ-003
+  disposition: BUILDING
+  acceptance_criterion:
+    pass_condition: rounding matches spec table
+    evidence_type: unit_test
+    verification_ref: cards/shared#ac3

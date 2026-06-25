@@ -606,6 +606,74 @@ def _check_acceptance_criteria(packet_dir: Path, findings: list) -> None:
                 "audit judges testability (PROP-023b)"))
 
 
+# PROP-039 (v1.18): packet-floor registry coverage. For a screen/module-first project (a planning
+# MODULE-REGISTRY.yaml drafted in the packet), the registry must cover every screen/shared module +
+# every BUILDING requirement id BEFORE the packet freezes — so the freeze→G1 sequence binds a registry
+# that already accounts for the whole plan. Cards still bind to the frozen hash (G1 order unchanged).
+# Fires ONLY when the planning registry is present; legacy packets are untouched (clause silent).
+REGISTRY_FILE = "MODULE-REGISTRY.yaml"
+SCREENS_MANIFEST_FILE = "screens-manifest.yaml"
+
+
+def _check_module_registry_coverage(packet_dir: Path, findings: list) -> None:
+    reg_path = packet_dir / REGISTRY_FILE
+    if not reg_path.is_file():
+        return  # not a screen/module-first packet — clauses silent (legacy untouched)
+    rdata, rerr = load_yaml(str(reg_path))
+    mr = rdata.get("module_registry") if isinstance(rdata, dict) else None
+    rows = mr.get("modules") if isinstance(mr, dict) else (
+        rdata.get("modules") if isinstance(rdata, dict) else None)
+    if rerr or not isinstance(rows, list) or not rows:
+        findings.append(("P1", str(reg_path),
+            f"{REGISTRY_FILE} present but has no module_registry.modules list — a screen/module-first "
+            "packet must carry a real registry covering the plan (PACKET-MODULE-REGISTRY-COVERS-SCREENS, "
+            "PROP-039)"))
+        return
+
+    registry_modules = {str(m.get("module_id")).strip() for m in rows
+                        if isinstance(m, dict) and m.get("module_id")}
+    registry_screens = {str(m.get("screen_id")).strip() for m in rows
+                       if isinstance(m, dict) and m.get("screen_id")
+                       and str(m.get("kind", "")).strip() == "screen"}
+
+    # ── PACKET-MODULE-REGISTRY-COVERS-SCREENS (P1) ──────────────────────────────────────────────
+    screens_path = packet_dir / SCREENS_MANIFEST_FILE
+    sdata, serr = load_yaml(str(screens_path))
+    screens = sdata.get("screens") if isinstance(sdata, dict) else None
+    if isinstance(screens, list):
+        for s in screens:
+            if not isinstance(s, dict) or s.get("user_facing") is False:
+                continue
+            sid = str(s.get("id", "") or "").strip()
+            if sid and sid not in registry_screens and sid not in registry_modules:
+                findings.append(("P1", str(reg_path),
+                    f"screen '{sid}' (in {SCREENS_MANIFEST_FILE}) is not covered by a registry "
+                    "screen module — the planning MODULE-REGISTRY must cover every screen before the "
+                    "packet freezes; an uncovered screen drifts unbuilt "
+                    "(PACKET-MODULE-REGISTRY-COVERS-SCREENS, PROP-039)"))
+
+    # ── PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS (P1) ─────────────────────────────────────────
+    mdata, merr = load_yaml(str(packet_dir / MANIFEST_FILE))
+    reqs = mdata.get("requirements") if isinstance(mdata, dict) else None
+    if isinstance(reqs, list):
+        covered = set()
+        for m in rows:
+            if isinstance(m, dict):
+                for rid in (m.get("requirement_ids") or []):
+                    if rid:
+                        covered.add(str(rid).strip())
+        for row in reqs:
+            if not isinstance(row, dict) or str(row.get("disposition", "")).strip() != "BUILDING":
+                continue
+            rid = str(row.get("id", "") or "").strip()
+            if rid and rid not in covered:
+                findings.append(("P1", str(reg_path),
+                    f"BUILDING requirement '{rid}' is in no registry module's requirement_ids — the "
+                    "planning MODULE-REGISTRY must cover every requirement before freeze; an uncovered "
+                    "requirement has no module to build it "
+                    "(PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS, PROP-039)"))
+
+
 def cmd_packet(args) -> int:
     packet_dir = Path(args.packet_dir)
 
@@ -629,6 +697,7 @@ def cmd_packet(args) -> int:
     _check_acceptance_criteria(packet_dir, findings)
     _check_style_direction(packet_dir, findings)
     _check_visual_provenance(packet_dir, findings)
+    _check_module_registry_coverage(packet_dir, findings)
 
     if findings:
         return findings_report(findings)
