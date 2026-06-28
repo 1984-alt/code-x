@@ -129,6 +129,8 @@ Then open a new session and start with:
 
 > "Let's start a new project with Code-X."
 
+> **How I actually drive it day-to-day** — which engine for planning vs building, my context-window habits, and clean session handoffs — is in [OPERATING-MODES.md](OPERATING-MODES.md). Code-X is model-agnostic; that doc is one operator's preferences, not requirements.
+
 ### Run the checker
 
 The `cx` checker is a small Python program inside the plugin's skill folder. From a clone of this repo:
@@ -219,7 +221,7 @@ In one line: **a shared plan-first baseline, plus a deterministic checker, a rev
 
 I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't build Code-X, I *directed* it. I said what I wanted; Claude did the hands-on building; Codex and GPT cross-reviewed the work and drove many of the improvements. That's the experiment: can someone who doesn't write code still direct AI rigorously enough that the software comes out faithful to their intent? I think of the role as an **AI build director** — like a film director who owns the final cut without operating the camera.
 
-- **If you're a vibe-coder or non-coder:** this is a way of working you can try today. Install it, read `START-HERE.md`, build something.
+- **If you're a vibe-coder or non-coder:** this is a way of working you can try today. Install it, read `START-HERE.md`, build something — then see [OPERATING-MODES.md](OPERATING-MODES.md) for how I actually drive it.
 - **If you're a professional engineer:** please tear it apart. Where is it naive, unsafe, over-built, or reinventing a wheel? Issues and PRs that challenge the design are the most welcome contribution — the explicit aim is for people who know more than I do to make it better. See [CONTRIBUTING.md](CONTRIBUTING.md). This isn't a formal proof; it's an open method shaped by real use and real mistakes, shared so those mistakes are harder to repeat.
 
 ---
