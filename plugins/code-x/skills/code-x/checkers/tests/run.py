@@ -2144,22 +2144,101 @@ class TestCheckFinalReadyBuiltAppAudit(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # v1.12 FIX-3: checker version identity must match the shipping protocol version
 # ---------------------------------------------------------------------------
+class TestWholePacketReview(unittest.TestCase):
+    """PROP-040 — the whole-packet integration gate. The contract clauses cover the receipt-content
+    bites; these unit tests cover the --packet-dir path-safety the harness can't express via the fixed
+    {REPO}/packet arg (an absolute EXTERNAL packet dir / a SYMLINK path component) — the xfam P1 fix."""
+
+    @staticmethod
+    def _mk(repo, packet_dir, *, hashval=None):
+        """Write a valid receipt + state into <repo>. packet_dir binds the review's frozen_packet_hash
+        (use hashval to skip the recompute when the check fails before currency). Returns the state path."""
+        import hashlib
+        h = hashval
+        if h is None:
+            sys.path.insert(0, str(CHECKERS_DIR))
+            try:
+                from cx_deck import _compute_packet_hash
+                h = _compute_packet_hash(Path(packet_dir))
+            finally:
+                sys.path.pop(0)
+        reviews = Path(repo) / "reviews"
+        reviews.mkdir(parents=True, exist_ok=True)
+        receipt = reviews / "whole-packet-review.yaml"
+        receipt.write_text(
+            "whole_packet_review:\n  schema_version: 1\n  review_kind: WHOLE_PACKET_G7\n"
+            f"  frozen_packet_hash: {h}\n  reviewed_source_set_hash: abc123abc123\n"
+            "  authoring_family: anthropic\n  reviewer_family: gpt\n"
+            "  three_leg_ask:\n    continuity: prior decisions re-checked\n    problems: no P0\n"
+            "    approach_improvement: no simpler structure\n"
+            "  verdict: PASS\n  findings_ref: reviews/whole-packet-review.md\n")
+        rh = hashlib.sha256(receipt.read_bytes()).hexdigest()[:12]
+        state = Path(repo) / "state.yaml"
+        state.write_text(
+            "project: x\npacket_dir: packet\nwhole_packet_review_receipt:\n"
+            "  receipt: reviews/whole-packet-review.yaml\n"
+            f'  receipt_hash: "{rh}"\n')
+        return str(state)
+
+    def test_good_passes(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            packet = repo / "packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", packet)
+            state = self._mk(repo, packet)
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+            self.assertIn("PASS", out)
+
+    def test_packet_dir_outside_repo_root_rejected(self):
+        """xfam P1: --packet-dir pointing at an EXTERNAL dir (outside --repo-root) must be rejected —
+        else the G7 floor could bind the review to a non-project packet."""
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            ext_packet = Path(tmp) / "external_packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", ext_packet)
+            state = self._mk(repo, ext_packet, hashval="0" * 64)
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(ext_packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+            self.assertIn("not under --repo-root", out)
+
+    def test_packet_dir_symlink_ancestor_rejected(self):
+        """xfam P1: a SYMLINK between repo-root and the frozen packet must be rejected (it would point
+        the packet at content OUTSIDE the repo)."""
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            ext = Path(tmp) / "ext"; ext.mkdir()
+            shutil.copytree(FIXTURES / "module_start_good_packet", ext / "packet")
+            os.symlink(ext, repo / "link")             # repo/link -> external dir
+            packet_via_link = repo / "link" / "packet"  # repo/link/packet
+            state = self._mk(repo, packet_via_link, hashval="0" * 64)
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(packet_via_link), "--repo-root", str(repo))
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+            self.assertIn("is a symlink", out)
+
+
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_18(self):
-        """The checker constant must equal the shipping protocol version (v1.18) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.18, PROP-039)."""
+    def test_protocol_version_constant_is_1_19(self):
+        """The checker constant must equal the shipping protocol version (v1.19) so cx identity
+        can never silently lag the ledger again (VERSION-HISTORY current = v1.19, PROP-040)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.18")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.19")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_18(self):
-        """`cx --version` surfaces V1.18."""
+    def test_cx_version_reports_1_19(self):
+        """`cx --version` surfaces V1.19."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.18", out)
+        self.assertIn("V1.19", out)
 
 
 # ---------------------------------------------------------------------------

@@ -334,4 +334,32 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE verify-app (card declares no verify_app_ref)")
 
+    # 12. whole-packet cross-family review — the G7 build-authorization INTEGRATION gate (PROP-040).
+    #     A module-advancing card means building is underway, so the WHOLE frozen packet must already
+    #     have passed a CURRENT, PASS, OPPOSITE-family integration review (the cross-document coherence
+    #     pass the per-card audit + the deterministic checker structurally cannot provide — a real-project
+    #     TRD-vs-stack-lock drift class). Fail-closed: a module build with no current receipt blocks the
+    #     entire build (mirrors module-start's fail-closed on a missing registry). The standalone check
+    #     does the path-safety + sha + opposite-family + verdict + packet-hash-currency validation; the
+    #     packet dir is the same frozen packet_dir the order wall (step 1b) re-hashes.
+    if card_mode in ("MODULE_BUILD", "MODE_A_UI"):
+        pkt_ref = str(state.get("packet_dir", "") or "").strip()
+        if not pkt_ref:
+            findings.append(("P1", "whole-packet-review",
+                "module-advancing build but state has no packet_dir — the whole-packet integration review "
+                "(PROP-040) cannot recompute the frozen-packet hash to prove the review is current; "
+                "fail-closed"))
+        elif Path(pkt_ref).is_absolute() or ".." in Path(pkt_ref).parts:
+            findings.append(("P1", "whole-packet-review",
+                f"state.packet_dir '{pkt_ref}' must be a repo-relative path (no absolute / .. escape) — "
+                "the whole-packet integration gate reads only the frozen packet committed in the repo "
+                "(PROP-040)"))
+        else:
+            pkt_path = str(Path(repo_root) / pkt_ref)
+            rc, out = _run_cx("check", "whole-packet-review", "--state", state_path,
+                              "--packet-dir", pkt_path, "--repo-root", repo_root)
+            _sub("whole-packet-review", rc, out, findings)
+    else:
+        print("  [INFO] NOT_APPLICABLE whole-packet-review (non-module-advancing card)")
+
     return findings_report(findings)

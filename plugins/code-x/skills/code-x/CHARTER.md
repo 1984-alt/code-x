@@ -68,7 +68,7 @@ MEMORY  (lightweight files — never auto-mutating)
 
 **Work orders & cards**
 - **Card compiler = a top-model AI planning task** (reads the locked packet once → emits the full work-order deck).
-- **Card auditor = opposite-family top model** — and this audit **IS** the main pre-build cross-family checkpoint (do *not* stack a second full cross-family review on top). *(Opus sharpening #2.)*
+- **Card auditor = opposite-family top model** — and this audit **IS** the main pre-build cross-family checkpoint *per card* (do *not* stack a second per-CARD cross-family review on top). It checks each card against its packet slice; it does **not** review the non-card packet docs (TRD/PRD/architecture/security baseline) for cross-document coherence — that is the separate **whole-packet integration review** at G7 (PROP-040), a distinct surface. *(Opus sharpening #2; whole-packet carve-out added v1.19.)*
 - **Card Compilation Gate is mandatory:** compiler compiles, opposite-AI audits, tiny checker validates shape/scope/budget. A bad card is more dangerous than a long packet.
 - Work-order fields: id, mode, actor, model_tier, objective, **source_map, card_compilation, actor_record, family_note,** read(required/forbidden), allowed/forbidden files, allowed/forbidden ops, relevant_invariants, acceptance, evidence_required, security_tripwire, loop_budget (review_fix_cycles + self_heal_attempts), stop_conditions, cost_budget, state_update.
 

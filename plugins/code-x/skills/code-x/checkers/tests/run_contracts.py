@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import os
+import hashlib as _hashlib
 from pathlib import Path
 
 try:
@@ -38,7 +39,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
                         "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app",
-                        "blueprint"}
+                        "blueprint", "whole-packet-review"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -343,12 +344,30 @@ def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --versi
     with open(os.path.join(packet, "MODULE-REGISTRY.yaml"), "w") as f:
         f.write(registry_body)
     # The card's locked_packet_hash = content hash of the frozen packet (deck semantics).
-    card.setdefault("source_map", {})["locked_packet_hash"] = _packet_hash(packet)
+    pkt_hash = _packet_hash(packet)
+    card.setdefault("source_map", {})["locked_packet_hash"] = pkt_hash
     card["allowed_files"] = ["src/app.py"]
     card["evidence_required"] = ["evidence.txt"]
     card["module_id"] = module_id
     if with_test_cmd:
         card["test_command"] = test_cmd
+    # PROP-040: bake a VALID whole-packet integration review receipt into the shared passing base so
+    # the new step-12 gate (which fires on every MODULE_BUILD / MODE_A_UI card) PASSES on it; every
+    # build-turn fixture inherits a current opposite-family review, and the bad-case recipes strip it.
+    # The receipt lives OUTSIDE the frozen packet (reviews/), bound to the packet content hash; it is
+    # committed so the tree stays clean (an untracked receipt would show in the derived scope list).
+    os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
+    _wpr = {"whole_packet_review": {
+        "schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": pkt_hash,
+        "reviewed_source_set_hash": _hashlib.sha256(pkt_hash.encode()).hexdigest()[:12],
+        "authoring_family": "anthropic", "reviewer_family": "gpt",
+        "three_leg_ask": {"continuity": "prior decisions re-checked", "problems": "no P0; drift swept",
+                          "approach_improvement": "no simpler structure found"},
+        "verdict": "PASS", "findings_ref": "reviews/whole-packet-review.md"}}
+    _wpr_path = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    with open(_wpr_path, "w") as f:
+        yaml.safe_dump(_wpr, f)
+    _wpr_hash = _hashlib.sha256(open(_wpr_path, "rb").read()).hexdigest()[:12]
     card_path = os.path.join(repo, "card.yaml")
     with open(card_path, "w") as f:
         yaml.dump(card, f)
@@ -356,7 +375,10 @@ def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --versi
     sha = _git_commit(repo, "build-turn fixture")
     state = os.path.join(tmp, "state.yaml")
     _write_state(state, sha, overrides={"packet_dir": "packet",
-                                        "module_registry_ref": "packet/MODULE-REGISTRY.yaml"})
+                                        "module_registry_ref": "packet/MODULE-REGISTRY.yaml",
+                                        "whole_packet_review_receipt": {
+                                            "receipt": "reviews/whole-packet-review.yaml",
+                                            "receipt_hash": _wpr_hash}})
     return repo, state
 
 
@@ -999,6 +1021,113 @@ def _recipe_dep_scan_uncovered_manifest(tmp):
     return _mk_dep_repo(tmp, extra_manifests=["requirements.txt"])
 
 
+# ── PROP-040 whole-packet-review recipes ────────────────────────────────────────
+# A self-contained repo: a frozen packet copied under <repo>/packet, a typed whole_packet_review
+# receipt under <repo>/reviews/ (OUTSIDE the packet), and a state pointing at it via
+# whole_packet_review_receipt {receipt, receipt_hash}. The standalone check needs no git; the returned
+# (repo, state) fill {REPO} and {STATE}; --packet-dir is {REPO}/packet. The good receipt's
+# frozen_packet_hash + the state's receipt_hash are computed LIVE (never baked constants that drift).
+def _mk_wpr_repo(tmp, review_override=None, drop_receipt_block=False, receipt_ref_override=None,
+                 state_hash_override=None, not_typed=False):
+    import shutil
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
+    pkt = os.path.join(repo, "packet")
+    shutil.copytree(FIXTURES / "module_start_good_packet", pkt)
+    pkt_hash = _packet_hash(pkt)
+    review = {"schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": pkt_hash,
+              "reviewed_source_set_hash": _hashlib.sha256(pkt_hash.encode()).hexdigest()[:12],
+              "authoring_family": "anthropic", "reviewer_family": "gpt",
+              "three_leg_ask": {"continuity": "prior packet decisions re-checked vs the frozen registry",
+                                "problems": "no P0; cross-document drift swept (TRD vs stack-lock)",
+                                "approach_improvement": "no simpler structure found; coverage adequate"},
+              "verdict": "PASS", "findings_ref": "reviews/whole-packet-review.md"}
+    if review_override:
+        review.update(review_override)
+        review = {k: v for k, v in review.items() if v is not None}   # None deletes a key
+    rpath = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    with open(rpath, "w") as f:
+        if not_typed:
+            f.write("not_a_review: true\n")   # a mapping with NO whole_packet_review key
+        else:
+            yaml.safe_dump({"whole_packet_review": review}, f)
+    rhash = _hashlib.sha256(open(rpath, "rb").read()).hexdigest()[:12]
+    state_doc = {"project": "wpr-contract-test", "packet_dir": "packet"}
+    if not drop_receipt_block:
+        state_doc["whole_packet_review_receipt"] = {
+            "receipt": receipt_ref_override or "reviews/whole-packet-review.yaml",
+            "receipt_hash": state_hash_override or rhash}
+    spath = os.path.join(tmp, "state.yaml")
+    with open(spath, "w") as f:
+        yaml.safe_dump(state_doc, f)
+    return repo, spath
+
+
+def _recipe_wpr_ok(tmp):
+    return _mk_wpr_repo(tmp)
+
+def _recipe_wpr_missing_receipt(tmp):
+    return _mk_wpr_repo(tmp, drop_receipt_block=True)
+
+def _recipe_wpr_hash_mismatch(tmp):
+    return _mk_wpr_repo(tmp, state_hash_override="deadbeef0000")
+
+def _recipe_wpr_path_unsafe(tmp):
+    return _mk_wpr_repo(tmp, receipt_ref_override="../outside.yaml")
+
+def _recipe_wpr_not_typed(tmp):
+    return _mk_wpr_repo(tmp, not_typed=True)
+
+def _recipe_wpr_same_family(tmp):
+    # ALIAS same-group: authoring 'claude' + reviewer 'anthropic' are BOTH the Anthropic group — a bare
+    # string-inequality would pass; the cross-family GROUP check must reject it (PROP-040 xfam P0).
+    return _mk_wpr_repo(tmp, review_override={"authoring_family": "claude", "reviewer_family": "anthropic"})
+
+def _recipe_wpr_unknown_family(tmp):
+    return _mk_wpr_repo(tmp, review_override={"reviewer_family": "mistral"})   # not a KNOWN family
+
+def _recipe_wpr_wrong_kind(tmp):
+    return _mk_wpr_repo(tmp, review_override={"review_kind": "PER_MODULE"})
+
+def _recipe_wpr_missing_field(tmp):
+    return _mk_wpr_repo(tmp, review_override={"findings_ref": None})   # None deletes a required key
+
+def _recipe_wpr_three_leg_placeholder(tmp):
+    return _mk_wpr_repo(tmp, review_override={"three_leg_ask": "present"})   # a bare scalar placeholder
+
+def _recipe_wpr_bad_verdict(tmp):
+    return _mk_wpr_repo(tmp, review_override={"verdict": "FIX_FIRST"})
+
+def _recipe_wpr_stale_packet(tmp):
+    return _mk_wpr_repo(tmp, review_override={"frozen_packet_hash": "deadbeef" * 8})
+
+def _recipe_wpr_receipt_symlink(tmp):
+    # the in-repo receipt ref is a SYMLINK to bytes OUTSIDE the repo — safe_repo_ref must reject it
+    # before reading (the PROP-037 path-safety class).
+    repo, state = _mk_wpr_repo(tmp)
+    ext = os.path.join(tmp, "external_review.yaml")
+    with open(ext, "w") as f:
+        f.write("whole_packet_review: {verdict: PASS}\n")
+    link = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    os.remove(link)
+    os.symlink(ext, link)   # in-repo symlink -> external bytes
+    return repo, state
+
+
+def _recipe_build_turn_wpr_missing(tmp):
+    """PROP-040: a module-advancing build-turn whose state has NO whole_packet_review_receipt — the
+    step-12 integration gate fails closed (no module builds without a current whole-packet review).
+    Built on the passing build_turn base (which now bakes a valid receipt) so the stripped receipt is
+    the SOLE failure — proves the rail wiring bites."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    with open(state) as f:
+        sdoc = yaml.safe_load(f)
+    sdoc.pop("whole_packet_review_receipt", None)
+    with open(state, "w") as f:
+        yaml.safe_dump(sdoc, f)
+    return repo, state
+
+
 # ── PROP-034 lock-fidelity recipes ──────────────────────────────────────────────
 # All reuse the frozen module_start_good_packet (REQ-001..004 BUILDING; m1->BUILD-001,
 # m2->BUILD-002, m3->BUILD-003) committed under <repo>/packet, with state.packet_dir=packet.
@@ -1577,12 +1706,30 @@ def _build_turn_blueprint_repo(tmp: str, *, blueprint_ready: bool) -> tuple[str,
                          "ceo_approval": {"approved_by": "CEO", "approved_at": "2026-06-25"}}]}},
             f, sort_keys=False)
 
+    # PROP-040: a valid whole-packet integration review receipt so the new step-12 gate PASSES on this
+    # module-advancing build (the SOLE variable here is BLUEPRINT-READY, not the whole-packet review).
+    os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
+    _wpr = {"whole_packet_review": {
+        "schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": packet_hash,
+        "reviewed_source_set_hash": hashlib.sha256(packet_hash.encode()).hexdigest()[:12],
+        "authoring_family": "anthropic", "reviewer_family": "gpt",
+        "three_leg_ask": {"continuity": "prior decisions re-checked", "problems": "no P0; drift swept",
+                          "approach_improvement": "no simpler structure found"},
+        "verdict": "PASS", "findings_ref": "reviews/whole-packet-review.md"}}
+    _wpr_path = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    with open(_wpr_path, "w") as f:
+        yaml.safe_dump(_wpr, f)
+    _wpr_hash = hashlib.sha256(open(_wpr_path, "rb").read()).hexdigest()[:12]
+
     subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
     sha = _git_commit(repo, "build-turn blueprint fixture")
     state = os.path.join(tmp, "state.yaml")
     _write_state(state, sha, overrides={"packet_dir": "packet",
                                         "module_registry_ref": "packet/MODULE-REGISTRY.yaml",
-                                        "blueprint_approval_ref": "approvals/BLUEPRINT-APPROVAL.yaml"})
+                                        "blueprint_approval_ref": "approvals/BLUEPRINT-APPROVAL.yaml",
+                                        "whole_packet_review_receipt": {
+                                            "receipt": "reviews/whole-packet-review.yaml",
+                                            "receipt_hash": _wpr_hash}})
     return repo, state
 
 
@@ -1669,6 +1816,20 @@ _RECIPES = {
     "dep_scan_missing_lockfile": _recipe_dep_scan_missing_lockfile,
     "dep_scan_missing_field": _recipe_dep_scan_missing_field,
     "dep_scan_uncovered_manifest": _recipe_dep_scan_uncovered_manifest,
+    "wpr_ok": _recipe_wpr_ok,
+    "wpr_missing_receipt": _recipe_wpr_missing_receipt,
+    "wpr_hash_mismatch": _recipe_wpr_hash_mismatch,
+    "wpr_path_unsafe": _recipe_wpr_path_unsafe,
+    "wpr_receipt_symlink": _recipe_wpr_receipt_symlink,
+    "wpr_not_typed": _recipe_wpr_not_typed,
+    "wpr_missing_field": _recipe_wpr_missing_field,
+    "wpr_wrong_kind": _recipe_wpr_wrong_kind,
+    "wpr_same_family": _recipe_wpr_same_family,
+    "wpr_unknown_family": _recipe_wpr_unknown_family,
+    "wpr_three_leg_placeholder": _recipe_wpr_three_leg_placeholder,
+    "wpr_bad_verdict": _recipe_wpr_bad_verdict,
+    "wpr_stale_packet": _recipe_wpr_stale_packet,
+    "build_turn_wpr_missing": _recipe_build_turn_wpr_missing,
     "foreign_lineage": _recipe_foreign_lineage,
     "dirty_unmarked": _recipe_dirty_unmarked,
     "wip_marked_ok": _recipe_wip_marked_ok,

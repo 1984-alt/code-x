@@ -35,6 +35,7 @@ from cx_render_fidelity import cmd_render_fidelity
 from cx_drift import cmd_drift
 from cx_structure import cmd_structure
 from cx_blueprint import cmd_blueprint
+from cx_whole_packet_review import cmd_whole_packet_review
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -248,6 +249,18 @@ def main():
     p_bp.add_argument("--approval", dest="approval", default=None,
                       help="Path to the out-of-packet BLUEPRINT-APPROVAL.yaml (approval/review receipts)")
 
+    # whole-packet-review (PROP-040 v1.19: the G7 build-authorization INTEGRATION gate — a current,
+    # PASS, opposite-family review of the WHOLE frozen packet, hash-bound, before any module build.)
+    p_wpr = check_sub.add_parser("whole-packet-review",
+                                 help="G7 integration gate: a current opposite-family review of the whole "
+                                      "frozen packet (cross-document coherence), recorded as a hash-bound "
+                                      "receipt OUTSIDE the packet; required before any module build (PROP-040)")
+    p_wpr.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml (carries whole_packet_review_receipt)")
+    p_wpr.add_argument("--packet-dir", dest="packet_dir", required=True,
+                       help="Frozen packet dir — re-hashed; the receipt's frozen_packet_hash must equal it (currency)")
+    p_wpr.add_argument("--repo-root", dest="repo_root", required=True,
+                       help="Repo root the receipt ref resolves under (path-safety)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -276,6 +289,7 @@ def main():
         "drift": cmd_drift,
         "structure": cmd_structure,
         "blueprint": cmd_blueprint,
+        "whole-packet-review": cmd_whole_packet_review,
     }
 
     fn = dispatch.get(args.check_cmd)

@@ -10,6 +10,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.19.0]
+
+Syncs the public release up to protocol **v1.19**, folding in one upgrade (PROP-040, the whole-packet integration review). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.
+
+### Added
+- **Whole-packet integration review (PROP-040) — one cross-family read of the *entire* plan before any building starts.** Until now, opposite-family review only ever looked at *slices*: each work-order card on its own, a risky module here and there, one finished module at a time. Nothing read the whole locked plan as a single coherent document — so a contradiction *between* documents (the technical spec says one thing, a later locked decision says another) could slip past every check and reach the builder. This release adds one mandatory, whole-plan, opposite-family review as a build-authorization precondition: before the first module is built, a different AI family reads the complete frozen plan end to end — requirements, every module spec, the architecture and technical docs, the data and behaviour contracts, the locked screens, the Master Blueprint — looking for the cross-document contradictions the per-card checks structurally cannot see. It is recorded as a hash-bound receipt kept *outside* the frozen plan and tied to that exact plan version; change the plan and the review is automatically invalidated and must be redone. The build-order wall then blocks every module until a current, passing review exists — *no module builds without it*.
+
+  Why it matters: on a real project, the plan passed every automated check, every slice-level review, and a visual approval — yet a stale technical doc still named an old component the stack had already been re-locked away from. An autonomous builder reading that doc would have built the wrong thing. This is the integration pass none of the slice reviews could provide.
+
+  Honest limit: it is a judgment review. The receipt proves the whole-plan review *happened* against the current plan and records its verdict — it cannot prove the review was perfect (that is bounded by the reviewer's thoroughness). It complements, never replaces, the per-card and per-module reviews.
+
+291 tests · 283 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.18.0]
 
 Syncs the public release up to protocol **v1.18**, folding in one upgrade (PROP-039, the Master Blueprint). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.

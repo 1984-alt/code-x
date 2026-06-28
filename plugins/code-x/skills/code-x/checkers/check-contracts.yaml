@@ -2296,6 +2296,195 @@ clauses:
       args: ["{STATE}", "--repo-root", "{REPO}"]
 
   # ──────────────────────────────────────────────────────────────
+  # v1.19 — PROP-040 whole-packet cross-family INTEGRATION review (G7 build-authorization, EVAL-036).
+  # The cross-document coherence pass the per-card audit + the deterministic checker structurally cannot
+  # provide (a real-project TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
+  # WHOLE frozen packet, recorded as a hash-bound receipt OUTSIDE the packet, required before any module.
+  # ──────────────────────────────────────────────────────────────
+
+  - id: WHOLE-PACKET-REVIEW-RECEIPT-REQUIRED
+    check: whole-packet-review
+    kind: gate
+    clause: "build is blocked when state carries no whole_packet_review_receipt — the whole-packet cross-family integration review is a mandatory G7 build-authorization precondition, not optional (P0) [PROP-040]"
+    source: "PROP-040 §proposal / GATES G7"
+    git_fixture: wpr_missing_receipt
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "mandatory G7 build-authorization precondition"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-RECEIPT-HASH-BOUND
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review_receipt whose receipt_hash != the receipt file's sha12 rejected — a fabricated/stale receipt cannot authorize build (mirrors the final-ready / Andon binding) (P0) [PROP-040]"
+    source: "PROP-040 Rev 2 #4 (final-ready-grade binding)"
+    git_fixture: wpr_hash_mismatch
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "fabricated/stale receipt"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-RECEIPT-PATH-SAFE
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review_receipt.receipt that is absolute / contains '..' / is a symlink / resolves OUTSIDE the repo rejected — the gate reads only an in-repo receipt (shared path-safety, the PROP-037 class) (P0) [PROP-040]"
+    source: "PROP-040 Rev 2 #4 / cx_common.safe_repo_ref"
+    git_fixture: wpr_path_unsafe
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "repo-relative path"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-TYPED
+    check: whole-packet-review
+    kind: gate
+    clause: "a receipt that is not a typed whole_packet_review mapping (or omits a required field) rejected — an arbitrary bound blob of bytes is not a review (P0) [PROP-040]"
+    source: "PROP-040 Rev 2 #4 (typed YAML block)"
+    git_fixture: wpr_not_typed
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "not a typed whole_packet_review mapping"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-OPPOSITE-FAMILY
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose reviewer_family == authoring_family rejected — a same-family review is not a cross-family review; the whole-packet review must be by the OPPOSITE family (P0) [PROP-040]"
+    source: "PROP-040 §proposal (opposite-family blind-spot catch)"
+    git_fixture: wpr_same_family
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "same-family review is not a cross-family review"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-VERDICT
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose verdict is missing or not in {PASS, FIX_FIRST_RESOLVED} rejected — a raw FIX_FIRST / REJECTED (or a missing verdict) does not authorize build (P0) [PROP-040]"
+    source: "PROP-040 Rev 2 #5 (one-shot; verdict must be resolved)"
+    git_fixture: wpr_bad_verdict
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "not PASS or FIX_FIRST_RESOLVED"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-PACKET-CURRENT
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose frozen_packet_hash != the recomputed frozen-packet hash rejected — the review is STALE for a different/older packet; ANY packet change (TRD/PRD/security/stack-lock/blueprint, even with every module hash unchanged) invalidates it (never keys currency on a module hash) (P0) [PROP-040 Rev 2 #2]"
+    source: "PROP-040 Rev 2 #2 (packet-hash-change-invalidates)"
+    git_fixture: wpr_stale_packet
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "STALE for a different/older"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-RECEIPT-SYMLINK
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review_receipt.receipt that is an in-repo SYMLINK to bytes OUTSIDE the repo rejected — safe_repo_ref rejects it before reading (the PROP-037 path-safety class; the '..' half is covered by WHOLE-PACKET-REVIEW-RECEIPT-PATH-SAFE) (P0) [PROP-040]"
+    source: "PROP-040 xfam P2 (path-safety symlink half) / cx_common.safe_repo_ref"
+    git_fixture: wpr_receipt_symlink
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-REQUIRED-FIELDS
+    check: whole-packet-review
+    kind: gate
+    clause: "a typed whole_packet_review that omits a required field (e.g. findings_ref) rejected — the review record must pin every auditable field, not merely be a well-formed mapping (distinct from the not-a-mapping bite) (P0) [PROP-040]"
+    source: "PROP-040 xfam P2 (coverage: required-field bite distinct from TYPED)"
+    git_fixture: wpr_missing_field
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "whole_packet_review missing"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-KIND
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose review_kind != WHOLE_PACKET_G7 rejected — this gate accepts only a whole-packet G7 integration review, not a per-card / per-module review smuggled in (P0) [PROP-040]"
+    source: "PROP-040 xfam P2 (coverage: review_kind bite)"
+    git_fixture: wpr_wrong_kind
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "WHOLE_PACKET_G7"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-FAMILY-KNOWN
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose authoring_family or reviewer_family is not a KNOWN family (e.g. 'mistral') rejected — an unknown family cannot be proven to be the opposite family; a bare string-inequality is not a cross-family proof (P0) [PROP-040 xfam P0]"
+    source: "PROP-040 xfam P0 (family taxonomy; single-source cx_blueprint.VALID_FAMILIES + _family_group)"
+    git_fixture: wpr_unknown_family
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "must be a KNOWN family"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-THREE-LEG
+    check: whole-packet-review
+    kind: gate
+    clause: "a whole_packet_review whose three_leg_ask is a bare scalar / placeholder (not a structured continuity + problems + approach_improvement record) rejected — a placeholder is not proof the PROP-015 three-leg ask was made (mirrors the card review_dispatch placeholder rule) (P0) [PROP-040]"
+    source: "PROP-040 xfam P2 (three_leg_ask not a placeholder; cx_card.TLA_PLACEHOLDERS)"
+    git_fixture: wpr_three_leg_placeholder
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "three_leg_ask must be a mapping"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-BUILD-TURN-RAIL
+    check: build-turn
+    kind: gate
+    clause: "build-turn fails a module-advancing card (MODULE_BUILD/MODE_A_UI) when state carries no current whole_packet_review receipt — the G7 whole-packet integration review is wired into the every-card rail, so no module builds without it (P1) [PROP-040]"
+    source: "PROP-040 Rev 2 #3 (wiring into the build-start path) / GATES G7"
+    git_fixture: build_turn_wpr_missing
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "mandatory G7 build-authorization precondition"
+    good:
+      git_fixture: build_turn_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
   # v1.11 — PROP-026 scrub-before-egress gate for a mandatory external reviewer (EVAL-020)
   # ──────────────────────────────────────────────────────────────
 

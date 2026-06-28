@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.18"    # Code-X V1 protocol version (V1.18 = PROP-039 the Master Blueprint; v1.17 = PROP-036 Verify-App Gate; v1.16 = PROP-035 the Fixing Stage; v1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
+PROTOCOL_VERSION = "1.19"    # Code-X V1 protocol version (V1.19 = PROP-040 whole-packet integration review; v1.18 = PROP-039 the Master Blueprint; v1.17 = PROP-036 Verify-App Gate; v1.16 = PROP-035 the Fixing Stage; v1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}

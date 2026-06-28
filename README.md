@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.18-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.19-orange.svg)
 
 **Code-X is a build protocol for non-coders directing AI to build software — faithfully, without writing the code.** It's one Indonesian vibe-coder's answer to a specific, maddening problem.
 
@@ -12,14 +12,14 @@ The method, in one breath: you lock the plan first and review it as a visual **M
 
 The point isn't to make AI coding magical. It's to make it hard for the AI to quietly cut corners while the person directing it can't see the code.
 
-It's early days — but the proof is real and runnable: **288 self-tests** green in CI, **270 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
+It's early days — but the proof is real and runnable: **291 self-tests** green in CI, **283 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
 
 ---
 
 ## What backs this up
 
-- **270 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
-- **288 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
+- **283 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
+- **291 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
 - **A real bug, caught in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *thrown out* when cross-family review found a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
 - **No single layer is forge-proof.** The protection is the whole *stack* — a checker the AI can't argue with, an opposite-family reviewer, and a human who owns every call — not any one gate. (How it holds, and where it doesn't, is spelled out below.)
 
@@ -171,7 +171,7 @@ No single layer is forge-proof. The protection is the **stack**, where each laye
 
 **What `cx` can't prove:** that the requirement was *right*, that the product judgment is sound, that the security model holds, or that a test is meaningful rather than tautological. Those need the fresh reader, the cross-family review, and the human. *Green ≠ enforcing* applies to `cx` itself — it checks shape and existence, not meaning.
 
-**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 270 gate clauses), cross-family review of the tests, and a final Built-App Audit that checks the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
+**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 283 gate clauses), cross-family review of the tests, and a final Built-App Audit that checks the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
 
 **Why four review layers, not one?** Because the director can't fix bugs by hand, so the system catches as much as it can before the human is asked to trust the result:
 
