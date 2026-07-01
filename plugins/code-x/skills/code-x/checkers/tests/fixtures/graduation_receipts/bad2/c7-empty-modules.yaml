@@ -1,0 +1,4 @@
+# R2.1/R2.8 bad fixture: modules is an empty list — a coderabbit receipt alone cannot vacuously
+# pass c7; zero modules under review is never proof the review pipeline ran.
+modules: []
+coderabbit_receipt: graduation_receipts/clean/coderabbit-receipt.yaml

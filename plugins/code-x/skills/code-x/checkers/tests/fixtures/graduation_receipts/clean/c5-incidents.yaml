@@ -1,0 +1,4 @@
+# c5_zero_postship_p0p1 evidence: append-only post-ship incident ledger. Zero rows for this
+# build_tag — the project's post-ship window closed clean.
+build_tag: clean-project-v1
+rows: []

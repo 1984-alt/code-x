@@ -1,0 +1,47 @@
+# Test fixture — graduation ledger: 3 clean projects, all user-facing, NO milestone ref.
+# Default --status invocation must exit 0 vacuously green.
+
+```yaml
+- project_id: proj-alpha
+  ship_commit: 6875306e5e4632433d955d86601457dbd5d6e768
+  ship_date: 2026-01-01
+  ship_timestamp_utc: "2026-01-01T10:00:00Z"
+  entered_by: hand-append
+  evidence_manifest: graduation_receipts/clean/graduation-evidence-manifest.yaml
+  criteria:
+    c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
+    c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}
+    c3_zero_design_drift: {receipt: graduation_receipts/clean/c3-fidelity.yaml, receipt_sha256: 1e2147a96e6d204dd5dc32a006da1f276313a40edacf7d0c88c56a6adc1740a8}
+    c4_matched_blueprint: {receipt: graduation_receipts/clean/c4-blueprint.yaml, receipt_sha256: 498009dae702bfabcad541ff37f468de2f601a2306641e974665b9c3f241be20}
+    c5_zero_postship_p0p1: {receipt: graduation_receipts/clean/c5-incidents.yaml, receipt_sha256: 7694895533f95511f60a185cfd7c4be0a03432016cc0beacf2778ada97fb7ddb}
+    c6_final_ready_clean_first_pass: {receipt: state_good_final_ready_with_audit.yaml, receipt_sha256: 5fdce6fab66efe1231322121252780de0cfca5e2f5bb9c3d38e059ec8fa98c08}
+    c7_full_review_pipeline: {receipt: graduation_receipts/clean/c7-review-index.yaml, receipt_sha256: a93658d2dcb2e0c1c3ee40d5c674dcb9f10a06de8c0567f7c2dfaa17e2786c02}
+- project_id: proj-beta
+  ship_commit: 123f52f7a728c0d611be39782218e4b953566d5a
+  ship_date: 2026-02-01
+  ship_timestamp_utc: "2026-02-01T10:00:00Z"
+  entered_by: hand-append
+  evidence_manifest: graduation_receipts/clean/graduation-evidence-manifest.yaml
+  criteria:
+    c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
+    c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}
+    c3_zero_design_drift: {receipt: graduation_receipts/clean/c3-fidelity.yaml, receipt_sha256: 1e2147a96e6d204dd5dc32a006da1f276313a40edacf7d0c88c56a6adc1740a8}
+    c4_matched_blueprint: {receipt: graduation_receipts/clean/c4-blueprint.yaml, receipt_sha256: 498009dae702bfabcad541ff37f468de2f601a2306641e974665b9c3f241be20}
+    c5_zero_postship_p0p1: {receipt: graduation_receipts/clean/c5-incidents.yaml, receipt_sha256: 7694895533f95511f60a185cfd7c4be0a03432016cc0beacf2778ada97fb7ddb}
+    c6_final_ready_clean_first_pass: {receipt: state_good_final_ready_with_audit.yaml, receipt_sha256: 5fdce6fab66efe1231322121252780de0cfca5e2f5bb9c3d38e059ec8fa98c08}
+    c7_full_review_pipeline: {receipt: graduation_receipts/clean/c7-review-index.yaml, receipt_sha256: a93658d2dcb2e0c1c3ee40d5c674dcb9f10a06de8c0567f7c2dfaa17e2786c02}
+- project_id: proj-gamma
+  ship_commit: 7e8015386e894745107ad5c803c4d088f64b1c73
+  ship_date: 2026-03-01
+  ship_timestamp_utc: "2026-03-01T10:00:00Z"
+  entered_by: hand-append
+  evidence_manifest: graduation_receipts/clean/graduation-evidence-manifest.yaml
+  criteria:
+    c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
+    c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}
+    c3_zero_design_drift: {receipt: graduation_receipts/clean/c3-fidelity.yaml, receipt_sha256: 1e2147a96e6d204dd5dc32a006da1f276313a40edacf7d0c88c56a6adc1740a8}
+    c4_matched_blueprint: {receipt: graduation_receipts/clean/c4-blueprint.yaml, receipt_sha256: 498009dae702bfabcad541ff37f468de2f601a2306641e974665b9c3f241be20}
+    c5_zero_postship_p0p1: {receipt: graduation_receipts/clean/c5-incidents.yaml, receipt_sha256: 7694895533f95511f60a185cfd7c4be0a03432016cc0beacf2778ada97fb7ddb}
+    c6_final_ready_clean_first_pass: {receipt: state_good_final_ready_with_audit.yaml, receipt_sha256: 5fdce6fab66efe1231322121252780de0cfca5e2f5bb9c3d38e059ec8fa98c08}
+    c7_full_review_pipeline: {receipt: graduation_receipts/clean/c7-review-index.yaml, receipt_sha256: a93658d2dcb2e0c1c3ee40d5c674dcb9f10a06de8c0567f7c2dfaa17e2786c02}
+```

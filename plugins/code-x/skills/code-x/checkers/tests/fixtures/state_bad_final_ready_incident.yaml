@@ -1,7 +1,7 @@
 # BAD: zero findings, stop_status NONE, BUT protocol_incident OPEN -> final-ready forbidden (P0, PROP-020)
 # stop_status stays NONE on purpose: isolates the NEW incident clause from the old stop_status!=NONE rule (GPT cross-review P1)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: FINAL_READY

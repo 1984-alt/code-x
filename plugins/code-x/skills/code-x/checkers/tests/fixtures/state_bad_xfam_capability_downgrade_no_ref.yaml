@@ -1,6 +1,6 @@
 # BAD: PROP-026 a capability DOWNGRADE (stage_3 -> stage_1) with no CEO decision ref (GPT #4).
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

@@ -1,7 +1,7 @@
 # BAD fixture: P1-02 — state with zero open findings but module_capsules_current absent
 # Expected: FIX-FIRST mentioning module_capsules_current (missing = NOT READY)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

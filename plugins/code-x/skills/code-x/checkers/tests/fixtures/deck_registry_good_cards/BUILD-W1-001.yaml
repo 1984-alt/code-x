@@ -1,0 +1,10 @@
+id: BUILD-W1-001
+mode: MODULE_BUILD
+actor: codex
+source_map:
+  locked_packet_hash: 0700ed8913e9444a22fe038b465dc03f174529e3e906c11a4741e3e9b679015a
+  source_sections:
+    - file: requirements-manifest.yaml
+      section: REQ-001
+      requirement_ids:
+        - REQ-001

@@ -1,0 +1,26 @@
+# BAD: ceo_accept_token does not embed the module's repo_sha prefix (E-A1) → MODULE-DEMO-TOKEN-NOT-BOUND-TO-SHA P0 (PROP-042 Part E).
+# repo_sha is 7d1408c9aa21 — the token must contain "7d1408" (first 6 chars). This token contains none of it.
+module_acceptance:
+  module_id: m_live
+  module_demo:
+    surface: web
+    generated_by: cx demo collect
+    repo_sha: 7d1408c9aa21
+    shown_screenshot_path: module_demo_shot.png
+    shown_screenshot_hash: b1ff9c8ea3a7
+    live_url: http://localhost:8000/home
+    ceo_accept_token: "ACCEPT-m_live-aabbcc"
+    ceo_turn_ref: module_demo_shot.png
+    ceo_verdict: accepted
+  live_slice_accept:
+    live_url: http://localhost:8000/home
+    ceo_drove: true
+    ceo_turn_ref: handoffs/2026-06-20-slice-home-accept.md
+    repo_sha: 7d1408c9aa21
+    ceo_accept_token: "ACCEPT-m_live-aabbcc"
+    viewport: 390x844
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_live-home-card.yaml#acceptance_criteria

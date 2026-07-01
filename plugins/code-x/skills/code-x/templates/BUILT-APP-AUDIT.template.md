@@ -1,6 +1,6 @@
 # BUILT-APP-AUDIT — AUDIT-SUMMARY — <project>
 
-> Read-only whole-app audit before final-ready (G8). See `BUILT-APP-AUDIT.md` for the full procedure.
+> Read-only whole-app self-audit before final xfam and final-ready (G8). See `BUILT-APP-AUDIT.md` for the full procedure.
 
 **Date:** <YYYY-MM-DD>
 **Branch / commit:** <branch> @ <sha12>

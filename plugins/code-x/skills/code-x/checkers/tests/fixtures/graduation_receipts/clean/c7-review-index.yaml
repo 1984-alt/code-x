@@ -1,0 +1,7 @@
+# c7_full_review_pipeline evidence: per-module module-quality replay inputs (reused good acceptance
+# + registry fixtures) + the CodeRabbit/build-turn receipt sidecar.
+modules:
+  - module_id: m_live
+    acceptance_receipt: module_acceptance_live_slice_good.yaml
+    registry: module_registry_good.yaml
+coderabbit_receipt: graduation_receipts/clean/coderabbit-receipt.yaml

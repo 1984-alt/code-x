@@ -1,6 +1,6 @@
 # BAD: PROP-026 xfam_capability not in the fixed ladder.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

@@ -1,7 +1,7 @@
 # BAD: built_app_audit.report_ref is an absolute path => P0 block (v1.12)
 # Mirrors acceptance_ref path-safety: absolute paths rejected.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

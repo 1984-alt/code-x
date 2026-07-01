@@ -1,4 +1,4 @@
-# cmd_close_turn: the turn-end gate (PROP-018 build-session rail).
+# cmd_close_turn: the turn-end gate (B-PROP-002 build-session rail).
 #
 #   cx check close-turn --state <CODE-X-STATE.yaml> --handoff <path> --repo-root <dir>
 #
@@ -50,7 +50,7 @@ def _close_turn_block(handoff_text: str) -> dict | None:
 
 
 def verify_lock_pointer(lock_block, state, repo_root, loc):
-    """PROP-034 Lever B — RECOMPUTE the frozen_packet_hash + open_cards from real files and verify
+    """BF-PROP-007 Lever B — RECOMPUTE the frozen_packet_hash + open_cards from real files and verify
     the handoff's COPIES match EXACTLY. The checker NEVER trusts the handoff copy; it recomputes the
     truth and compares. Catches the two forgeries: a self-declared hash (recompute, never trust) and
     a vacuous open_cards: [] (legal ONLY when the recomputed set is genuinely empty).
@@ -65,7 +65,7 @@ def verify_lock_pointer(lock_block, state, repo_root, loc):
         findings.append(("P1", loc,
             "close_turn.lock_pointer missing or not a mapping — a handoff must POINT AT the lock "
             "(frozen_packet_hash + open_cards + lock_restatement_assertion), copied not paraphrased "
-            "(PROP-034 Lever B)"))
+            "(BF-PROP-007 Lever B)"))
         return findings
 
     packet_dir_rel = str(state.get("packet_dir", "") or "").strip()
@@ -75,34 +75,34 @@ def verify_lock_pointer(lock_block, state, repo_root, loc):
     declared_hash = str(lock_block.get("frozen_packet_hash", "") or "").strip()
     if herr or real_hash is None:
         findings.append(("P1", loc,
-            f"cannot recompute the frozen packet hash to verify the handoff: {herr} (PROP-034 Lever B)"))
+            f"cannot recompute the frozen packet hash to verify the handoff: {herr} (BF-PROP-007 Lever B)"))
     elif not declared_hash:
         findings.append(("P1", loc,
             "close_turn.lock_pointer.frozen_packet_hash missing — copy the real packet hash verbatim "
-            "(PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
+            "(BF-PROP-007 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
     elif declared_hash != real_hash:
         findings.append(("P1", loc,
             f"close_turn.lock_pointer.frozen_packet_hash '{declared_hash}' != the RECOMPUTED packet "
             f"hash '{real_hash}' — a self-declared hash is never trusted; the next session cannot boot "
-            "on a drifted handoff (PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
+            "on a drifted handoff (BF-PROP-007 Lever B / LOCK-FIDELITY-HANDOFF-HASH-MISMATCH)"))
 
     # open_cards — recompute from frozen registry + state, never trust the handoff's copy.
     real_open, oerr = recompute_open_cards(repo_root, packet_dir_rel, state)
     declared_open = lock_block.get("open_cards")
     if oerr or real_open is None:
         findings.append(("P1", loc,
-            f"cannot recompute the open-card set to verify the handoff: {oerr} (PROP-034 Lever B)"))
+            f"cannot recompute the open-card set to verify the handoff: {oerr} (BF-PROP-007 Lever B)"))
     elif not isinstance(declared_open, list):
         findings.append(("P1", loc,
             "close_turn.lock_pointer.open_cards missing or not a list — copy the deck+state open-card "
-            "set (PROP-034 Lever B / LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH)"))
+            "set (BF-PROP-007 Lever B / LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH)"))
     else:
         declared_set = sorted(str(c) for c in declared_open)
         if declared_set != real_open:
             findings.append(("P1", loc,
                 f"close_turn.lock_pointer.open_cards {declared_set} != the RECOMPUTED open-card set "
                 f"{real_open} — the handoff copy is stale/vacuous; open_cards: [] is legal ONLY when "
-                "the recomputed set is genuinely empty (PROP-034 Lever B / "
+                "the recomputed set is genuinely empty (BF-PROP-007 Lever B / "
                 "LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH)"))
 
     # lock_restatement_assertion — a one-line machine assertion naming the verified hash.
@@ -111,16 +111,16 @@ def verify_lock_pointer(lock_block, state, repo_root, loc):
         findings.append(("P1", loc,
             "close_turn.lock_pointer.lock_restatement_assertion missing — a one-line "
             "'no requirement added/dropped since <hash>' assertion makes the lock, not the paraphrase, "
-            "what the next session re-loads (PROP-034 Lever B)"))
+            "what the next session re-loads (BF-PROP-007 Lever B)"))
     elif real_hash and real_hash not in assertion:
         findings.append(("P1", loc,
             "close_turn.lock_pointer.lock_restatement_assertion does not name the recomputed packet "
-            f"hash '{real_hash}' — the assertion must pin the exact frozen hash (PROP-034 Lever B)"))
+            f"hash '{real_hash}' — the assertion must pin the exact frozen hash (BF-PROP-007 Lever B)"))
     return findings
 
 
 def _check_lock_pointer(block, state, repo_root, loc, findings):
-    """Wrapper used at close-turn write time. PROP-034 Lever B applies to a build session that has a
+    """Wrapper used at close-turn write time. BF-PROP-007 Lever B applies to a build session that has a
     FROZEN packet (state.packet_dir set) — that is where the lock exists to point at. A turn with no
     packet_dir (planning / pre-freeze / a non-build handoff) has no lock to copy, so the sub-block is
     not required; but if the handoff DOES carry a lock_pointer it is still verified (no free pass)."""
@@ -132,7 +132,7 @@ def _check_lock_pointer(block, state, repo_root, loc, findings):
 
 
 def _check_fix_questions(block, repo_root, loc, findings):
-    """[PROP-035 Lever B] Anti-amnesia reconcile at turn close. A turn that left FIX-stage questions open
+    """[F-PROP-001 Lever B] Anti-amnesia reconcile at turn close. A turn that left FIX-stage questions open
     declares them in close_turn.fix_questions {log_ref, open_questions:[{id, log_row}]}; every open
     question must reconcile to a real row in the file-backed FIX-QUESTIONS-LOG. A declared open question
     whose log_row is absent (or no log_ref at all) is an off-the-books re-ask — the omission the
@@ -143,13 +143,13 @@ def _check_fix_questions(block, repo_root, loc, findings):
         return  # no open FIX-stage questions this turn
     if not isinstance(fq, dict):
         findings.append(("P1", loc,
-            "close_turn.fix_questions must be a mapping {log_ref, open_questions: [...]} (PROP-035 "
+            "close_turn.fix_questions must be a mapping {log_ref, open_questions: [...]} (F-PROP-001 "
             "Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
         return
     open_qs = fq.get("open_questions") or []
     if not isinstance(open_qs, list):
         findings.append(("P1", loc,
-            "close_turn.fix_questions.open_questions must be a list (PROP-035 Lever B / "
+            "close_turn.fix_questions.open_questions must be a list (F-PROP-001 Lever B / "
             "FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
         return
     if not open_qs:
@@ -158,7 +158,7 @@ def _check_fix_questions(block, repo_root, loc, findings):
     if not log_ref:
         findings.append(("P1", loc,
             "close_turn.fix_questions has open_questions but no log_ref — every FIX-stage question must "
-            "be file-backed in a FIX-QUESTIONS-LOG (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+            "be file-backed in a FIX-QUESTIONS-LOG (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
         return
     # Parse the log as a TYPED FIX-QUESTIONS-LOG via the SAME validator cx_card uses (built-code review #6:
     # a `row in log_text` substring match passes on any random mention — a typed row id is the reconcile key).
@@ -167,7 +167,7 @@ def _check_fix_questions(block, repo_root, loc, findings):
     if logerr is not None or log_ids is None:
         findings.append(("P1", loc,
             f"close_turn.fix_questions.log_ref '{log_ref}' {logerr or 'is not a typed FIX-QUESTIONS-LOG'} "
-            "— the FIX-QUESTIONS-LOG must exist and be typed to reconcile against (PROP-035 Lever B / "
+            "— the FIX-QUESTIONS-LOG must exist and be typed to reconcile against (F-PROP-001 Lever B / "
             "FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
         return
     for i, q in enumerate(open_qs):
@@ -178,13 +178,13 @@ def _check_fix_questions(block, repo_root, loc, findings):
         if not row:
             findings.append(("P1", loc,
                 f"close_turn.fix_questions.open_questions[{i}] has no log_row — name the FIX-QUESTIONS-LOG "
-                "row id it reconciles to (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+                "row id it reconciles to (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
             continue
         if row not in log_ids:
             findings.append(("P1", loc,
                 f"close_turn.fix_questions.open_questions[{i}] log_row '{row}' is not a typed row id in the "
                 f"FIX-QUESTIONS-LOG '{log_ref}' — an open question with no reconciled log row is an "
-                "off-the-books re-ask (PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+                "off-the-books re-ask (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
 
 
 def cmd_close_turn(args) -> int:
@@ -206,7 +206,7 @@ def cmd_close_turn(args) -> int:
     loc = handoff_path
 
     # GPT cross-review 2026-06-12: state mutated at turn close must not dodge the
-    # state-side PROP-020/021 clauses — re-run the targeted ones here.
+    # state-side BF-PROP-002 · BF-PROP-003 clauses — re-run the targeted ones here.
     from cx_state import _check_fix_cycles, _check_protocol_incident
     _check_fix_cycles(state, state_path, findings)
     _check_protocol_incident(state, state_path, findings)
@@ -295,10 +295,10 @@ def cmd_close_turn(args) -> int:
             "HEAD commit message has no Code-X-Provenance: trailer — commit the turn's "
             "work with provenance before closing"))
 
-    # --- PROP-034 Lever B: lock-pointing handoff sub-block ---
+    # --- BF-PROP-007 Lever B: lock-pointing handoff sub-block ---
     _check_lock_pointer(block, state, repo_root, loc, findings)
 
-    # --- PROP-035 Lever B: anti-amnesia FIX-QUESTIONS-LOG reconcile ---
+    # --- F-PROP-001 Lever B: anti-amnesia FIX-QUESTIONS-LOG reconcile ---
     _check_fix_questions(block, repo_root, loc, findings)
 
     # --- vault_sync enum (the 11.7h-zero-vault-syncs scar) ---

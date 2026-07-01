@@ -287,12 +287,12 @@ clauses:
     good:
       args: ["--module-id=m1", "--state", "tests/fixtures/state_module_accepted_good.yaml", "--acceptance", "tests/fixtures/module_acceptance_good.yaml"]
 
-  # PROP-028 — phantom-completion guard at the module-acceptance Andon wall (2026-06-19, pre-review)
+  # BF-PROP-006 — phantom-completion guard at the module-acceptance Andon wall (2026-06-19, pre-review)
   - id: PROP-028-NO-REPO-SHA
     check: module-acceptance
     kind: gate
-    clause: "a module-acceptance receipt missing repo_sha_before (and with no typed legacy_no_baseline carve-out) is rejected — the build-baseline binding needed to prove a real change shipped is absent (P1) [PROP-028]"
-    source: "PROP-028 §phantom-completion guard / repo_sha_before"
+    clause: "a module-acceptance receipt missing repo_sha_before (and with no typed legacy_no_baseline carve-out) is rejected — the build-baseline binding needed to prove a real change shipped is absent (P1) [BF-PROP-006]"
+    source: "BF-PROP-006 §phantom-completion guard / repo_sha_before"
     bad:
       args: ["--module-id=m1", "--state", "tests/fixtures/state_module_accepted_no_repo_sha.yaml", "--acceptance", "tests/fixtures/module_acceptance_bad_no_repo_sha.yaml"]
       expect_severity: P1
@@ -303,8 +303,8 @@ clauses:
   - id: PROP-028-MALFORMED-REPO-SHA
     check: module-acceptance
     kind: gate
-    clause: "a module-acceptance receipt whose repo_sha_before is malformed (not hex / <12 chars) is rejected — the build-baseline binding is unusable so the phantom-completion guard cannot run (P1) [PROP-028]"
-    source: "PROP-028 §phantom-completion guard / repo_sha_before"
+    clause: "a module-acceptance receipt whose repo_sha_before is malformed (not hex / <12 chars) is rejected — the build-baseline binding is unusable so the phantom-completion guard cannot run (P1) [BF-PROP-006]"
+    source: "BF-PROP-006 §phantom-completion guard / repo_sha_before"
     bad:
       args: ["--module-id=m1", "--state", "tests/fixtures/state_module_accepted_malformed_repo_sha.yaml", "--acceptance", "tests/fixtures/module_acceptance_bad_malformed_repo_sha.yaml"]
       expect_severity: P1
@@ -348,6 +348,18 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
 
+  - id: MODULE-QUALITY-SELF-REVIEW-REQUIRED
+    check: module-quality
+    kind: gate
+    clause: "module acceptance without a same-family self_review receipt is rejected (P1) — build-card intent is not enough; the module acceptance rail must prove the mandatory self-review ran before acceptance [PROP-042 / v1.21]"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project (v1.20) skip class"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_no_self_review.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "same-family self_review"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
   - id: REGRESSION-SMOKE-SKIPPED
     check: module-quality
     kind: gate
@@ -360,12 +372,109 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
 
-  # ── PROP-032 fold: Live Slice Delivery — the CEO must DRIVE the running build per page slice ──
+  # ── EVAL-040 fold (PBF-PROP-012-EVAL040): build_validation + anti_slop evidence-bound receipt legs ──
+  - id: MODULE-QUALITY-BUILD-VALIDATION-REQUIRED
+    check: module-quality
+    kind: gate
+    clause: "module acceptance without a build_validation leg (and not declared applicability: not_applicable) is rejected (P1) — the build must show machine-checkable proof it actually validated [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040 (PBF-PROP-012 Part C enforcement)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_no_build_validation.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "build_validation leg missing"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-BUILD-VALIDATION-MALFORMED
+    check: module-quality
+    kind: gate
+    clause: "build_validation applies-branch shape defects (bad status, empty ran, missing command coverage, non-scalar reviewer/builder) or na-branch missing na_reason/acceptance_artifact_type are rejected (P1) [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_build_validation_bad_status.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "not PASS/PASS_AFTER_FIX"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-BUILD-VALIDATION-CONTRADICTED
+    check: module-quality
+    kind: gate
+    clause: "a build_validation claims row claiming PASS but contradicted by its RE-READ log (nonzero exit with no nonzero_pass_semantics, a declared fail_marker in the log, an expect_contains marker absent, or an absolute/'..'-escaping/unresolvable log_path) is a fabricated PASS (P0) — mirror cx_evidence.py claim/log re-read [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040 (cx_evidence.py:78-99 reuse)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_build_validation_contradicted_exit.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P0
+      expect_contains: "fabricated PASS"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-BUILD-VALIDATION-NA-INVALID
+    check: module-quality
+    kind: gate
+    clause: "a money/login/data risk-flagged module (frozen registry) that declares build_validation applicability: not_applicable is rejected (P0) — a risk module HAS a build and cannot skip build_validation via the N/A escape (which is only for docs/config/protocol modules) [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040 xfam REWORK P0#1"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_build_validation_na_on_risk_module.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P0
+      expect_contains: "cannot skip build_validation via the N/A escape"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_build_validation_na_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m3"]
+
+  - id: MODULE-QUALITY-BUILD-VALIDATION-SELF-GRADED
+    check: module-quality
+    kind: gate
+    clause: "build_validation.reviewer == builder (both present) is rejected (P1) — the builder cannot grade its own same-wave build, mirror EVIDENCE-BASELINE-BUILDER-INVALID [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040 (cx_evidence.py:184-188 reuse)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_build_validation_self_graded.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "same-wave self-grading"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-ANTI-SLOP-REQUIRED
+    check: module-quality
+    kind: gate
+    clause: "module acceptance without an anti_slop leg is rejected (P1) — always-on, no N/A path (slop applies to any authored artifact) [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_no_anti_slop.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "anti_slop leg missing"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-ANTI-SLOP-MALFORMED
+    check: module-quality
+    kind: gate
+    clause: "anti_slop shape defects (bad status, role != slop_removal, family_relation != same_family, missing reviewer_family/builder_family, no evidence anchor) are rejected (P1) [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_anti_slop_wrong_role.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "not 'slop_removal'"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  - id: MODULE-QUALITY-ANTI-SLOP-SELF-GRADED
+    check: module-quality
+    kind: gate
+    clause: "anti_slop.reviewer == builder (both present) is rejected (P1) — same-wave self-review of the anti-slop pass [EVAL-040]"
+    source: "PBF-PROP-012-EVAL040"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_anti_slop_self_graded.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+      expect_severity: P1
+      expect_contains: "self-grading of the anti-slop pass"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_full_good.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
+
+  # ── B-PROP-008 fold: Live Slice Delivery — the CEO must DRIVE the running build per page slice ──
   - id: MODULE-QUALITY-LIVE-SLICE-NO-DRIVE
     check: module-quality
     kind: gate
-    clause: "a live_slice module (frozen registry) accepted with no live_slice_accept block rejected — a Mode A screenshot/shell or module batch is not proof the CEO DROVE the running build (P0) [PROP-032]"
-    source: "PROP-032 (Live Slice Delivery); covers the LAST slice (no next to gate)"
+    clause: "a live_slice module (frozen registry) accepted with no live_slice_accept block rejected — a Mode A screenshot/shell or module batch is not proof the CEO DROVE the running build (P0) [B-PROP-008]"
+    source: "B-PROP-008 (Live Slice Delivery); covers the LAST slice (no next to gate)"
     bad:
       args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_missing.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m_live"]
       expect_severity: P0
@@ -376,8 +485,8 @@ clauses:
   - id: MODULE-START-LIVE-SLICE-NO-DRIVE
     check: module-start
     kind: gate
-    clause: "the order wall reads live_slice from the FROZEN registry — a prior live_slice with no live_slice_accept block is NOT validly accepted, so the next slice cannot start (P0 — 'no next until the CEO drove it') [PROP-032]"
-    source: "PROP-032 (Live Slice Delivery); the core 'no accept, no next' P0"
+    clause: "the order wall reads live_slice from the FROZEN registry — a prior live_slice with no live_slice_accept block is NOT validly accepted, so the next slice cannot start (P0 — 'no next until the CEO drove it') [B-PROP-008]"
+    source: "B-PROP-008 (Live Slice Delivery); the core 'no accept, no next' P0"
     git_fixture: module_start_live_slice_blocks
     bad:
       args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -387,12 +496,12 @@ clauses:
       git_fixture: module_start_live_slice_ok
       args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
-  # ── PROP-036 fold: Verify-App Gate — a live_slice's runtime behavior is machine-verified before the CEO live-drive ──
+  # ── B-PROP-010 fold: Verify-App Gate — a live_slice's runtime behavior is machine-verified before the CEO live-drive ──
   - id: VERIFY-APP-MISSING
     check: verify-app
     kind: gate
-    clause: "a live_slice acceptance receipt with NO verify_app block is rejected — the verify-app agent must DRIVE the running build and check its acceptance criteria at runtime BEFORE the CEO live-drive; without it the accept is offered on behavior never machine-exercised (P0) [PROP-036]"
-    source: "PROP-036 (Verify-App Gate); precondition to the live_slice CEO live-drive accept"
+    clause: "a live_slice acceptance receipt with NO verify_app block is rejected — the verify-app agent must DRIVE the running build and check its acceptance criteria at runtime BEFORE the CEO live-drive; without it the accept is offered on behavior never machine-exercised (P0) [B-PROP-010]"
+    source: "B-PROP-010 (Verify-App Gate); precondition to the live_slice CEO live-drive accept"
     bad:
       args: ["--acceptance", "tests/fixtures/verify_app_missing.yaml"]
       expect_severity: P0
@@ -403,8 +512,8 @@ clauses:
   - id: VERIFY-APP-NOT-PASSED
     check: verify-app
     kind: gate
-    clause: "a verify_app block whose passed is not true is rejected — the verify-app agent drove the running build and its runtime acceptance-criteria check did NOT pass; the slice cannot be accepted and the live-drive is not offered (P1) [PROP-036]"
-    source: "PROP-036 (Verify-App Gate); honest behavior-fail"
+    clause: "a verify_app block whose passed is not true is rejected — the verify-app agent drove the running build and its runtime acceptance-criteria check did NOT pass; the slice cannot be accepted and the live-drive is not offered (P1) [B-PROP-010]"
+    source: "B-PROP-010 (Verify-App Gate); honest behavior-fail"
     bad:
       args: ["--acceptance", "tests/fixtures/verify_app_not_passed.yaml"]
       expect_severity: P1
@@ -415,8 +524,8 @@ clauses:
   - id: VERIFY-APP-UNBOUND-SHA
     check: verify-app
     kind: gate
-    clause: "a verify_app block whose repo_sha is not hex-shaped (>=12 hex chars) is rejected — the receipt fails to even RECORD which build was driven in a commit-shaped field (shape only; the checker does NOT verify it is HEAD/a real commit — honest scope, mirrors live_slice_accept.repo_sha) (P0) [PROP-036]"
-    source: "PROP-036 (Verify-App Gate); recorded-binding presence guard (NOT a freshness proof)"
+    clause: "a verify_app block whose repo_sha is not hex-shaped (>=12 hex chars) is rejected — the receipt fails to even RECORD which build was driven in a commit-shaped field (shape only; the checker does NOT verify it is HEAD/a real commit — honest scope, mirrors live_slice_accept.repo_sha) (P0) [B-PROP-010]"
+    source: "B-PROP-010 (Verify-App Gate); recorded-binding presence guard (NOT a freshness proof)"
     bad:
       args: ["--acceptance", "tests/fixtures/verify_app_unbound_sha.yaml"]
       expect_severity: P0
@@ -427,8 +536,8 @@ clauses:
   - id: VERIFY-APP-PASSED-NOT-BOOL
     check: verify-app
     kind: gate
-    clause: "a verify_app block whose passed is a \"true\"/\"yes\" STRING (not a real boolean true) is rejected — passed is a MACHINE verdict, not a human attestation like live_slice_accept.ceo_drove, so a quoted/coerced truthy value must fail closed (P1) [PROP-036 xfam]"
-    source: "PROP-036 xfam (GPT-5.5); closes the truthy-coercion class on the gate's core verdict"
+    clause: "a verify_app block whose passed is a \"true\"/\"yes\" STRING (not a real boolean true) is rejected — passed is a MACHINE verdict, not a human attestation like live_slice_accept.ceo_drove, so a quoted/coerced truthy value must fail closed (P1) [B-PROP-010 xfam]"
+    source: "B-PROP-010 xfam (GPT-5.5); closes the truthy-coercion class on the gate's core verdict"
     bad:
       args: ["--acceptance", "tests/fixtures/verify_app_passed_string.yaml"]
       expect_severity: P1
@@ -436,11 +545,157 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
 
+  # ── PBF-PROP-012 Part E: SEE-AND-TEST gate — module_demo block enforces the show-step (the real-project fix) ──
+  - id: MODULE-DEMO-MISSING
+    check: module-demo
+    kind: gate
+    clause: "a live_slice module accepted with NO module_demo block is rejected — the SEE-AND-TEST show-step was skipped; the demo block must record the surface, a machine-captured shown screenshot (hash-bound), and the CEO typed accept token before acceptance (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); fixes a real project's 'ceo_drove ticked without a demo' root cause"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_missing.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "NO typed module_demo block"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-SURFACE-INVALID
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose surface is not in {web, mobile} is rejected — the demo must declare which screen the build ran on (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); surface-enum guard"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_surface_bad.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "not in {web, mobile}"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-WEB-NO-URL
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block declaring surface: web with a blank/absent live_url is rejected — a web demo must record the running URL the CEO opened in Chrome (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); web surface evidence guard"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_web_no_url.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "live_url is missing/blank"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-MOBILE-WRONG-SIM
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block declaring surface: mobile with simulator != iphone-13-pro is rejected — the CEO-locked device constant must be used for all mobile demos (P0) [PBF-PROP-012 Part E E-A2]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); CEO-locked device constant (E-A2)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_mobile_wrong_sim.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "iphone-13-pro"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-SURFACE-MISMATCH
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block with surface: mobile + live_url present (wrong surface evidence) is rejected — the cross-field surface guard prevents declaring the wrong surface to dodge the simulator requirement (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); cross-field surface forgery guard"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_surface_mismatch.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "surface mismatch"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-RECEIPT-FORGED
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose shown_screenshot_hash does not match the real bytes of shown_screenshot_path is rejected — the anti-forgery anchor proves the screenshot bytes were not swapped or hand-edited (P0) [PBF-PROP-012 Part E / B-PROP-009 pattern]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); screenshot-bytes anti-forgery (B-PROP-009 pattern)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_forged_hash.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "shown_screenshot_hash"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-UNBOUND-SHA
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose repo_sha is not hex >=12 chars is rejected — the receipt does not record which build was demoed in a commit-shaped field (shape only; honest scope mirrors verify_app.repo_sha) (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); repo_sha hex-shape guard"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_unbound_sha.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "not a hex commit id"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-NO-CEO-TOKEN
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block with a blank ceo_accept_token is rejected — the CEO's distinct typed accept token must be recorded and non-blank (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); CEO-token binding"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_no_token.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "ceo_accept_token missing/blank"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-TOKEN-NOT-BOUND-TO-SHA
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose ceo_accept_token does not embed the repo_sha prefix (first 6 hex chars) is rejected — the token must be unique per slice so it cannot be reused across builds (E-A1 P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E E-A1 (token embeds repo_sha prefix — unique per slice)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_token_no_sha.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "repo_sha prefix"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-CEO-TURN-UNRESOLVED
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose ceo_turn_ref does not resolve to an existing in-repo file is rejected — the CEO turn artifact (handoff/transcript carrying the typed accept) must exist; without it the accept token cannot be traced to a real CEO message (P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); ceo_turn_ref path-resolution guard"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_turn_unresolved.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "does not exist"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-NOT-ACCEPTED
+    check: module-demo
+    kind: gate
+    clause: "a module_demo block whose ceo_verdict is 'needs_fix' (not 'accepted') is rejected — the CEO drove the demo and requested fixes; the module is NOT accepted and the next slice is blocked until a fresh demo shows 'accepted' (E-A3 P0) [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E E-A3 (ceo_verdict must be 'accepted' to accept the module)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_not_accepted.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P0
+      expect_contains: "needs_fix"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: STATE-MODULE-DEMO-MODE-MISSING
+    check: state
+    kind: gate
+    clause: "build-mode session without session_start.module_demo_mode (demo_every_user_facing_module: yes, or typed no_user_facing_modules waiver + ceo_decision_ref) rejected P2 [PBF-PROP-012 Part E]"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); session-start ack that the orchestrator will demo every user-facing module (mirrors orchestration-mode-ack)"
+    git_fixture: no_module_demo_mode
+    bad:
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+      expect_severity: P2
+    good:
+      git_fixture: ancestor_ok
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+
   - id: MODULE-QUALITY-NONMAPPING-BLOCK
     check: module-quality
     kind: gate
-    clause: "a module-quality acceptance receipt whose module_acceptance block is a list/scalar (not a mapping) fails closed — a non-mapping block + top-level fields must NOT fall back to the bare receipt and bypass the live_slice/verify_app precondition on the last-slice path (P1) [PROP-036 xfam]"
-    source: "PROP-036 xfam (GPT-5.5); mirrors the cx_module_acceptance R12 non-mapping fail-closed onto the module-quality path"
+    clause: "a module-quality acceptance receipt whose module_acceptance block is a list/scalar (not a mapping) fails closed — a non-mapping block + top-level fields must NOT fall back to the bare receipt and bypass the live_slice/verify_app precondition on the last-slice path (P1) [B-PROP-010 xfam]"
+    source: "B-PROP-010 xfam (GPT-5.5); mirrors the cx_module_acceptance R12 non-mapping fail-closed onto the module-quality path"
     bad:
       args: ["--acceptance", "tests/fixtures/module_quality_nonmapping_block.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
       expect_severity: P1
@@ -451,8 +706,8 @@ clauses:
   - id: VERIFY-APP-REF-SYMLINK-ESCAPE
     check: build-turn
     kind: gate
-    clause: "build-turn rejects a card.verify_app_ref that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo verify_app receipt (path-safety, mirrors the acceptance_ref guard) (P1) [PROP-036 xfam]"
-    source: "PROP-036 xfam (GPT-5.5); build-turn verify_app_ref path-safety"
+    clause: "build-turn rejects a card.verify_app_ref that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo verify_app receipt (path-safety, mirrors the acceptance_ref guard) (P1) [B-PROP-010 xfam]"
+    source: "B-PROP-010 xfam (GPT-5.5); build-turn verify_app_ref path-safety"
     git_fixture: build_turn_verify_app_symlink
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -462,42 +717,52 @@ clauses:
       git_fixture: build_turn_verify_app_rail_ok
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
-  # ── PROP-037: build-turn-WIDE path-safety — the PROP-036 verify_app_ref symlink/resolved-escape guard,
+  # ── B-PROP-011: build-turn-WIDE path-safety — the B-PROP-010 verify_app_ref symlink/resolved-escape guard,
   #    factored into the shared cx_common.safe_repo_ref helper and applied to EVERY build-turn root/ref
-  #    read. The safe-ref (non-symlink, in-repo) pass path is field-agnostic and proven by the verify-app
-  #    good fixture above (build_turn_verify_app_rail_ok), so these siblings carry the bad bite only. ──
+  #    read. B-PROP-012 item 1 adds per-field good git_fixtures for each sibling so a future regression in
+  #    a caller-specific post-guard path is caught locally (today only proven field-agnostically by
+  #    build_turn_verify_app_rail_ok). ──
   - id: DEP-SCAN-REF-SYMLINK-ESCAPE
     check: build-turn
     kind: gate
-    clause: "build-turn rejects a state.dependency_scan_receipt_ref that is a symlink / resolves OUTSIDE the repo — the rail must not scan arbitrary external bytes as an in-repo dependency receipt (shared path-safety, mirrors the acceptance_ref guard) (P1) [PROP-037]"
-    source: "PROP-037 build-turn-wide path-safety (PROP-036 xfam residual)"
+    clause: "build-turn rejects a state.dependency_scan_receipt_ref that is a symlink / resolves OUTSIDE the repo — the rail must not scan arbitrary external bytes as an in-repo dependency receipt (shared path-safety, mirrors the acceptance_ref guard) (P1) [B-PROP-011]"
+    source: "B-PROP-011 build-turn-wide path-safety (B-PROP-010 xfam residual)"
     git_fixture: build_turn_dep_scan_symlink
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
       expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:                          # B-PROP-012 item 1: per-field good fixture (real in-repo dep-scan ref, passes whole build-turn)
+      git_fixture: build_turn_dep_scan_ref_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
   - id: RENDER-BUNDLE-REF-SYMLINK-ESCAPE
     check: build-turn
     kind: gate
-    clause: "build-turn rejects a card.render_bundle that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo render bundle (shared path-safety, mirrors the acceptance_ref guard) (P1) [PROP-037]"
-    source: "PROP-037 build-turn-wide path-safety (PROP-036 xfam residual)"
+    clause: "build-turn rejects a card.render_bundle that is a symlink / resolves OUTSIDE the repo — the rail must not read arbitrary external bytes as an in-repo render bundle (shared path-safety, mirrors the acceptance_ref guard) (P1) [B-PROP-011]"
+    source: "B-PROP-011 build-turn-wide path-safety (B-PROP-010 xfam residual)"
     git_fixture: build_turn_render_bundle_symlink
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
       expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:                          # B-PROP-012 item 1: per-field good fixture (real in-repo render_bundle ref, passes whole build-turn)
+      git_fixture: build_turn_render_bundle_ref_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
   - id: CODERABBIT-RECEIPT-REF-SYMLINK-ESCAPE
     check: build-turn
     kind: gate
-    clause: "build-turn rejects a card.coderabbit.receipt that is a symlink / resolves OUTSIDE the repo — this read previously carried NO path-safety at all (the worst build-turn root/ref read), so a symlinked receipt let the rail read arbitrary external bytes as a CodeRabbit review (shared path-safety) (P1) [PROP-037]"
-    source: "PROP-037 build-turn-wide path-safety (previously-unguarded coderabbit receipt read)"
+    clause: "build-turn rejects a card.coderabbit.receipt that is a symlink / resolves OUTSIDE the repo — this read previously carried NO path-safety at all (the worst build-turn root/ref read), so a symlinked receipt let the rail read arbitrary external bytes as a CodeRabbit review (shared path-safety) (P1) [B-PROP-011]"
+    source: "B-PROP-011 build-turn-wide path-safety (previously-unguarded coderabbit receipt read)"
     git_fixture: build_turn_coderabbit_receipt_symlink
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
       expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:                          # B-PROP-012 item 1: per-field good fixture (real in-repo coderabbit receipt, passes whole build-turn)
+      git_fixture: build_turn_coderabbit_receipt_ref_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
   # ── V1.10 fix-fold (GPT built-code cross-review) — the bypass cases the first fold missed ──
   - id: MODULE-START-PRIOR-NO-RECEIPT
@@ -604,6 +869,21 @@ clauses:
     good:
       args: ["tests/fixtures/card_module2_start.yaml", "--packet-dir", "tests/fixtures/module_start_good_packet", "--registry", "tests/fixtures/module_start_good_packet/MODULE-REGISTRY.yaml", "--state", "tests/fixtures/state_modules_m1_accepted.yaml", "--repo-root", "tests/fixtures"]
 
+  # ── B-PROP-012 item 2: module_registry_ref symlink-alias hygiene ──
+  - id: MODULE-START-REGISTRY-ALIAS-SYMLINK
+    check: module-start
+    kind: gate
+    clause: "--registry that is a SYMLINK-ALIAS to the canonical in-packet registry is rejected — module_registry_ref must be a real in-repo path for consistency with the safe_repo_ref helper pattern; no external-byte hole exists but a symlink ref is rejected for hygiene (P1) [B-PROP-012]"
+    source: "B-PROP-012 item 2 (build-turn path-safety hygiene; GPT-5.5 APPROACH/IMPROVEMENT, thread 019ef97e)"
+    git_fixture: module_start_registry_alias_symlink
+    bad:
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/reg-alias.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "symlink"
+    good:
+      git_fixture: module_start_symlink_ok
+      args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
   - id: MODULE-START-MALFORMED-REGISTRY-ROW
     check: module-start
     kind: gate
@@ -652,6 +932,18 @@ clauses:
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
+  - id: CARD-CODERABBIT-REQUIRED-FOR-MODULE-BUILD
+    check: card
+    kind: gate
+    clause: "a MODULE_BUILD / MODE_A_UI code-diff card must declare coderabbit.required: yes; planning cannot omit the CodeRabbit receipt rail [PROP-042 / v1.21]"
+    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    bad:
+      args: ["tests/fixtures/card_bad_missing_coderabbit.yaml"]
+      expect_severity: P1
+      expect_contains: "CodeRabbit"
+    good:
+      args: ["tests/fixtures/card_good.yaml"]
+
   - id: SELF-REVIEW-LABEL-UNBACKED
     check: card
     kind: gate
@@ -688,7 +980,7 @@ clauses:
       args: ["tests/fixtures/card_good.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # check: card — BUILD-ENGINE-PROFILES enforcement (PROP-013)
+  # check: card — BUILD-ENGINE-PROFILES enforcement (PBF-PROP-008)
   # Runner pins CX_PROFILES=tests/fixtures/profiles_test.yaml so fixture
   # hashes survive live-canon seat tuning. Production default = live canon.
   # ──────────────────────────────────────────────────────────────
@@ -1041,6 +1333,18 @@ clauses:
     good:
       args: ["tests/fixtures/state_good_final_ready.yaml"]
 
+  - id: STATE-FINAL-XFAM-REQUIRES-BUILT-APP-AUDIT
+    check: state
+    kind: gate
+    clause: "a BUILD_FACTORY state with accepted modules may not route directly to final xfam until the Built-App Audit / whole-app self-audit milestone is run and dispositioned [PROP-042 / v1.21]"
+    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    bad:
+      args: ["tests/fixtures/state_bad_final_xfam_without_built_app_audit.yaml"]
+      expect_severity: P1
+      expect_contains: "Built-App Audit"
+    good:
+      args: ["tests/fixtures/state_good_final_xfam_with_built_app_audit.yaml"]
+
   - id: FINAL-READY-AUDIT-REF-NONEXISTENT
     check: final-ready
     kind: gate
@@ -1123,6 +1427,42 @@ clauses:
       expect_severity: P1
     good:
       args: []
+
+  - id: CONSISTENCY-SLASH-SHORTHAND-PROP
+    check: consistency
+    kind: gate
+    clause: "a PROP-id token immediately followed by /<digits> in rule-bearing canon is a slash-shorthand list — silently mis-reads as wrong PROPs; use middot (·) as separator (P1) [PROP-044/PBF-PROP-014]"
+    source: "KAIZEN.md No-ambiguity rule / v1.21 self-review fold"
+    bad:
+      args: ["--registry", "tests/fixtures/consistency_registry_slash_bad.yaml"]
+      expect_severity: P1
+      expect_contains: "CONSISTENCY-SLASH-SHORTHAND-PROP"
+    good:
+      args: ["--registry", "tests/fixtures/consistency_registry_slash_good.yaml"]
+
+  - id: CONSISTENCY-SLASH-SHORTHAND-PROP-QUEUE
+    check: consistency
+    kind: gate
+    clause: "CONSISTENCY-SLASH-SHORTHAND-PROP bites on slash-shorthand ids residing in a queue-shaped (PIQ) file — proves widened scan_scope.rule_bearing covering MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md catches violations there (P1)"
+    source: "v1.21 slash-shorthand sweep completion / TASK-2 scope-widening"
+    bad:
+      args: ["--registry", "tests/fixtures/consistency_registry_slash_bad_queue.yaml"]
+      expect_severity: P1
+      expect_contains: "CONSISTENCY-SLASH-SHORTHAND-PROP"
+    good:
+      args: ["--registry", "tests/fixtures/consistency_registry_slash_good_queue.yaml"]
+
+  - id: CONSISTENCY-STALE-BARE-PROP
+    check: consistency
+    kind: gate
+    clause: "a bare PROP-NNN (old-format, no stage prefix) in rule-bearing canon is a stale pre-migration id — use the stage-prefixed id; exempt: PROP-009, PROP-010 (retired), PROP-028-* (frozen clause-ids) (P1)"
+    source: "KAIZEN.md No-ambiguity rule / v1.21 self-review fold"
+    bad:
+      args: ["--registry", "tests/fixtures/consistency_registry_stale_prop_bad.yaml"]
+      expect_severity: P1
+      expect_contains: "CONSISTENCY-STALE-BARE-PROP"
+    good:
+      args: ["--registry", "tests/fixtures/consistency_registry_slash_good.yaml"]
 
   # ──────────────────────────────────────────────────────────────
   # check: deck
@@ -1223,7 +1563,7 @@ clauses:
       expect_warn_text: "WARN:"
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-014 fold (2026-06-10): packet-contents floor + riders
+  # P-PROP-001 fold (2026-06-10): packet-contents floor + riders
   # ──────────────────────────────────────────────────────────────
 
   - id: CARD-PROFILES-ENV-TEST-ONLY
@@ -1251,6 +1591,19 @@ clauses:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
 
+  - id: STATE-ORCHESTRATION-MODE-MISSING
+    check: state
+    kind: gate
+    clause: "build-mode session without session_start.orchestration_mode (dispatch_subagents+lead_role, or typed inline_waiver+ceo_decision_ref) rejected P2"
+    source: "PBF-PROP-012 Part B (R-ORCH) — orchestrator dispatches fresh subagents per task; never builds inline"
+    git_fixture: no_orchestration_mode
+    bad:
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+      expect_severity: P2
+    good:
+      git_fixture: ancestor_ok
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+
   - id: DECK-CEO-REF-RESOLVES
     check: deck
     kind: gate
@@ -1261,6 +1614,30 @@ clauses:
       expect_severity: P1
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
+
+  - id: DECK-MODULE-REGISTRY-CARD-IDS-MATCH
+    check: deck
+    kind: gate
+    clause: "a MODULE-REGISTRY.yaml naming a card_id absent from the compiled deck rejected — every card_id in the registry must match a compiled card (P0) [PB-PROP-002]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/deck_registry_bad_cards", "tests/fixtures/good_registry_packet"]
+      expect_severity: P0
+      expect_contains: "DECK-MODULE-REGISTRY-CARD-IDS-MATCH"
+    good:
+      args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet"]
+
+  - id: DECK-MODULE-REGISTRY-CARD-IDS-BLANK
+    check: deck
+    kind: gate
+    clause: "a MODULE-REGISTRY.yaml whose card_ids contains a blank/empty entry rejected — a blank entry was previously skipped, binding the module to NO real card past the deck floor (P0) [PB-PROP-002, GPT xfam]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet_blank_card"]
+      expect_severity: P0
+      expect_contains: "blank/empty card_ids entry"
+    good:
+      args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet"]
 
   - id: PACKET-COVERAGE-MAP-REQUIRED
     check: packet
@@ -1340,7 +1717,7 @@ clauses:
       args: ["tests/fixtures/packet_good"]
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-023 fold: WRITING-stage front-end hardening (clarify-before-freeze + testable
+  # P-PROP-003 fold: WRITING-stage front-end hardening (clarify-before-freeze + testable
   # acceptance criterion). Part of v1.13. Canon: PACKET-CONTENTS.md Piece 2.
   # ──────────────────────────────────────────────────────────────
 
@@ -1348,7 +1725,7 @@ clauses:
     check: packet
     kind: gate
     clause: "packet without clarification-sweep.md rejected — no markers is not proof the sweep ran"
-    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a"
+    source: "PACKET-CONTENTS.md Piece 2 / P-PROP-003a"
     bad:
       args: ["tests/fixtures/packet_bad_clarify_no_sweep"]
       expect_severity: P1
@@ -1360,7 +1737,7 @@ clauses:
     check: packet
     kind: gate
     clause: "an unresolved [NEEDS-CLARIFICATION: …] marker in a content doc blocks freeze"
-    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a"
+    source: "PACKET-CONTENTS.md Piece 2 / P-PROP-003a"
     bad:
       args: ["tests/fixtures/packet_bad_clarify_open_marker"]
       expect_severity: P1
@@ -1372,7 +1749,7 @@ clauses:
     check: packet
     kind: gate
     clause: "a clarification whose ceo_decision_ref does not RESOLVE to a real ledger row rejected — a fake/unresolving ref (CEO-D-99999) is the inline free-text self-exemption hatch (built-code review P1: presence-only check was not ledger-bound)"
-    source: "PACKET-CONTENTS.md Piece 2 / PROP-023a (synthesis ADAPT ii + built-code review)"
+    source: "PACKET-CONTENTS.md Piece 2 / P-PROP-003a (synthesis ADAPT ii + built-code review)"
     bad:
       args: ["tests/fixtures/packet_bad_clarify_inline_dismissal"]
       expect_severity: P1
@@ -1384,7 +1761,7 @@ clauses:
     check: packet
     kind: gate
     clause: "BUILDING requirement without a structured acceptance_criterion {pass_condition, evidence_type, verification_ref} rejected — present+non-placeholder, cold reader judges testability"
-    source: "PACKET-CONTENTS.md Piece 2 / PROP-023b (synthesis ADAPT, fold-blocking P1: not an English-quality gate)"
+    source: "PACKET-CONTENTS.md Piece 2 / P-PROP-003b (synthesis ADAPT, fold-blocking P1: not an English-quality gate)"
     bad:
       args: ["tests/fixtures/packet_bad_acceptance_missing"]
       expect_severity: P1
@@ -1396,7 +1773,7 @@ clauses:
     check: packet
     kind: gate
     clause: "BUILDING acceptance_criterion field that is a placeholder OR a non-string (bool/list/dict via str-coercion) rejected — present != filled-in (built-code review P1: `pass_condition: true` must not pass)"
-    source: "PACKET-CONTENTS.md Piece 2 / PROP-023b (built-code review)"
+    source: "PACKET-CONTENTS.md Piece 2 / P-PROP-003b (built-code review)"
     bad:
       args: ["tests/fixtures/packet_bad_acceptance_nonstring"]
       expect_severity: P1
@@ -1405,14 +1782,14 @@ clauses:
       args: ["tests/fixtures/packet_good"]
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-015 fold (2026-06-10): review-dispatch three-leg ask — [RULE:review-three-leg-ask]
+  # PBF-PROP-009 fold (2026-06-10): review-dispatch three-leg ask — [RULE:review-three-leg-ask]
   # ──────────────────────────────────────────────────────────────
 
   - id: CARD-REVIEW-DISPATCH-MISSING-APPROACH
     check: card
     kind: gate
-    clause: "review-dispatch card missing three_leg_ask.approach_improvement rejected — the dropped leg that triggered PROP-015"
-    source: "GATES.md Review-methodology (PROP-015) / GPT minimal-fix 4"
+    clause: "review-dispatch card missing three_leg_ask.approach_improvement rejected — the dropped leg that triggered PBF-PROP-009"
+    source: "GATES.md Review-methodology (PBF-PROP-009) / GPT minimal-fix 4"
     bad:
       args: ["tests/fixtures/card_review_bad_missing_approach.yaml"]
       expect_severity: P1
@@ -1423,7 +1800,7 @@ clauses:
     check: card
     kind: gate
     clause: "review-dispatch card with approach_improvement: 'asked' (placeholder) rejected — green-but-not-enforcing"
-    source: "GATES.md Review-methodology (PROP-015) / GPT P1-03"
+    source: "GATES.md Review-methodology (PBF-PROP-009) / GPT P1-03"
     bad:
       args: ["tests/fixtures/card_review_bad_placeholder.yaml"]
       expect_severity: P1
@@ -1434,7 +1811,7 @@ clauses:
     check: card
     kind: gate
     clause: "review-dispatch card whose legs lack canonical labels AND has no prompt_ref rejected (relaxed rule: labels OR prompt_ref)"
-    source: "GATES.md Review-methodology (PROP-015) / GPT P1-03, CEO relaxed 2026-06-10"
+    source: "GATES.md Review-methodology (PBF-PROP-009) / GPT P1-03, CEO relaxed 2026-06-10"
     bad:
       args: ["tests/fixtures/card_review_bad_no_labels_no_ref.yaml"]
       expect_severity: P1
@@ -1445,7 +1822,7 @@ clauses:
     check: card
     kind: gate
     clause: "mode REVIEW card without a review_dispatch block rejected — omitting the block is not an exemption"
-    source: "GATES.md Review-methodology (PROP-015) / GPT P1-02 trigger refinement"
+    source: "GATES.md Review-methodology (PBF-PROP-009) / GPT P1-02 trigger refinement"
     bad:
       args: ["tests/fixtures/card_review_bad_no_block.yaml"]
       expect_severity: P1
@@ -1456,7 +1833,7 @@ clauses:
     check: card
     kind: gate
     clause: "ordinary build card with no review_dispatch block passes — the three-leg ask never over-fires on non-review cards"
-    source: "GATES.md Review-methodology (PROP-015) / GPT P1-02"
+    source: "GATES.md Review-methodology (PBF-PROP-009) / GPT P1-02"
     bad:
       args: ["tests/fixtures/card_review_bad_missing_approach.yaml"]
       expect_severity: P1
@@ -1464,14 +1841,14 @@ clauses:
       args: ["tests/fixtures/card_good.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-016/017 fold (2026-06-11): style-select lock + lessons preload
+  # P-PROP-002 · PBF-PROP-010 fold (2026-06-11): style-select lock + lessons preload
   # ──────────────────────────────────────────────────────────────
 
   - id: LOCKED-STYLE-DIRECTION-REQUIRED
     check: packet
     kind: gate
     clause: "user-facing packet (category 14 DONE) whose taste lock has no complete locked_style_direction rejected — Style-Select outcome must be recorded before the G7 path"
-    source: "GATES.md G6 Style-Select (PROP-016) / templates/PRODUCT-TASTE-LOCK.template.md §6"
+    source: "GATES.md G6 Style-Select (P-PROP-002) / templates/PRODUCT-TASTE-LOCK.template.md §6"
     bad:
       args: ["tests/fixtures/packet_bad_style_direction_missing"]
       expect_severity: P1
@@ -1479,18 +1856,18 @@ clauses:
       args: ["tests/fixtures/packet_good_style_locked"]
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-031 fold (2026-06-20): external-visual-reference capture + lock
+  # P-PROP-004 fold (2026-06-20): external-visual-reference capture + lock
   # ──────────────────────────────────────────────────────────────
 
   - id: PACKET-PROP031-PROVENANCE-REQUIRED
     check: packet
     kind: gate
     clause: "user-facing packet (category 14 DONE) with a screen lacking a valid visual_provenance rejected — 'like MM' can never be a silent prose aside"
-    source: "GATES.md G6 / PACKET-CONTENTS.md cat-14 / PROP-031"
+    source: "GATES.md G6 / PACKET-CONTENTS.md cat-14 / P-PROP-004"
     bad:
       args: ["tests/fixtures/packet_bad_prop031_no_provenance"]
       expect_severity: P1
-      expect_contains: "look-source unstated (PROP-031)"
+      expect_contains: "look-source unstated (P-PROP-004)"
     good:
       args: ["tests/fixtures/packet_prop031_external_good"]
 
@@ -1498,11 +1875,11 @@ clauses:
     check: packet
     kind: gate
     clause: "external_reference screen with no captured/pinned reference manifest rejected — a chat 'confirmed the UX' is not a capture"
-    source: "PACKET-CONTENTS.md cat-14 / PROP-031"
+    source: "PACKET-CONTENTS.md cat-14 / P-PROP-004"
     bad:
       args: ["tests/fixtures/packet_bad_prop031_uncaptured"]
       expect_severity: P1
-      expect_contains: "the captured reference must be pinned inside the packet (PROP-031)"
+      expect_contains: "the captured reference must be pinned inside the packet (P-PROP-004)"
     good:
       args: ["tests/fixtures/packet_prop031_external_good"]
 
@@ -1510,7 +1887,7 @@ clauses:
     check: packet
     kind: gate
     clause: "captured reference whose file_hash no longer matches the pinned bytes rejected — the capture changed since freeze"
-    source: "PACKET-CONTENTS.md cat-14 / PROP-031"
+    source: "PACKET-CONTENTS.md cat-14 / P-PROP-004"
     bad:
       args: ["tests/fixtures/packet_bad_prop031_capture_hash"]
       expect_severity: P1
@@ -1518,14 +1895,14 @@ clauses:
     good:
       args: ["tests/fixtures/packet_prop031_external_good"]
 
-  # (PROP-031 advisory fidelity-language WARN is non-blocking — covered by a unit
+  # (P-PROP-004 advisory fidelity-language WARN is non-blocking — covered by a unit
   #  test in test_cx.py, not the contract harness, which proves GATES bite.)
 
   - id: STATE-LESSONS-PRELOAD-ACK
     check: state
     kind: gate
     clause: "planning-stage session without session_start.lessons_preload PASS (file+hash) rejected P2"
-    source: "GATES.md Review-lessons loop (PROP-017) / templates/STATE.template.yaml"
+    source: "GATES.md Review-lessons loop (PBF-PROP-010) / templates/STATE.template.yaml"
     git_fixture: planning_no_lessons_ack
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1535,14 +1912,14 @@ clauses:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
 
   # ──────────────────────────────────────────────────────────────
-  # PROP-005/012 fold (2026-06-11): scoped sweep — shrunk scope must still BITE
+  # PBF-PROP-004 · PBF-PROP-007 fold (2026-06-11): scoped sweep — shrunk scope must still BITE
   # ──────────────────────────────────────────────────────────────
 
   - id: CONSISTENCY-SCOPED-SWEEP-STRICT-BITES
     check: consistency
     kind: gate
     clause: "in-scope unregistered rule copy (KERNEL in scan_scope, not in appears_in, no pointer) FAILS under --strict — scope shrink must never un-bite the sweep"
-    source: "CX-CHECK-SPEC.md consistency / PROP-005+012 fold"
+    source: "CX-CHECK-SPEC.md consistency / PBF-PROP-004+012 fold"
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_scoped.yaml", "--strict"]
       expect_severity: P1
@@ -1550,7 +1927,7 @@ clauses:
       args: ["--registry", "tests/fixtures/consistency_registry_scoped.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # check: state — PROP-018 boot-ack + PROP-020 typed deviations
+  # check: state — B-PROP-002 boot-ack + BF-PROP-002 typed deviations
   # (v1.08 remainder build, 2026-06-12)
   # ──────────────────────────────────────────────────────────────
 
@@ -1558,7 +1935,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD-mode session-start without session_start.protocol_boot_ack (machine-generated by cx check boot) rejected"
-    source: GATES.md Build-session rails / PROP-018
+    source: GATES.md Build-session rails / B-PROP-002
     git_fixture: no_boot_ack
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1571,7 +1948,7 @@ clauses:
     check: state
     kind: gate
     clause: "boot receipt tampered/changed after acknowledgment rejected — the model never authors hashes"
-    source: GATES.md Build-session rails / PROP-018 (GPT P1-018-01)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT P1-018-01)
     git_fixture: boot_ack_stale
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1584,7 +1961,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD-mode session-start without a typed review_boundary block rejected — reviewer taxonomy/timing is state, not prose"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     git_fixture: no_review_boundary
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1597,18 +1974,54 @@ clauses:
     check: state
     kind: gate
     clause: "review_boundary fields must be the required enums — partial prose rejected"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_enum.yaml"]
       expect_severity: P1
     good:
       args: ["tests/fixtures/state_good_review_boundary.yaml"]
 
+  - id: STATE-CODERABBIT-BUILD-BOUNDARY-YES
+    check: state
+    kind: gate
+    clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state must declare CodeRabbit before self-review as yes; not_applicable/no is a planning-stage skip [PROP-042 / v1.21]"
+    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    bad:
+      args: ["tests/fixtures/state_bad_review_boundary_coderabbit_na.yaml"]
+      expect_severity: P1
+      expect_contains: "CodeRabbit"
+    good:
+      args: ["tests/fixtures/state_good_review_boundary.yaml"]
+
+  - id: STATE-SELF-REVIEW-MODULE-BOUNDARY
+    check: state
+    kind: gate
+    clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state with self_review_boundary: final is rejected — module self-review is mandatory at the module acceptance gate; final Built-App Audit is additional, not a replacement [PROP-042 / v1.21]"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project (v1.20) skip class"
+    bad:
+      args: ["tests/fixtures/state_bad_review_boundary_self_final.yaml"]
+      expect_severity: P1
+      expect_contains: "self_review_boundary"
+    good:
+      args: ["tests/fixtures/state_good_review_boundary.yaml"]
+
+  - id: STATE-CODEX-APP-XFAM-FINAL-ONLY
+    check: state
+    kind: gate
+    clause: "a CODEX_APP build state declaring module/foundation_checkpoint xfam is rejected — Codex-built projects route opposite-family review to the whole-app final pass after Built-App Audit; Claude Code may still use per-module xfam after self-review [PROP-042 / v1.21]"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); CEO clarification 2026-06-29"
+    bad:
+      args: ["tests/fixtures/state_bad_codex_module_xfam_boundary.yaml"]
+      expect_severity: P1
+      expect_contains: "whole-app"
+    good:
+      args: ["tests/fixtures/state_good_final_xfam_with_built_app_audit.yaml"]
+
   - id: STATE-CEO-DEFERRED-NEEDS-REF
     check: state
     kind: gate
     clause: "cross_family_boundary ceo_deferred REQUIRES ceo_decision_ref + deferred_review_blocks"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     bad:
       args: ["tests/fixtures/state_bad_ceo_deferred_no_ref.yaml"]
       expect_severity: P1
@@ -1643,7 +2056,7 @@ clauses:
     check: state
     kind: gate
     clause: "protocol_deviations rows must be fully typed (id/ceo_authorized/ceo_decision_ref/canonical_rule/temporary_rule/blocks-enum/review_debt_items)"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     bad:
       args: ["tests/fixtures/state_bad_deviation_untyped.yaml"]
       expect_severity: P1
@@ -1654,7 +2067,7 @@ clauses:
     check: state
     kind: gate
     clause: "stop_status PROTOCOL_INCIDENT without an incident row recording cause + repair rejected"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     bad:
       args: ["tests/fixtures/state_bad_incident_no_cause_repair.yaml"]
       expect_severity: P1
@@ -1662,14 +2075,14 @@ clauses:
       args: ["tests/fixtures/state_good_incident_open.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # check: card — PROP-019 UI-contract carry-forward + PROP-020 incident gate
+  # check: card — B-PROP-003 UI-contract carry-forward + BF-PROP-002 incident gate
   # ──────────────────────────────────────────────────────────────
 
   - id: CARD-UI-CONTRACT-REQUIRED
     check: card
     kind: gate
     clause: "card touching templates/static/HTML without ui_contract rejected — never infer the visual contract"
-    source: GATES.md G3 / PROP-019 (Sample W4 scar)
+    source: GATES.md G3 / B-PROP-003 (Sample W4 scar)
     bad:
       args: ["tests/fixtures/card_bad_ui_no_contract.yaml"]
       expect_severity: P1
@@ -1680,7 +2093,7 @@ clauses:
     check: card
     kind: gate
     clause: "ui_contract locked artifacts (taste lock, golden master) must be IN read.required, not just named"
-    source: GATES.md G3 / PROP-019
+    source: GATES.md G3 / B-PROP-003
     bad:
       args: ["tests/fixtures/card_bad_ui_contract_not_in_read.yaml"]
       expect_severity: P1
@@ -1691,7 +2104,7 @@ clauses:
     check: card
     kind: gate
     clause: "design_fixture_purge without complete 8-field fixture_replacement_map rows rejected — no map, no G3 pass"
-    source: GATES.md G3 / PROP-019 (GPT P1-019-03)
+    source: GATES.md G3 / B-PROP-003 (GPT P1-019-03)
     bad:
       args: ["tests/fixtures/card_bad_purge_no_replacement_map.yaml"]
       expect_severity: P1
@@ -1701,8 +2114,8 @@ clauses:
   - id: CARD-VISUAL-CONTRACT-CONTEXT
     check: card
     kind: gate
-    clause: "UI review dispatch without the additive visual_contract_context block rejected (PROP-015 stanza untouched)"
-    source: GATES.md G3 / PROP-019 (GPT P2-019-04)
+    clause: "UI review dispatch without the additive visual_contract_context block rejected (PBF-PROP-009 stanza untouched)"
+    source: GATES.md G3 / B-PROP-003 (GPT P2-019-04)
     bad:
       args: ["tests/fixtures/card_bad_ui_review_no_visual_context.yaml"]
       expect_severity: P1
@@ -1713,7 +2126,7 @@ clauses:
     check: card
     kind: gate
     clause: "while PROTOCOL_INCIDENT is open only the incident's repair_card may build — new build cards BLOCKED"
-    source: GATES.md G5 / PROP-020 (GPT P1-020-01 deadlock controls)
+    source: GATES.md G5 / BF-PROP-002 (GPT P1-020-01 deadlock controls)
     bad:
       args: ["tests/fixtures/card_good.yaml", "--state", "tests/fixtures/state_incident_open_other_repair.yaml"]
       expect_severity: P1
@@ -1724,7 +2137,7 @@ clauses:
     check: card
     kind: gate
     clause: "requesting cross-family review while PROTOCOL_INCIDENT is open rejected"
-    source: GATES.md G5 / PROP-020
+    source: GATES.md G5 / BF-PROP-002
     bad:
       args: ["tests/fixtures/card_review_good.yaml", "--state", "tests/fixtures/state_incident_open_other_repair.yaml"]
       expect_severity: P1
@@ -1733,14 +2146,14 @@ clauses:
 
   # ──────────────────────────────────────────────────────────────
   # check: boot · build-turn · close-turn · evals · design-fidelity
-  # (PROP-018/019 rails — v1.08 remainder build)
+  # (B-PROP-002 · B-PROP-003 rails — v1.08 remainder build)
   # ──────────────────────────────────────────────────────────────
 
   - id: BOOT-FAILS-ON-BAD-STATE
     check: boot
     kind: gate
     clause: "cx check boot exits FIX-FIRST when the session-start state check fails (receipt still written, recording the failure)"
-    source: GATES.md Build-session rails / PROP-018
+    source: GATES.md Build-session rails / B-PROP-002
     git_fixture: foreign_lineage
     bad:
       args: ["--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -1753,7 +2166,7 @@ clauses:
     check: build-turn
     kind: gate
     clause: "no project test command named by card/state = FAIL 'card incomplete' — build-turn never guesses (no-runner decision)"
-    source: GATES.md Build-session rails / PROP-018 (GPT P1-018-02)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT P1-018-02)
     git_fixture: build_turn_no_test
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -1766,7 +2179,7 @@ clauses:
     check: build-turn
     kind: gate
     clause: "the card-named deterministic test command failing blocks the turn"
-    source: GATES.md Build-session rails / PROP-018
+    source: GATES.md Build-session rails / B-PROP-002
     git_fixture: build_turn_test_fails
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -1793,7 +2206,7 @@ clauses:
     check: close-turn
     kind: gate
     clause: "handoff without a typed close_turn block (findings_delta/evidence_paths/next_prompt/vault_sync) rejected — never free-text grep"
-    source: GATES.md Build-session rails / PROP-018 (GPT P2-018-03)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT P2-018-03)
     git_fixture: close_turn_no_delta
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -1806,7 +2219,7 @@ clauses:
     check: close-turn
     kind: gate
     clause: "handoff OPEN finding absent from state open_findings rejected — state and handoff must agree (the W4 scar)"
-    source: GATES.md Build-session rails / PROP-018
+    source: GATES.md Build-session rails / B-PROP-002
     git_fixture: close_turn_delta_mismatch
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -1819,7 +2232,7 @@ clauses:
     check: close-turn
     kind: gate
     clause: "vault_sync not PASS requires reason + where_saved (the 11.7h-zero-vault-syncs scar)"
-    source: GATES.md Build-session rails / PROP-018 (GPT P2-018-04)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT P2-018-04)
     git_fixture: close_turn_vault_skip_no_reason
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -1832,7 +2245,7 @@ clauses:
     check: evals
     kind: gate
     clause: "a failing protocol suite turns cx check evals red (env-wrapped — no PYTHONPATH re-discovery)"
-    source: GATES.md Build-session rails / PROP-018
+    source: GATES.md Build-session rails / B-PROP-002
     bad:
       args: ["--checkers-dir", "tests/fixtures/evals_bad"]
       expect_severity: P1
@@ -1843,7 +2256,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "live DOM missing a forbidden_missing marker from the locked ui_marker_manifest rejected — deleted shells cannot read green"
-    source: GATES.md G3+G6 / PROP-019
+    source: GATES.md G3+G6 / B-PROP-003
     bad:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_bad_missing_marker.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
       expect_severity: P1
@@ -1854,7 +2267,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "missing/empty screenshot rejected — visual support proof required alongside the deterministic DOM gate"
-    source: GATES.md G3+G6 / PROP-019 (GPT P1-019-02)
+    source: GATES.md G3+G6 / B-PROP-003 (GPT P1-019-02)
     bad:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_empty.png", "--legacy-migration"]
       expect_severity: P1
@@ -1865,7 +2278,7 @@ clauses:
     check: final-ready
     kind: gate
     clause: "an open PROTOCOL_INCIDENT forbids final-ready even with zero open findings (fixture keeps stop_status NONE so the bite is THIS clause, not the old stop_status rule)"
-    source: GATES.md G5+G8 / PROP-020 (GPT cross-review 2026-06-12 P1)
+    source: GATES.md G5+G8 / BF-PROP-002 (GPT cross-review 2026-06-12 P1)
     bad:
       args: ["tests/fixtures/state_bad_final_ready_incident.yaml"]
       expect_severity: P0
@@ -1877,7 +2290,7 @@ clauses:
     check: state
     kind: gate
     clause: "a hand-authored receipt with correct canon hashes but no state/HEAD binding rejected — forging a green boot must equal running the command"
-    source: GATES.md Build-session rails / PROP-018 (GPT cross-review 2026-06-12 P1)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT cross-review 2026-06-12 P1)
     git_fixture: boot_receipt_forged
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1891,7 +2304,7 @@ clauses:
     check: close-turn
     kind: gate
     clause: "findings_delta rows missing finding text or explicit state_item_ref rejected — all five typed fields, defaults are not reconciliation"
-    source: GATES.md Build-session rails / PROP-018 (GPT cross-review 2026-06-12 P2)
+    source: GATES.md Build-session rails / B-PROP-002 (GPT cross-review 2026-06-12 P2)
     git_fixture: close_turn_row_untyped
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -1905,7 +2318,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "marker-stuffed generic template rejected — hidden stubs / missing locked role / missing label cannot read green"
-    source: GATES.md G3+G6 / PROP-019 (GPT cross-review 2026-06-12 P2)
+    source: GATES.md G3+G6 / B-PROP-003 (GPT cross-review 2026-06-12 P2)
     bad:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_bad_marker_stuffed.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
       expect_severity: P1
@@ -1914,14 +2327,14 @@ clauses:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.09 honest remainder — PROP-021 fix-escalation ladder (EVAL-015)
+  # v1.09 honest remainder — BF-PROP-003 fix-escalation ladder (EVAL-015)
   # ──────────────────────────────────────────────────────────────
 
   - id: STATE-FIX-CYCLE-SAME-TIER
     check: state
     kind: gate
     clause: "fix-2 re-dispatching the same seat tier as fix-1 on the same finding_id rejected — escalate per BUILD-ENGINE-PROFILES.fix_escalation"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_same_tier.yaml"]
       expect_severity: P1
@@ -1933,7 +2346,7 @@ clauses:
     check: state
     kind: gate
     clause: "non-escalated fix-3 (seat at or below the fix-2 seat) rejected — the ladder is strictly upward until the 4-failure cross-family rule"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_fix3_not_escalated.yaml"]
       expect_severity: P1
@@ -1944,7 +2357,7 @@ clauses:
     check: state
     kind: gate
     clause: "fix_cycles row missing finding_id / source_review_ref rejected — attempt history is STATE-owned and typed"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_missing_finding_id.yaml"]
       expect_severity: P1
@@ -1956,7 +2369,7 @@ clauses:
     check: state
     kind: gate
     clause: "escalation recorded as a loop_budget reset rejected — escalation changes the seat, never grants a new review cycle"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_budget_reset.yaml"]
       expect_severity: P1
@@ -1968,7 +2381,7 @@ clauses:
     check: state
     kind: gate
     clause: "fix-cycle attempt with no recorded prior attempt rejected — the ladder is sequential, attempts never skipped or untracked"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_skipped_attempt.yaml"]
       expect_severity: P1
@@ -1980,7 +2393,7 @@ clauses:
     check: state
     kind: gate
     clause: "two fix-cycle rows claiming the same attempt_n for one finding rejected — one row per bounded attempt"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_duplicate_attempt.yaml"]
       expect_severity: P1
@@ -1992,7 +2405,7 @@ clauses:
     check: state
     kind: gate
     clause: "attempt_n > 3 rejected — fix-3 failure feeds the 4-failure cross-family debug rule, never a fix-4 row"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_fix4_row.yaml"]
       expect_severity: P1
@@ -2004,7 +2417,7 @@ clauses:
     check: state
     kind: gate
     clause: "escalated attempt whose seat_ref names no verifiable model+effort rejected — fail closed against the ladder"
-    source: GATES.md G5 / PROP-021
+    source: GATES.md G5 / BF-PROP-003
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_unparseable_seat.yaml"]
       expect_severity: P1
@@ -2013,14 +2426,14 @@ clauses:
       args: ["tests/fixtures/state_good_fix_cycles.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.09 honest remainder — PROP-022 proof-card honesty (EVAL-016)
+  # v1.09 honest remainder — B-PROP-004 proof-card honesty (EVAL-016)
   # ──────────────────────────────────────────────────────────────
 
   - id: EVIDENCE-CLAIM-LOG-CONTRADICTS
     check: evidence
     kind: gate
     clause: "claimed PASS contradicted by its own log (fail_marker present) rejected as P0 — cx RE-READS the log"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_claim_log_contradicts.yaml"]
       expect_severity: P0
@@ -2032,7 +2445,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "evidence claim whose log_path does not exist rejected as P0 — a claim without its log is unverifiable"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_claim_log_missing.yaml"]
       expect_severity: P0
@@ -2043,7 +2456,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "acceptance-proof claim types (money/security/design-fidelity/interaction/...) without a positive-control red run rejected — green ≠ enforcing"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_no_positive_control.yaml"]
       expect_severity: P1
@@ -2055,7 +2468,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "positive control that does not demonstrate the EXPECTED failure (green log / unrelated reason) rejected"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_positive_control_wrong_reason.yaml"]
       expect_severity: P1
@@ -2067,7 +2480,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "interaction proof whose dispatched event family != handler family rejected as hard P1 — a mouse-event swipe test never touches a touch handler"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_modality_mismatch.yaml"]
       expect_severity: P1
@@ -2079,7 +2492,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "comparison baseline that is builder-produced same-wave output rejected as P0 — expected = the frozen lock/contract hash, never the build's own output"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["tests/fixtures/card_bad_baseline_builder.yaml"]
       expect_severity: P0
@@ -2091,7 +2504,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "ui_lock_manifest without audit_status PASS + ceo_acceptance_ref rejected as P0 — no PASS = no build; the builder only consumes the lock"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_bad_unaudited.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--build-vocab", "tests/fixtures/build_vocab_good.yaml"]
       expect_severity: P0
@@ -2103,7 +2516,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "build vocabulary (translation keys / ui states / alert variants) absent from the ui_lock_manifest rejected as P1 — invented vocabulary"
-    source: GATES.md G6 / PROP-022
+    source: GATES.md G6 / B-PROP-004
     bad:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--build-vocab", "tests/fixtures/build_vocab_bad_invented.yaml"]
       expect_severity: P1
@@ -2118,8 +2531,8 @@ clauses:
   - id: STATE-FIX-CYCLE-ENGINE-FAMILY
     check: state
     kind: gate
-    clause: "escalated fix seat from the wrong family for the row's OWN engine epoch rejected — the ladder is per the epoch's engine (epoch-aware PROP-025)"
-    source: GATES.md G5 / PROP-021 (epoch-aware PROP-025)
+    clause: "escalated fix seat from the wrong family for the row's OWN engine epoch rejected — the ladder is per the epoch's engine (epoch-aware BF-PROP-004)"
+    source: GATES.md G5 / BF-PROP-003 (epoch-aware BF-PROP-004)
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_wrong_engine.yaml"]
       expect_severity: P1
@@ -2128,14 +2541,14 @@ clauses:
       args: ["tests/fixtures/state_good_fix_cycles.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.11 — PROP-025 engine-epoch fix_cycles (EVAL-018)
+  # v1.11 — BF-PROP-004 engine-epoch fix_cycles (EVAL-018)
   # ──────────────────────────────────────────────────────────────
 
   - id: STATE-FIX-CYCLE-EPOCH-UNRESOLVABLE
     check: state
     kind: gate
     clause: "switched-project fix_cycles row with no epoch anchor (engine_epoch_id / effective_at / engine_family) rejected — fail closed, never assume the current engine"
-    source: GATES.md G5 / PROP-025
+    source: GATES.md G5 / BF-PROP-004
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_epoch_unresolvable.yaml"]
       expect_severity: P1
@@ -2147,7 +2560,7 @@ clauses:
     check: state
     kind: gate
     clause: "fix_cycles row whose declared engine_family contradicts the epoch recomputed from engine_switch_log rejected — engine_family is a cache, the epoch is authoritative (GPT #16)"
-    source: GATES.md G5 / PROP-025
+    source: GATES.md G5 / BF-PROP-004
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_epoch_cache_mismatch.yaml"]
       expect_severity: P1
@@ -2159,7 +2572,7 @@ clauses:
     check: state
     kind: gate
     clause: "a fix ladder continuing across an engine switch without a typed cross_epoch_deviation rejected — the fix level is preserved across a switch, never silently reset (GPT #17)"
-    source: GATES.md G5 / PROP-025
+    source: GATES.md G5 / BF-PROP-004
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_cross_epoch_reset.yaml"]
       expect_severity: P1
@@ -2171,7 +2584,7 @@ clauses:
     check: state
     kind: gate
     clause: "a malformed engine_switch_log row (missing epoch id / engines / effective_at) rejected — the epoch chain cannot be reconstructed, so fix_cycles validation fails closed (GPT #18)"
-    source: GATES.md G5 / PROP-025
+    source: GATES.md G5 / BF-PROP-004
     bad:
       args: ["tests/fixtures/state_bad_engine_switch_log_malformed.yaml"]
       expect_severity: P1
@@ -2180,14 +2593,14 @@ clauses:
       args: ["tests/fixtures/state_good_fix_cycles_epoch.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.11 — PROP-027 pre-build dependency-scan gate (EVAL-019)
+  # v1.11 — B-PROP-006 pre-build dependency-scan gate (EVAL-019)
   # ──────────────────────────────────────────────────────────────
 
   - id: DEP-SCAN-STALE-LOCKFILE-HASH
     check: dep-scan
     kind: gate
     clause: "dependency_scan receipt whose lockfile_hash != the lockfile's sha12 rejected — stale/forged, or the lockfile drifted after the scan (post-G7 drift)"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #11,#12)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #11,#12)
     git_fixture: dep_scan_stale_hash
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2201,7 +2614,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "dependency_scan reporting high/critical advisories that does not enumerate them in high_critical_advisories rejected — each must be named to be matched to a waiver (0 high/critical is the bar)"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #13, GPT review F3)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #13, GPT review F3)
     git_fixture: dep_scan_high_unwaived
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2215,7 +2628,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "an enumerated high/critical advisory not covered by any typed CEO waiver rejected — a blanket waiver may not hide an unrelated advisory (GPT review F3)"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT review F3)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT review F3)
     git_fixture: dep_scan_high_uncovered
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2229,7 +2642,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "a lockfile found under the repo that no dependency_scan.scans entry covers rejected — a 2nd lockfile in a scanned root cannot go unscanned (GPT review F4)"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT review F4)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT review F4)
     git_fixture: dep_scan_extra_lockfile
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2243,7 +2656,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "dependency_scan lockfile ref that is absolute / .. / symlink / outside the repo rejected — the gate reads only an in-tree lockfile"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #15)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #15)
     git_fixture: dep_scan_path_unsafe
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2257,7 +2670,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "a scanned ecosystem whose declared lockfile does not exist under the repo rejected — a scanned root must have a pinned lockfile committed"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #14)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #14)
     git_fixture: dep_scan_missing_lockfile
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2271,7 +2684,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "a dependency_scan scan record missing a required typed field (ecosystem/command/scanner_version/db_timestamp/manifest/lockfile/hash/produced_at/counts) rejected"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #12)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #12)
     git_fixture: dep_scan_missing_field
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2285,7 +2698,7 @@ clauses:
     check: dep-scan
     kind: gate
     clause: "a package-manager manifest found under the repo that no dependency_scan.scans entry covers rejected — every root must be scanned (scan-all-pairs)"
-    source: PACKET-CONTENTS.md S1 / PROP-027 (GPT #14)
+    source: PACKET-CONTENTS.md S1 / B-PROP-006 (GPT #14)
     git_fixture: dep_scan_uncovered_manifest
     bad:
       args: ["{STATE}", "--repo-root", "{REPO}"]
@@ -2296,17 +2709,17 @@ clauses:
       args: ["{STATE}", "--repo-root", "{REPO}"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.19 — PROP-040 whole-packet cross-family INTEGRATION review (G7 build-authorization, EVAL-036).
+  # v1.19 — P-PROP-006 whole-packet cross-family INTEGRATION review (G7 build-authorization, EVAL-036).
   # The cross-document coherence pass the per-card audit + the deterministic checker structurally cannot
-  # provide (a real-project TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
+  # provide (a real project's TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
   # WHOLE frozen packet, recorded as a hash-bound receipt OUTSIDE the packet, required before any module.
   # ──────────────────────────────────────────────────────────────
 
   - id: WHOLE-PACKET-REVIEW-RECEIPT-REQUIRED
     check: whole-packet-review
     kind: gate
-    clause: "build is blocked when state carries no whole_packet_review_receipt — the whole-packet cross-family integration review is a mandatory G7 build-authorization precondition, not optional (P0) [PROP-040]"
-    source: "PROP-040 §proposal / GATES G7"
+    clause: "build is blocked when state carries no whole_packet_review_receipt — the whole-packet cross-family integration review is a mandatory G7 build-authorization precondition, not optional (P0) [P-PROP-006]"
+    source: "P-PROP-006 §proposal / GATES G7"
     git_fixture: wpr_missing_receipt
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2319,8 +2732,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-RECEIPT-HASH-BOUND
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review_receipt whose receipt_hash != the receipt file's sha12 rejected — a fabricated/stale receipt cannot authorize build (mirrors the final-ready / Andon binding) (P0) [PROP-040]"
-    source: "PROP-040 Rev 2 #4 (final-ready-grade binding)"
+    clause: "a whole_packet_review_receipt whose receipt_hash != the receipt file's sha12 rejected — a fabricated/stale receipt cannot authorize build (mirrors the final-ready / Andon binding) (P0) [P-PROP-006]"
+    source: "P-PROP-006 Rev 2 #4 (final-ready-grade binding)"
     git_fixture: wpr_hash_mismatch
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2333,8 +2746,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-RECEIPT-PATH-SAFE
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review_receipt.receipt that is absolute / contains '..' / is a symlink / resolves OUTSIDE the repo rejected — the gate reads only an in-repo receipt (shared path-safety, the PROP-037 class) (P0) [PROP-040]"
-    source: "PROP-040 Rev 2 #4 / cx_common.safe_repo_ref"
+    clause: "a whole_packet_review_receipt.receipt that is absolute / contains '..' / is a symlink / resolves OUTSIDE the repo rejected — the gate reads only an in-repo receipt (shared path-safety, the B-PROP-011 class) (P0) [P-PROP-006]"
+    source: "P-PROP-006 Rev 2 #4 / cx_common.safe_repo_ref"
     git_fixture: wpr_path_unsafe
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2347,8 +2760,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-TYPED
     check: whole-packet-review
     kind: gate
-    clause: "a receipt that is not a typed whole_packet_review mapping (or omits a required field) rejected — an arbitrary bound blob of bytes is not a review (P0) [PROP-040]"
-    source: "PROP-040 Rev 2 #4 (typed YAML block)"
+    clause: "a receipt that is not a typed whole_packet_review mapping (or omits a required field) rejected — an arbitrary bound blob of bytes is not a review (P0) [P-PROP-006]"
+    source: "P-PROP-006 Rev 2 #4 (typed YAML block)"
     git_fixture: wpr_not_typed
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2361,8 +2774,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-OPPOSITE-FAMILY
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose reviewer_family == authoring_family rejected — a same-family review is not a cross-family review; the whole-packet review must be by the OPPOSITE family (P0) [PROP-040]"
-    source: "PROP-040 §proposal (opposite-family blind-spot catch)"
+    clause: "a whole_packet_review whose reviewer_family == authoring_family rejected — a same-family review is not a cross-family review; the whole-packet review must be by the OPPOSITE family (P0) [P-PROP-006]"
+    source: "P-PROP-006 §proposal (opposite-family blind-spot catch)"
     git_fixture: wpr_same_family
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2375,8 +2788,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-VERDICT
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose verdict is missing or not in {PASS, FIX_FIRST_RESOLVED} rejected — a raw FIX_FIRST / REJECTED (or a missing verdict) does not authorize build (P0) [PROP-040]"
-    source: "PROP-040 Rev 2 #5 (one-shot; verdict must be resolved)"
+    clause: "a whole_packet_review whose verdict is missing or not in {PASS, FIX_FIRST_RESOLVED} rejected — a raw FIX_FIRST / REJECTED (or a missing verdict) does not authorize build (P0) [P-PROP-006]"
+    source: "P-PROP-006 Rev 2 #5 (one-shot; verdict must be resolved)"
     git_fixture: wpr_bad_verdict
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2386,25 +2799,48 @@ clauses:
       git_fixture: wpr_ok
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
 
-  - id: WHOLE-PACKET-REVIEW-PACKET-CURRENT
+  - id: WHOLE-PACKET-REVIEW-SUBSTANTIVE-CURRENT
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose frozen_packet_hash != the recomputed frozen-packet hash rejected — the review is STALE for a different/older packet; ANY packet change (TRD/PRD/security/stack-lock/blueprint, even with every module hash unchanged) invalidates it (never keys currency on a module hash) (P0) [PROP-040 Rev 2 #2]"
-    source: "PROP-040 Rev 2 #2 (packet-hash-change-invalidates)"
+    clause: "a whole_packet_review whose reviewed_source_set_hash != the recomputed substantive-source hash rejected — a substantive packet change (TRD/PRD/requirements/any non-build-metadata content) invalidates the review; build-metadata-only registry edits carry (PB-PROP-002); keys on substantive hash, not raw packet hash (P0) [P-PROP-006 Rev 2 #2 / PB-PROP-002]"
+    source: "P-PROP-006 Rev 2 #2 / PB-PROP-002 §substantive-source-set"
     git_fixture: wpr_stale_packet
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
       expect_severity: P0
-      expect_contains: "STALE for a different/older"
+      expect_contains: "SUBSTANTIVE packet doc"
     good:
       git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-SUBSTANTIVE-HASH-PRESENT
+    check: whole-packet-review
+    kind: gate
+    clause: "a receipt with reviewed_source_set_hash missing/blank rejected — the receipt must record the substantive-source hash (P0) [PB-PROP-002]"
+    source: "PB-PROP-002 §substantive-source-set"
+    git_fixture: wpr_missing_sub_hash
+    bad:
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "WHOLE-PACKET-REVIEW-SUBSTANTIVE-HASH-PRESENT"
+    good:
+      git_fixture: wpr_ok
+      args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
+
+  - id: WHOLE-PACKET-REVIEW-BUILDMETA-CARRIES
+    check: whole-packet-review
+    kind: gate
+    clause: "editing ONLY MODULE-REGISTRY.yaml build-metadata fields (card_ids / dependency_modules / frozen_packet_hash / protocol_version) does NOT invalidate the whole-packet review — the review carries because substantive packet content is unchanged (PB-PROP-002) [good-only gate]"
+    source: "PB-PROP-002 §substantive-source-set"
+    git_fixture: wpr_buildmeta_delta
+    good:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
 
   - id: WHOLE-PACKET-REVIEW-RECEIPT-SYMLINK
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review_receipt.receipt that is an in-repo SYMLINK to bytes OUTSIDE the repo rejected — safe_repo_ref rejects it before reading (the PROP-037 path-safety class; the '..' half is covered by WHOLE-PACKET-REVIEW-RECEIPT-PATH-SAFE) (P0) [PROP-040]"
-    source: "PROP-040 xfam P2 (path-safety symlink half) / cx_common.safe_repo_ref"
+    clause: "a whole_packet_review_receipt.receipt that is an in-repo SYMLINK to bytes OUTSIDE the repo rejected — safe_repo_ref rejects it before reading (the B-PROP-011 path-safety class; the '..' half is covered by WHOLE-PACKET-REVIEW-RECEIPT-PATH-SAFE) (P0) [P-PROP-006]"
+    source: "P-PROP-006 xfam P2 (path-safety symlink half) / cx_common.safe_repo_ref"
     git_fixture: wpr_receipt_symlink
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2417,8 +2853,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-REQUIRED-FIELDS
     check: whole-packet-review
     kind: gate
-    clause: "a typed whole_packet_review that omits a required field (e.g. findings_ref) rejected — the review record must pin every auditable field, not merely be a well-formed mapping (distinct from the not-a-mapping bite) (P0) [PROP-040]"
-    source: "PROP-040 xfam P2 (coverage: required-field bite distinct from TYPED)"
+    clause: "a typed whole_packet_review that omits a required field (e.g. findings_ref) rejected — the review record must pin every auditable field, not merely be a well-formed mapping (distinct from the not-a-mapping bite) (P0) [P-PROP-006]"
+    source: "P-PROP-006 xfam P2 (coverage: required-field bite distinct from TYPED)"
     git_fixture: wpr_missing_field
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2431,8 +2867,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-KIND
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose review_kind != WHOLE_PACKET_G7 rejected — this gate accepts only a whole-packet G7 integration review, not a per-card / per-module review smuggled in (P0) [PROP-040]"
-    source: "PROP-040 xfam P2 (coverage: review_kind bite)"
+    clause: "a whole_packet_review whose review_kind != WHOLE_PACKET_G7 rejected — this gate accepts only a whole-packet G7 integration review, not a per-card / per-module review smuggled in (P0) [P-PROP-006]"
+    source: "P-PROP-006 xfam P2 (coverage: review_kind bite)"
     git_fixture: wpr_wrong_kind
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2445,8 +2881,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-FAMILY-KNOWN
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose authoring_family or reviewer_family is not a KNOWN family (e.g. 'mistral') rejected — an unknown family cannot be proven to be the opposite family; a bare string-inequality is not a cross-family proof (P0) [PROP-040 xfam P0]"
-    source: "PROP-040 xfam P0 (family taxonomy; single-source cx_blueprint.VALID_FAMILIES + _family_group)"
+    clause: "a whole_packet_review whose authoring_family or reviewer_family is not a KNOWN family (e.g. 'mistral') rejected — an unknown family cannot be proven to be the opposite family; a bare string-inequality is not a cross-family proof (P0) [P-PROP-006 xfam P0]"
+    source: "P-PROP-006 xfam P0 (family taxonomy; single-source cx_blueprint.VALID_FAMILIES + _family_group)"
     git_fixture: wpr_unknown_family
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2459,8 +2895,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-THREE-LEG
     check: whole-packet-review
     kind: gate
-    clause: "a whole_packet_review whose three_leg_ask is a bare scalar / placeholder (not a structured continuity + problems + approach_improvement record) rejected — a placeholder is not proof the PROP-015 three-leg ask was made (mirrors the card review_dispatch placeholder rule) (P0) [PROP-040]"
-    source: "PROP-040 xfam P2 (three_leg_ask not a placeholder; cx_card.TLA_PLACEHOLDERS)"
+    clause: "a whole_packet_review whose three_leg_ask is a bare scalar / placeholder (not a structured continuity + problems + approach_improvement record) rejected — a placeholder is not proof the PBF-PROP-009 three-leg ask was made (mirrors the card review_dispatch placeholder rule) (P0) [P-PROP-006]"
+    source: "P-PROP-006 xfam P2 (three_leg_ask not a placeholder; cx_card.TLA_PLACEHOLDERS)"
     git_fixture: wpr_three_leg_placeholder
     bad:
       args: ["--state", "{STATE}", "--packet-dir", "{REPO}/packet", "--repo-root", "{REPO}"]
@@ -2473,8 +2909,8 @@ clauses:
   - id: WHOLE-PACKET-REVIEW-BUILD-TURN-RAIL
     check: build-turn
     kind: gate
-    clause: "build-turn fails a module-advancing card (MODULE_BUILD/MODE_A_UI) when state carries no current whole_packet_review receipt — the G7 whole-packet integration review is wired into the every-card rail, so no module builds without it (P1) [PROP-040]"
-    source: "PROP-040 Rev 2 #3 (wiring into the build-start path) / GATES G7"
+    clause: "build-turn fails a module-advancing card (MODULE_BUILD/MODE_A_UI) when state carries no current whole_packet_review receipt — the G7 whole-packet integration review is wired into the every-card rail, so no module builds without it (P1) [P-PROP-006]"
+    source: "P-PROP-006 Rev 2 #3 (wiring into the build-start path) / GATES G7"
     git_fixture: build_turn_wpr_missing
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -2485,14 +2921,14 @@ clauses:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.11 — PROP-026 scrub-before-egress gate for a mandatory external reviewer (EVAL-020)
+  # v1.11 — BF-PROP-005 scrub-before-egress gate for a mandatory external reviewer (EVAL-020)
   # ──────────────────────────────────────────────────────────────
 
   - id: EGRESS-CODERABBIT-NO-RECEIPT
     check: egress
     kind: gate
     clause: "a raw diff sent to CodeRabbit with NO egress_scrub receipt and NO sensitive_code_carveout rejected — scrub-before-egress is mandatory (CodeRabbit reads the raw diff automatically)"
-    source: PROP-026 / GPT #1
+    source: BF-PROP-005 / GPT #1
     bad:
       args: ["tests/fixtures/egress_diff_secret.txt", "--target=coderabbit"]
       expect_severity: P0
@@ -2504,7 +2940,7 @@ clauses:
     check: egress
     kind: gate
     clause: "an egress_scrub receipt whose diff_hash != the diff's sha12 rejected — the scrub is not bound to THIS diff (stale/forged)"
-    source: PROP-026 / GPT #1
+    source: BF-PROP-005 / GPT #1
     bad:
       args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_wrong_hash.yaml"]
       expect_severity: P0
@@ -2515,8 +2951,8 @@ clauses:
   - id: EGRESS-SCRUB-NO-POSITIVE-CONTROL
     check: egress
     kind: gate
-    clause: "an egress_scrub receipt whose positive_control_exit is 0 rejected — a scrub whose planted-secret control is not caught is unproven (PROP-022 discipline)"
-    source: PROP-026 / GPT #1
+    clause: "an egress_scrub receipt whose positive_control_exit is 0 rejected — a scrub whose planted-secret control is not caught is unproven (B-PROP-004 discipline)"
+    source: BF-PROP-005 / GPT #1
     bad:
       args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_pce_zero.yaml"]
       expect_severity: P0
@@ -2528,7 +2964,7 @@ clauses:
     check: egress
     kind: gate
     clause: "an egress_scrub receipt claiming a clean diff while sensitive content remains in the diff rejected — a PASS contradicted by evidence is a P0"
-    source: PROP-026 / GPT #1
+    source: BF-PROP-005 / GPT #1
     bad:
       args: ["tests/fixtures/egress_diff_secret.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_for_secret.yaml"]
       expect_severity: P0
@@ -2540,7 +2976,7 @@ clauses:
     check: egress
     kind: gate
     clause: "a sensitive_code_carveout missing the CEO decision ref / reason rejected — an unrecorded local-only claim is not a carve-out"
-    source: PROP-026 / GPT #1
+    source: BF-PROP-005 / GPT #1
     bad:
       args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_carveout_no_reason.yaml"]
       expect_severity: P0
@@ -2549,14 +2985,14 @@ clauses:
       args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_carveout_good.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.11 — PROP-026 the 3-stage cross-family review ladder (xfam_capability, EVAL-021)
+  # v1.11 — BF-PROP-005 the 3-stage cross-family review ladder (xfam_capability, EVAL-021)
   # ──────────────────────────────────────────────────────────────
 
   - id: STATE-XFAM-CAPABILITY-ENUM
     check: state
     kind: gate
     clause: "review_boundary.xfam_capability outside the fixed {stage_1,stage_2,stage_3} ladder rejected"
-    source: PROP-026 / GPT #4
+    source: BF-PROP-005 / GPT #4
     bad:
       args: ["tests/fixtures/state_bad_xfam_capability_enum.yaml"]
       expect_severity: P1
@@ -2568,7 +3004,7 @@ clauses:
     check: state
     kind: gate
     clause: "xfam_capability stage_3 self-asserted with no xfam_capability_evidence rejected — capability is evidence-backed / auto-promoted, never self-declared to dodge the second family"
-    source: PROP-026 / GPT #4
+    source: BF-PROP-005 / GPT #4
     bad:
       args: ["tests/fixtures/state_bad_xfam_capability_stage3_no_evidence.yaml"]
       expect_severity: P1
@@ -2580,7 +3016,7 @@ clauses:
     check: state
     kind: gate
     clause: "an xfam_capability downgrade to a weaker review tier with no CEO decision ref rejected — append-only; the second family cannot be quietly dropped"
-    source: PROP-026 / GPT #4
+    source: BF-PROP-005 / GPT #4
     bad:
       args: ["tests/fixtures/state_bad_xfam_capability_downgrade_no_ref.yaml"]
       expect_severity: P1
@@ -2592,7 +3028,7 @@ clauses:
     check: state
     kind: gate
     clause: "xfam_capability_evidence that is absolute / .. (escapes the repo) rejected — the evidence is an in-tree opposite-family review artifact, not an arbitrary external file (GPT review F6)"
-    source: PROP-026 / GPT review F6
+    source: BF-PROP-005 / GPT review F6
     bad:
       args: ["tests/fixtures/state_bad_xfam_capability_evidence_unsafe.yaml"]
       expect_severity: P1
@@ -2601,14 +3037,14 @@ clauses:
       args: ["tests/fixtures/state_good_xfam_capability.yaml"]
 
   # ──────────────────────────────────────────────────────────────
-  # v1.11 — PROP-026 class-sweep self-audit (anti-whack-a-mole, EVAL-023)
+  # v1.11 — BF-PROP-005 class-sweep self-audit (anti-whack-a-mole, EVAL-023)
   # ──────────────────────────────────────────────────────────────
 
   - id: CLASS-SWEEP-MISSING-FIELDS
     check: class-sweep
     kind: gate
     clause: "a class_sweep receipt missing a required field (class/scope_boundary/detection_command/pre_fix_hits/post_fix_count/positive_control) rejected"
-    source: PROP-026 / GPT #6
+    source: BF-PROP-005 / GPT #6
     bad:
       args: ["tests/fixtures/class_sweep_bad_missing_fields.yaml"]
       expect_severity: P1
@@ -2620,7 +3056,7 @@ clauses:
     check: class-sweep
     kind: gate
     clause: "a class_sweep with an empty pre_fix_hits list rejected — the sweep enumerates EVERY instance; whack-a-mole is fixing one instance, not the class"
-    source: PROP-026 / GPT #6
+    source: BF-PROP-005 / GPT #6
     bad:
       args: ["tests/fixtures/class_sweep_bad_empty_hits.yaml"]
       expect_severity: P1
@@ -2632,7 +3068,7 @@ clauses:
     check: class-sweep
     kind: gate
     clause: "a class_sweep whose positive_control does not show a planted instance detected rejected — an un-validated detection does not prove the class is found"
-    source: PROP-026 / GPT #6
+    source: BF-PROP-005 / GPT #6
     bad:
       args: ["tests/fixtures/class_sweep_bad_no_positive_control.yaml"]
       expect_severity: P1
@@ -2644,7 +3080,7 @@ clauses:
     check: class-sweep
     kind: gate
     clause: "a class_sweep with no regression_test_ref rejected — trust is the test, not a re-review; a fix with no pinning test is not 'done' (so it is safe to never re-review)"
-    source: PROP-026 / GPT #6
+    source: BF-PROP-005 / GPT #6
     bad:
       args: ["tests/fixtures/class_sweep_bad_no_regression_test.yaml"]
       expect_severity: P1
@@ -2656,7 +3092,7 @@ clauses:
     check: class-sweep
     kind: gate
     clause: "class_sweep regression_test_ref that is absolute / .. (escapes the repo) rejected — the pinning test lives in the repo (GPT review F7)"
-    source: PROP-026 / GPT review F7
+    source: BF-PROP-005 / GPT review F7
     bad:
       args: ["tests/fixtures/class_sweep_bad_unsafe_test_ref.yaml"]
       expect_severity: P1
@@ -2668,7 +3104,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "PROOF card with no evidence_claims rejected — omission is not an exemption from claim-evidence binding"
-    source: GATES.md G6 / PROP-022 (GPT cross-review 2026-06-12)
+    source: GATES.md G6 / B-PROP-004 (GPT cross-review 2026-06-12)
     bad:
       args: ["tests/fixtures/card_bad_proof_no_claims.yaml"]
       expect_severity: P1
@@ -2680,7 +3116,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "positive-control run with exit 0 rejected even when the expected marker appears in the log — a red run must actually be red"
-    source: GATES.md G6 / PROP-022 (GPT cross-review 2026-06-12)
+    source: GATES.md G6 / B-PROP-004 (GPT cross-review 2026-06-12)
     bad:
       args: ["tests/fixtures/card_bad_positive_control_exit_zero.yaml"]
       expect_severity: P1
@@ -2692,7 +3128,7 @@ clauses:
     check: evidence
     kind: gate
     clause: "comparison-class claim types (route_map / click_path / snapshot / vocabulary_coverage / design_fidelity) without a pinned baseline rejected as P0 — baseline is required by TYPE, never opt-in"
-    source: GATES.md G6 / PROP-022 (GPT cross-review 2026-06-12)
+    source: GATES.md G6 / B-PROP-004 (GPT cross-review 2026-06-12)
     bad:
       args: ["tests/fixtures/card_bad_route_map_no_baseline.yaml"]
       expect_severity: P0
@@ -2704,7 +3140,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "ui_lock_manifest that locks vocabulary checked WITHOUT --build-vocab rejected — vocabulary coverage cannot be silently skipped"
-    source: GATES.md G6 / PROP-022 (GPT cross-review 2026-06-12)
+    source: GATES.md G6 / B-PROP-004 (GPT cross-review 2026-06-12)
     bad:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
       expect_severity: P1
@@ -2716,7 +3152,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "external_capture lock with no side_by_side_accept receipt rejected — the CEO must ACCEPT the produced screen side-by-side with the captured reference (the gap that let 'like MM' ship from memory)"
-    source: GATES.md G6 / PROP-031
+    source: GATES.md G6 / P-PROP-004
     bad:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_no_receipt.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
       expect_severity: P0
@@ -2728,7 +3164,7 @@ clauses:
     check: design-fidelity
     kind: gate
     clause: "external_capture side-by-side receipt whose produced/reference dimensions differ rejected — not judged at the same viewport"
-    source: GATES.md G6 / PROP-031
+    source: GATES.md G6 / P-PROP-004
     bad:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_dim_mismatch.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
       expect_severity: P1
@@ -2736,7 +3172,7 @@ clauses:
     good:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_external_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
 
-  # ── render-fidelity (PROP-033, fold v1.14) — in-loop RENDERED-fidelity gate ──────────
+  # ── render-fidelity (B-PROP-009, fold v1.14) — in-loop RENDERED-fidelity gate ──────────
   # Layer 1 = deterministic + BLOCKING (P0 gate-integrity, P1 layout-defect); each bad fixture
   # isolates ONE clause and the shared render_good.yaml PASSES.
   # FIX 1 (xfam): every render clause supplies the AUTHORITATIVE --repo-head aaaaaaaaaaaa (the
@@ -2745,7 +3181,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "render bundle with no pinned render_profile (empty/missing profile_hash) rejected — a non-deterministic render proves nothing"
-    source: GATES.md G6 / PROP-033 §4.1
+    source: GATES.md G6 / B-PROP-009 §4.1
     bad:
       args: ["tests/fixtures/render_bad_profile_unpinned.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2757,7 +3193,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "render bundle whose profile_hash != the fingerprint recomputed from the profile body rejected — a self-declared hash any string satisfies pins nothing (FIX 2)"
-    source: GATES.md G6 / PROP-033 §4.1
+    source: GATES.md G6 / B-PROP-009 §4.1
     bad:
       args: ["tests/fixtures/render_bad_profile_unbound.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2769,7 +3205,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "evidence whose repo_head != the authoritative --repo-head (a leftover screenshot from a prior commit) rejected — green render-fit must mean a render of THIS commit"
-    source: GATES.md G6 / PROP-033 §4.2
+    source: GATES.md G6 / B-PROP-009 §4.2
     bad:
       args: ["tests/fixtures/render_bad_evidence_stale.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2781,7 +3217,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "evidence whose screenshot_hash != sha12 of the real screenshot bytes (a forged/swapped screenshot) rejected — collect != check, the receipt must bind the real file"
-    source: GATES.md G6 / PROP-033 §4.2
+    source: GATES.md G6 / B-PROP-009 §4.2
     bad:
       args: ["tests/fixtures/render_bad_receipt_forged.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2793,7 +3229,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "an evidence row with NO render_profile_hash rejected — the profile pin is mandatory per-row; an absent row hash can no longer skip the pin (FIX 2)"
-    source: GATES.md G6 / PROP-033 §4.2
+    source: GATES.md G6 / B-PROP-009 §4.2
     bad:
       args: ["tests/fixtures/render_bad_missing_row_hash.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2805,7 +3241,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "an evidence row whose measured viewport_width != the pinned profile width for its viewport_id rejected — the receipt lies about the viewport it rendered at, gaming the overflow check (FIX 3, rated P0 forgery)"
-    source: GATES.md G6 / PROP-033 §4.4
+    source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_wrong_viewport.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2817,7 +3253,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "a frozen coverage_matrix required row with no otherwise-valid render evidence rejected — no required render row may silently ship unrendered"
-    source: GATES.md G6 / PROP-033 §4.3
+    source: GATES.md G6 / B-PROP-009 §4.3
     bad:
       args: ["tests/fixtures/render_bad_coverage_incomplete.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P0
@@ -2829,7 +3265,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production module)"
-    source: GATES.md G6 / PROP-033 §4.4
+    source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_overflow.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P1
@@ -2841,7 +3277,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "a locked primary control rendered out of frame (in_frame: false) rejected — an off-screen control fails the screen even with no horizontal overflow"
-    source: GATES.md G6 / PROP-033 §4.4
+    source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_control_offscreen.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P1
@@ -2853,7 +3289,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "a blank render / app that never reached app-ready rejected — a blank error page has no overflow and would otherwise pass the width checks"
-    source: GATES.md G6 / PROP-033 §4.4
+    source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_blank_route_fail.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P1
@@ -2865,7 +3301,7 @@ clauses:
     check: render-fidelity
     kind: gate
     clause: "a cannot_verify: true evidence row with no preflight_pass_ref rejected — env-absence must be preflight-backed, never a blanket per-card waiver"
-    source: GATES.md G6 / PROP-033 §4.8
+    source: GATES.md G6 / B-PROP-009 §4.8
     bad:
       args: ["tests/fixtures/render_bad_cannot_verify.yaml", "--repo-head=aaaaaaaaaaaa"]
       expect_severity: P1
@@ -2874,15 +3310,15 @@ clauses:
       args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
 
   # ──────────────────────────────────────────────────────────────
-  # check: card / close-turn / drift  — PROP-034 lock-fidelity continuity (fold v1.15)
+  # check: card / close-turn / drift  — BF-PROP-007 lock-fidelity continuity (fold v1.15)
   # Each clause pins a biting bad fixture (rc=1 at the stated severity) + a good fixture (rc=0).
   # ──────────────────────────────────────────────────────────────
 
   - id: LOCK-FIDELITY-FIX-ANCHOR-MISSING
     check: card
     kind: gate
-    clause: "a mode: FIX card without a resolving lock_anchor_ref rejected — a fix that cannot name the frozen requirement it restores is freelancing (PROP-034 Lever A)"
-    source: PROP-034 §2 Lever A
+    clause: "a mode: FIX card without a resolving lock_anchor_ref rejected — a fix that cannot name the frozen requirement it restores is freelancing (BF-PROP-007 Lever A)"
+    source: BF-PROP-007 §2 Lever A
     git_fixture: lf_card_no_anchor
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -2895,8 +3331,8 @@ clauses:
   - id: LOCK-FIDELITY-DEVIATION-CLASS-MISSING
     check: card
     kind: gate
-    clause: "a mode: FIX card without deviation_class rejected — a fix must declare RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE so a departure is never silent (PROP-034 Lever A)"
-    source: PROP-034 §2 Lever A
+    clause: "a mode: FIX card without deviation_class rejected — a fix must declare RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE so a departure is never silent (BF-PROP-007 Lever A)"
+    source: BF-PROP-007 §2 Lever A
     git_fixture: lf_card_no_devclass
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -2909,8 +3345,8 @@ clauses:
   - id: LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED
     check: card
     kind: gate
-    clause: "deviation_class: SCOPE_CHANGE without BOTH ceo_decision_ref AND packet_amendment_ref rejected — scope not already in the lock cannot be built as a fix (P1 default; P0 on a high-risk class) (PROP-034 Lever A)"
-    source: PROP-034 §2 Lever A / SEVERITY.md
+    clause: "deviation_class: SCOPE_CHANGE without BOTH ceo_decision_ref AND packet_amendment_ref rejected — scope not already in the lock cannot be built as a fix (P1 default; P0 on a high-risk class) (BF-PROP-007 Lever A)"
+    source: BF-PROP-007 §2 Lever A / SEVERITY.md
     git_fixture: lf_card_scope_unauth
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -2923,8 +3359,8 @@ clauses:
   - id: LOCK-FIDELITY-RESTORE-OVERREACH
     check: drift
     kind: gate
-    clause: "a fix card touching files OUTSIDE its anchored card's allowed_files rejected at module-acceptance — deterministic file/path over-reach (PROP-034 Lever C)"
-    source: PROP-034 §2 Lever C
+    clause: "a fix card touching files OUTSIDE its anchored card's allowed_files rejected at module-acceptance — deterministic file/path over-reach (BF-PROP-007 Lever C)"
+    source: BF-PROP-007 §2 Lever C
     git_fixture: lf_overreach
     bad:
       args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
@@ -2937,8 +3373,8 @@ clauses:
   - id: LOCK-FIDELITY-HANDOFF-HASH-MISMATCH
     check: close-turn
     kind: gate
-    clause: "a handoff whose lock_pointer.frozen_packet_hash != the RECOMPUTED packet hash rejected — a self-declared hash is never trusted (PROP-034 Lever B)"
-    source: PROP-034 §2 Lever B
+    clause: "a handoff whose lock_pointer.frozen_packet_hash != the RECOMPUTED packet hash rejected — a self-declared hash is never trusted (BF-PROP-007 Lever B)"
+    source: BF-PROP-007 §2 Lever B
     git_fixture: lf_handoff_hash_mismatch
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -2951,8 +3387,8 @@ clauses:
   - id: LOCK-FIDELITY-HANDOFF-OPENCARDS-MISMATCH
     check: close-turn
     kind: gate
-    clause: "a handoff whose lock_pointer.open_cards != the RECOMPUTED deck+state open-card set rejected — the vacuous open_cards: [] forgery is caught (PROP-034 Lever B)"
-    source: PROP-034 §2 Lever B
+    clause: "a handoff whose lock_pointer.open_cards != the RECOMPUTED deck+state open-card set rejected — the vacuous open_cards: [] forgery is caught (BF-PROP-007 Lever B)"
+    source: BF-PROP-007 §2 Lever B
     git_fixture: lf_handoff_opencards_mismatch
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -2965,8 +3401,8 @@ clauses:
   - id: LOCK-FIDELITY-DRIFT-UNLOGGED
     check: drift
     kind: gate
-    clause: "a working-set card referencing a requirement_id NOT in the frozen manifest (not an authorized SCOPE_CHANGE fix) rejected at module-acceptance — unlogged scope drift (PROP-034 Lever C, Layer 1)"
-    source: PROP-034 §2 Lever C
+    clause: "a working-set card referencing a requirement_id NOT in the frozen manifest (not an authorized SCOPE_CHANGE fix) rejected at module-acceptance — unlogged scope drift (BF-PROP-007 Lever C, Layer 1)"
+    source: BF-PROP-007 §2 Lever C
     git_fixture: lf_drift_unlogged
     bad:
       args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
@@ -2976,12 +3412,12 @@ clauses:
       git_fixture: lf_drift_ok
       args: ["--state", "{STATE}", "--repo-root", "{REPO}", "--cards-dir", "{REPO}/cards", "--at-acceptance"]
 
-  # ── PROP-034 xfam FIX-FIRST hardening (v1.15 fold) — F2/F3/F6/F7/F8 biting fixtures ──────────────
+  # ── BF-PROP-007 xfam FIX-FIRST hardening (v1.15 fold) — F2/F3/F6/F7/F8 biting fixtures ──────────────
   - id: LOCK-FIDELITY-ANCHOR-PACKET-HASH-MISMATCH
     check: card
     kind: gate
-    clause: "a FIX card whose source_map.locked_packet_hash != the RECOMPUTED hash of state.packet_dir rejected — the fix anchors to a DIFFERENT packet than the live frozen one; a self-declared anchor packet is never trusted (PROP-034 Lever A / F2)"
-    source: PROP-034 xfam F2
+    clause: "a FIX card whose source_map.locked_packet_hash != the RECOMPUTED hash of state.packet_dir rejected — the fix anchors to a DIFFERENT packet than the live frozen one; a self-declared anchor packet is never trusted (BF-PROP-007 Lever A / F2)"
+    source: BF-PROP-007 xfam F2
     git_fixture: lf_card_packet_hash_mismatch
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -2994,8 +3430,8 @@ clauses:
   - id: LOCK-FIDELITY-ANCHOR-CARD-NOT-IN-REGISTRY
     check: card
     kind: gate
-    clause: "a FIX card whose lock_anchor_ref.card_id does not resolve to a card in the frozen MODULE-REGISTRY rejected — a fix must anchor to a real frozen card, else the over-reach check skips an unfound anchor (PROP-034 Lever A / F2)"
-    source: PROP-034 xfam F2
+    clause: "a FIX card whose lock_anchor_ref.card_id does not resolve to a card in the frozen MODULE-REGISTRY rejected — a fix must anchor to a real frozen card, else the over-reach check skips an unfound anchor (BF-PROP-007 Lever A / F2)"
+    source: BF-PROP-007 xfam F2
     git_fixture: lf_card_anchor_card_not_in_registry
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3008,8 +3444,8 @@ clauses:
   - id: LOCK-FIDELITY-SCOPE-CEO-REF-DANGLING
     check: card
     kind: gate
-    clause: "a SCOPE_CHANGE whose ceo_decision_ref does not resolve to a row in the packet CEO-DECISION-LEDGER rejected — a self-declared decision id is not authorization (PROP-034 Lever A / F3)"
-    source: PROP-034 xfam F3
+    clause: "a SCOPE_CHANGE whose ceo_decision_ref does not resolve to a row in the packet CEO-DECISION-LEDGER rejected — a self-declared decision id is not authorization (BF-PROP-007 Lever A / F3)"
+    source: BF-PROP-007 xfam F3
     git_fixture: lf_card_scope_ceo_ref_dangling
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3022,8 +3458,8 @@ clauses:
   - id: LOCK-FIDELITY-SCOPE-AMENDMENT-UNSAFE
     check: card
     kind: gate
-    clause: "a SCOPE_CHANGE whose packet_amendment_ref is a path-unsafe ref (absolute / '..' / symlink / outside-repo) rejected — the amendment must be a real in-tree file (PROP-034 Lever A / F3)"
-    source: PROP-034 xfam F3
+    clause: "a SCOPE_CHANGE whose packet_amendment_ref is a path-unsafe ref (absolute / '..' / symlink / outside-repo) rejected — the amendment must be a real in-tree file (BF-PROP-007 Lever A / F3)"
+    source: BF-PROP-007 xfam F3
     git_fixture: lf_card_scope_amend_unsafe
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3036,8 +3472,8 @@ clauses:
   - id: LOCK-FIDELITY-SCOPE-DESTRUCTIVE-P0
     check: card
     kind: gate
-    clause: "an UNAUTHORIZED SCOPE_CHANGE on a DESTRUCTIVE surface (touches_upload_restore_import) escalates to P0 — the high-risk class the old card_high_risk() missed (PROP-034 Lever A / F3)"
-    source: PROP-034 xfam F3
+    clause: "an UNAUTHORIZED SCOPE_CHANGE on a DESTRUCTIVE surface (touches_upload_restore_import) escalates to P0 — the high-risk class the old card_high_risk() missed (BF-PROP-007 Lever A / F3)"
+    source: BF-PROP-007 xfam F3
     git_fixture: lf_card_scope_destructive_p0
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3050,8 +3486,8 @@ clauses:
   - id: LOCK-FIDELITY-DEVIATION-STATUS-INVALID
     check: module-acceptance
     kind: gate
-    clause: "a lock_deviation row whose status is not OPEN or CEO_REVIEWED (CLOSED/DONE/typo/blank) fails closed at module-acceptance — an unknown status must never slip through as reviewed (PROP-034 / F8)"
-    source: PROP-034 xfam F8
+    clause: "a lock_deviation row whose status is not OPEN or CEO_REVIEWED (CLOSED/DONE/typo/blank) fails closed at module-acceptance — an unknown status must never slip through as reviewed (BF-PROP-007 / F8)"
+    source: BF-PROP-007 xfam F8
     git_fixture: lf_accept_status_invalid
     bad:
       args: ["--module-id", "m3", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3064,8 +3500,8 @@ clauses:
   - id: LOCK-FIDELITY-ACCEPTANCE-LAYER1-DRIFT
     check: module-acceptance
     kind: gate
-    clause: "module-acceptance fails closed when the live deck has Layer-1 drift — a working-set card referencing an off-manifest requirement_id cannot be accepted (PROP-034 Lever C / F7)"
-    source: PROP-034 xfam F7
+    clause: "module-acceptance fails closed when the live deck has Layer-1 drift — a working-set card referencing an off-manifest requirement_id cannot be accepted (BF-PROP-007 Lever C / F7)"
+    source: BF-PROP-007 xfam F7
     git_fixture: lf_accept_layer1_drift
     bad:
       args: ["--module-id", "m2", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3078,8 +3514,8 @@ clauses:
   - id: LOCK-FIDELITY-SESSION-LOCK-POINTER-REQUIRED
     check: state
     kind: gate
-    clause: "a frozen project (state.packet_dir set) booting on a handoff with NO close_turn.lock_pointer fails closed at session-start — a stripped/absent block cannot boot on a drifted lock; only an explicit typed migration row exempts (PROP-034 Lever B / F6)"
-    source: PROP-034 xfam F6
+    clause: "a frozen project (state.packet_dir set) booting on a handoff with NO close_turn.lock_pointer fails closed at session-start — a stripped/absent block cannot boot on a drifted lock; only an explicit typed migration row exempts (BF-PROP-007 Lever B / F6)"
+    source: BF-PROP-007 xfam F6
     git_fixture: lf_session_no_lock_pointer
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -3090,7 +3526,7 @@ clauses:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
 
   # ──────────────────────────────────────────────────────────────
-  # check: structure / card / close-turn / state / consistency  (PROP-035 — the Fixing stage)
+  # check: structure / card / close-turn / state / consistency  (F-PROP-001 — the Fixing stage)
   # 18 clauses; each pinned BAD fixture fails closed at the stated severity (so green = enforcing).
   # (16 at first build + TREE-BOUND #17 / AMNESIA-LOG-BACKED #18 from the GPT-5.5 xhigh built-code review.)
   # ──────────────────────────────────────────────────────────────
@@ -3098,8 +3534,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-RAIL
     check: build-turn
     kind: gate
-    clause: "a mode: FIX card runs through build-turn → cx check structure is INVOKED (rail wired); a forged structure_lock surfaces as a structure sub-check failure (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a mode: FIX card runs through build-turn → cx check structure is INVOKED (rail wired); a forged structure_lock surfaces as a structure sub-check failure (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_rail
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3112,8 +3548,8 @@ clauses:
   - id: VERIFY-APP-BUILD-TURN-RAIL
     check: build-turn
     kind: gate
-    clause: "a card declaring verify_app_ref runs through build-turn → cx check verify-app is INVOKED (rail wired); a failing verify_app receipt (passed != true) surfaces as a verify-app sub-check failure at slice completion, before the screen is surfaced (PROP-036)"
-    source: PROP-036 (Verify-App Gate); build-turn early-catch, mirror of the render-fidelity / structure rails
+    clause: "a card declaring verify_app_ref runs through build-turn → cx check verify-app is INVOKED (rail wired); a failing verify_app receipt (passed != true) surfaces as a verify-app sub-check failure at slice completion, before the screen is surfaced (B-PROP-010)"
+    source: B-PROP-010 (Verify-App Gate); build-turn early-catch, mirror of the render-fidelity / structure rails
     git_fixture: build_turn_verify_app_rail
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3126,8 +3562,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-LOCK-REF
     check: structure
     kind: gate
-    clause: "a mode: FIX card with no structure_lock_ref fails closed — a fix must bind to the frozen architecture it preserves (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a mode: FIX card with no structure_lock_ref fails closed — a fix must bind to the frozen architecture it preserves (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_nolockref
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3140,8 +3576,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-MANIFEST
     check: structure
     kind: gate
-    clause: "a fix that creates/renames/moves/deletes a file OUTSIDE allowed_files vs the frozen structure_lock is structural drift (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a fix that creates/renames/moves/deletes a file OUTSIDE allowed_files vs the frozen structure_lock is structural drift (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_manifest
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3154,8 +3590,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-HASH-RECOMPUTE
     check: structure
     kind: gate
-    clause: "a structure_lock whose manifest_sha != the RECOMPUTED hash of its commit+paths is rejected — a self-declared structure hash is never trusted (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a structure_lock whose manifest_sha != the RECOMPUTED hash of its commit+paths is rejected — a self-declared structure hash is never trusted (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_badhash
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3168,8 +3604,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-TREE-BOUND
     check: structure
     kind: gate
-    clause: "a structure_lock whose paths OMIT/ALTER a file that exists in git ls-tree at accepted_at_commit is rejected — the frozen side is recomputed from the REAL tree, never trusted from the self-declared paths list; a forger who deletes a tracked file and omits it from paths (recomputing a self-consistent hash so HASH-RECOMPUTE still passes) would otherwise empty the live-vs-frozen diff (PROP-035 Lever A, built-code review #1)"
-    source: PROP-035 §3 Lever A (built-code review #1)
+    clause: "a structure_lock whose paths OMIT/ALTER a file that exists in git ls-tree at accepted_at_commit is rejected — the frozen side is recomputed from the REAL tree, never trusted from the self-declared paths list; a forger who deletes a tracked file and omits it from paths (recomputing a self-consistent hash so HASH-RECOMPUTE still passes) would otherwise empty the live-vs-frozen diff (F-PROP-001 Lever A, built-code review #1)"
+    source: F-PROP-001 §3 Lever A (built-code review #1)
     git_fixture: fs_struct_paths_forged
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3182,8 +3618,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-PATHSAFE
     check: structure
     kind: gate
-    clause: "a structure_lock_ref using an absolute path / '..' / symlink / outside-repo target is rejected (reuses the v1.10 path-safety shape) (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a structure_lock_ref using an absolute path / '..' / symlink / outside-repo target is rejected (reuses the v1.10 path-safety shape) (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_pathsafe
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3196,8 +3632,8 @@ clauses:
   - id: FIX-STAGE-STRUCT-FORGED
     check: structure
     kind: gate
-    clause: "a structure_lock that is not machine-generated (wrong generator marker) / not sha-bound to a real commit is forged (PROP-035 Lever A)"
-    source: PROP-035 §3 Lever A
+    clause: "a structure_lock that is not machine-generated (wrong generator marker) / not sha-bound to a real commit is forged (F-PROP-001 Lever A)"
+    source: F-PROP-001 §3 Lever A
     git_fixture: fs_struct_forged
     bad:
       args: ["{REPO}/cards/fix.yaml", "--repo-root", "{REPO}"]
@@ -3210,8 +3646,8 @@ clauses:
   - id: FIX-STAGE-AMNESIA-QLOG-RECONCILE
     check: close-turn
     kind: gate
-    clause: "an open FIX-stage question in the handoff with no reconciled FIX-QUESTIONS-LOG row is an off-the-books re-ask (PROP-035 Lever B)"
-    source: PROP-035 §3 Lever B
+    clause: "an open FIX-stage question in the handoff with no reconciled FIX-QUESTIONS-LOG row is an off-the-books re-ask (F-PROP-001 Lever B)"
+    source: F-PROP-001 §3 Lever B
     git_fixture: fs_qlog_unreconciled
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -3224,8 +3660,8 @@ clauses:
   - id: FIX-STAGE-AMNESIA-LOG-BACKED
     check: card
     kind: gate
-    clause: "a clarification_provenance question that is not a typed row in the file-backed FIX-QUESTIONS-LOG (no fix_questions_log ref, an untyped/missing log, or a question.id absent from it) is a card-only receipt, not file-backed — a card receipt cannot prove a question was filed, undercutting the close-turn reconcile (PROP-035 Lever B, built-code review #5)"
-    source: PROP-035 §3 Lever B (built-code review #5)
+    clause: "a clarification_provenance question that is not a typed row in the file-backed FIX-QUESTIONS-LOG (no fix_questions_log ref, an untyped/missing log, or a question.id absent from it) is a card-only receipt, not file-backed — a card receipt cannot prove a question was filed, undercutting the close-turn reconcile (F-PROP-001 Lever B, built-code review #5)"
+    source: F-PROP-001 §3 Lever B (built-code review #5)
     git_fixture: fs_amnesia_unlogged
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3238,8 +3674,8 @@ clauses:
   - id: FIX-STAGE-AMNESIA-GHOST-REF
     check: card
     kind: gate
-    clause: "a clarification_provenance related_ceo_d_ref (or new_ledger_row_ref) that resolves to no real CEO-DECISION-LEDGER row is a ghost (PROP-035 Lever B)"
-    source: PROP-035 §3 Lever B
+    clause: "a clarification_provenance related_ceo_d_ref (or new_ledger_row_ref) that resolves to no real CEO-DECISION-LEDGER row is a ghost (F-PROP-001 Lever B)"
+    source: F-PROP-001 §3 Lever B
     git_fixture: fs_amnesia_ghost
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3252,8 +3688,8 @@ clauses:
   - id: FIX-STAGE-AMNESIA-CONTRADICTION
     check: card
     kind: gate
-    clause: "an answer that contradicts a locked decision with no resolved ceo_override_ref changes a locked rule silently (P1 default; P0 on a danger class) (PROP-035 Lever B)"
-    source: PROP-035 §3 Lever B
+    clause: "an answer that contradicts a locked decision with no resolved ceo_override_ref changes a locked rule silently (P1 default; P0 on a danger class) (F-PROP-001 Lever B)"
+    source: F-PROP-001 §3 Lever B
     git_fixture: fs_amnesia_contradiction
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3266,8 +3702,8 @@ clauses:
   - id: FIX-STAGE-AMNESIA-OVERRIDE-SAFE
     check: card
     kind: gate
-    clause: "a ceo_override_ref that is an absolute path / '..' / outside-repo is rejected (PROP-035 Lever B)"
-    source: PROP-035 §3 Lever B
+    clause: "a ceo_override_ref that is an absolute path / '..' / outside-repo is rejected (F-PROP-001 Lever B)"
+    source: F-PROP-001 §3 Lever B
     git_fixture: fs_amnesia_override_unsafe
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3280,8 +3716,8 @@ clauses:
   - id: FIX-STAGE-XLOCK-SURFACE
     check: card
     kind: gate
-    clause: "an allowed_files entry OUTSIDE every declared fix_targets surface is a silent layer-cross (P1 default; P0 on a danger-class card) (PROP-035 Lever C)"
-    source: PROP-035 §3 Lever C
+    clause: "an allowed_files entry OUTSIDE every declared fix_targets surface is a silent layer-cross (P1 default; P0 on a danger-class card) (F-PROP-001 Lever C)"
+    source: F-PROP-001 §3 Lever C
     git_fixture: fs_xlock_surface
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3294,8 +3730,8 @@ clauses:
   - id: FIX-STAGE-XLOCK-MULTI-ANCHOR
     check: card
     kind: gate
-    clause: "a multi-target fix where any target lacks its own lock_anchor_ref + reason is a blanket open-everything (PROP-035 Lever C)"
-    source: PROP-035 §3 Lever C
+    clause: "a multi-target fix where any target lacks its own lock_anchor_ref + reason is a blanket open-everything (F-PROP-001 Lever C)"
+    source: F-PROP-001 §3 Lever C
     git_fixture: fs_multi_anchor
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3308,8 +3744,8 @@ clauses:
   - id: FIX-STAGE-POSTURE-DECL
     check: card
     kind: gate
-    clause: "a mode: FIX card with no fix_targets (or a target outside the closed 7-target taxonomy) fails the posture declaration (PROP-035 Lever C)"
-    source: PROP-035 §3 Lever C
+    clause: "a mode: FIX card with no fix_targets (or a target outside the closed 7-target taxonomy) fails the posture declaration (F-PROP-001 Lever C)"
+    source: F-PROP-001 §3 Lever C
     git_fixture: fs_posture_no_targets
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3322,8 +3758,8 @@ clauses:
   - id: FIX-STAGE-REVERT-RECEIPT
     check: card
     kind: gate
-    clause: "a mode: FIX card that marks drift_recovery_required but carries no (or a partial) revert_receipt is fixing a Layer-1 drift forward (PROP-035 Lever E)"
-    source: PROP-035 §3 Lever E
+    clause: "a mode: FIX card that marks drift_recovery_required but carries no (or a partial) revert_receipt is fixing a Layer-1 drift forward (F-PROP-001 Lever E)"
+    source: F-PROP-001 §3 Lever E
     git_fixture: fs_revert_missing
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}"]
@@ -3336,8 +3772,8 @@ clauses:
   - id: FIX-STAGE-SEAT-PROFILE
     check: state
     kind: gate
-    clause: "current_stage: FIXING_STAGE with no fixing_stage orchestrator seat in BUILD-ENGINE-PROFILES leaves the seat cap invisible (PROP-035 §6 state-layer)"
-    source: PROP-035 §6 (xfam P1-3)
+    clause: "current_stage: FIXING_STAGE with no fixing_stage orchestrator seat in BUILD-ENGINE-PROFILES leaves the seat cap invisible (F-PROP-001 §6 state-layer)"
+    source: F-PROP-001 §6 (xfam P1-3)
     bad:
       args: ["tests/fixtures/state_fixing_stage.yaml", "--profiles", "tests/fixtures/profiles_test.yaml"]
       expect_severity: P1
@@ -3348,8 +3784,8 @@ clauses:
   - id: FIX-STAGE-GUARDRAIL-PRESENCE
     check: consistency
     kind: gate
-    clause: "the always-read Fixing preserve-posture guardrail removed/reworded out of canon is caught by cx check consistency (presence bite; mirrors prevention-first-ladder). NOTE: the consistency mechanism emits P1 for a missing canonical — STRICTER than the proposal's nominal P2, the safe direction (PROP-035 Lever D)"
-    source: PROP-035 §3 Lever D
+    clause: "the always-read Fixing preserve-posture guardrail removed/reworded out of canon is caught by cx check consistency (presence bite; mirrors prevention-first-ladder). NOTE: the consistency mechanism emits P1 for a missing canonical — STRICTER than the proposal's nominal P2, the safe direction (F-PROP-001 Lever D)"
+    source: F-PROP-001 §3 Lever D
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_fixing_drifted.yaml"]
       expect_severity: P1
@@ -3358,7 +3794,7 @@ clauses:
       args: []
 
   # ──────────────────────────────────────────────────────────────
-  # check: blueprint  (PROP-039 v1.18 — the per-module BLUEPRINT-READY gate)
+  # check: blueprint  (P-PROP-005 v1.18 — the per-module BLUEPRINT-READY gate)
   # Each clause = a pinned BAD fixture rejected at the stated severity (recomputed
   # from source, never a written flag) + a GOOD fixture that passes.
   # ──────────────────────────────────────────────────────────────
@@ -3367,7 +3803,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "the --approval receipt's manifest_hash + packet_hash must equal the recomputed manifest + frozen-packet hashes — a stale receipt for a different/older packet is caught (P1-2, no self-referential in-packet hash)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §5.2"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §5.2"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_manifest_hash_approval.yaml"]
       expect_severity: P0
@@ -3379,7 +3815,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "every anchor {file,line,source_hash} resolves to real source and the recomputed span hash matches — a tampered/stale anchor span is caught"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.7"
     bad:
       args: ["tests/fixtures/blueprint_bad_anchor_resolves_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_anchor_resolves_packet_approval.yaml"]
       expect_severity: P1
@@ -3391,7 +3827,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "the manifest's anchor set EQUALS the expected set derived from registry+requirements+controls+nav — a missing OR duplicate anchor fails (the omitted-requirement-still-hashes-clean hole, P1-3)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.7"
     bad:
       args: ["tests/fixtures/blueprint_bad_anchor_coverage_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_anchor_coverage_packet_approval.yaml"]
       expect_severity: P0
@@ -3403,7 +3839,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "each kind: screen module has a hash-bound ui_lock_manifest (style+provenance) — a missing/unbound locked design fails; N/A for shared_logic"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.4"
     bad:
       args: ["tests/fixtures/blueprint_bad_design_lock_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_design_lock_packet_approval.yaml"]
       expect_severity: P1
@@ -3415,7 +3851,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "every nav to_screen resolves to a registered screen — a dangling/orphan target fails; N/A for shared_logic"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.4"
     bad:
       args: ["tests/fixtures/blueprint_bad_nav_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_nav_packet_approval.yaml"]
       expect_severity: P1
@@ -3427,7 +3863,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "every control's contract_id resolves in behaviour-contracts.yaml to a full contract (tap_outcome/state_change/error_empty/done_test_ref) — a missing/placeholder contract fails (P1-4; never synthesized from a data-fn attribute)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.5"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.5"
     bad:
       args: ["tests/fixtures/blueprint_bad_control_contract_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_control_contract_packet_approval.yaml"]
       expect_severity: P1
@@ -3439,7 +3875,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "every BUILDING requirement in the module resolves to an acceptance_criterion done-test — a BUILDING req with no done-test fails"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.4"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.4"
     bad:
       args: ["tests/fixtures/blueprint_bad_done_test_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_done_test_packet_approval.yaml"]
       expect_severity: P1
@@ -3451,7 +3887,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "no surviving [NEEDS-CLARIFICATION] marker in the module's anchored scope — an open question blocks readiness"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.8"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.8"
     bad:
       args: ["tests/fixtures/blueprint_bad_clarification_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_clarification_packet_approval.yaml"]
       expect_severity: P1
@@ -3463,7 +3899,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "the receipt has a ceo_approval for the module AND approved_source_hash == the recomputed current source-hash — a STALE approval after a plan edit is auto-invalidated (P1-1, the auto-invalidation)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.7"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.7"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_stale_approval.yaml"]
       expect_severity: P0
@@ -3475,7 +3911,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "a registry-risk-flagged module (money/auth/shared-data/secrets) must carry a typed opposite-family review receipt (reviewer_family + verdict + reviewed_source_hash == approved_source_hash + path-safe ref) — a manifest boolean never satisfies it (P1-5)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §5.2"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §5.2"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_no_review_receipt.yaml"]
       expect_severity: P1
@@ -3487,7 +3923,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "requires --state; no open P0–P3 mapped to the module (fail-closed to global findings when attribution is absent) (P1-6)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.8"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.8"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_hidden_severity_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
       expect_severity: P1
@@ -3499,7 +3935,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "required field set enforced per kind; a screen-only field N/A on shared_logic must carry an explicit reason, never a silent skip (P2-3)"
-    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / PROP-039 §3.1"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.1"
     bad:
       args: ["tests/fixtures/blueprint_bad_per_kind_packet", "--module", "rounding", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_per_kind_packet_approval.yaml"]
       expect_severity: P1
@@ -3512,8 +3948,8 @@ clauses:
   - id: PACKET-MODULE-REGISTRY-COVERS-SCREENS
     check: packet
     kind: gate
-    clause: "the planning MODULE-REGISTRY must cover every screen in screens-manifest before the packet freezes — an uncovered screen drifts unbuilt (PROP-039 P1-7)"
-    source: "PACKET-CONTENTS.md / PROP-039 §5.2"
+    clause: "the planning MODULE-REGISTRY must cover every screen in screens-manifest before the packet freezes — an uncovered screen drifts unbuilt (P-PROP-005 P1-7)"
+    source: "PACKET-CONTENTS.md / P-PROP-005 §5.2"
     bad:
       args: ["tests/fixtures/packet_bad_registry_missing_screen"]
       expect_severity: P1
@@ -3524,8 +3960,8 @@ clauses:
   - id: PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS
     check: packet
     kind: gate
-    clause: "the planning MODULE-REGISTRY must cover every BUILDING requirement id before the packet freezes — an uncovered requirement has no module to build it (PROP-039 P1-7)"
-    source: "PACKET-CONTENTS.md / PROP-039 §5.2"
+    clause: "the planning MODULE-REGISTRY must cover every BUILDING requirement id before the packet freezes — an uncovered requirement has no module to build it (P-PROP-005 P1-7)"
+    source: "PACKET-CONTENTS.md / P-PROP-005 §5.2"
     bad:
       args: ["tests/fixtures/packet_bad_registry_missing_requirement"]
       expect_severity: P1
@@ -3533,13 +3969,63 @@ clauses:
     good:
       args: ["tests/fixtures/packet_good"]
 
+  # ── PB-PROP-002: build-auth floor — registry build-shape fields ──────────────────────────────────
+
+  - id: PACKET-MODULE-REGISTRY-FROZEN-HASH-PRESENT
+    check: packet
+    kind: gate
+    clause: "a packet MODULE-REGISTRY.yaml with no frozen_packet_hash rejected — an unbound registry is not frozen; the frozen_packet_hash marks the registry as bound to a specific packet (P0) [PB-PROP-002]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/packet_registry_no_frozen_hash"]
+      expect_severity: P0
+      expect_contains: "UNBOUND registry is not frozen"
+    good:
+      args: ["tests/fixtures/good_registry_packet"]
+
+  - id: PACKET-MODULE-REGISTRY-DEP-CYCLE
+    check: packet
+    kind: gate
+    clause: "a packet MODULE-REGISTRY.yaml with cyclic dependency_modules rejected — deps must form a DAG; a cycle makes the order wall unresolvable (P0) [PB-PROP-002]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/packet_registry_dep_cycle"]
+      expect_severity: P0
+      expect_contains: "dependency_modules form a cycle"
+    good:
+      args: ["tests/fixtures/good_registry_packet"]
+
+  - id: PACKET-MODULE-REGISTRY-DEP-UNKNOWN
+    check: packet
+    kind: gate
+    clause: "a packet MODULE-REGISTRY.yaml with dependency_modules referencing unknown module_ids rejected — every dependency must be a registered module (P0) [PB-PROP-002]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/packet_registry_dep_unknown"]
+      expect_severity: P0
+      expect_contains: "dependency_modules reference module_id(s) not in the registry"
+    good:
+      args: ["tests/fixtures/good_registry_packet"]
+
+  - id: PACKET-MODULE-REGISTRY-DEP-ORDER
+    check: packet
+    kind: gate
+    clause: "a packet MODULE-REGISTRY.yaml whose dependency_modules reference a same-or-LATER module rejected — the order wall builds in registry order and unions earlier rows, so a forward dependency is a valid DAG yet a guaranteed module-start deadlock; deps must reference an EARLIER row (P0) [PB-PROP-002, GPT xfam]"
+    source: "PB-PROP-002 §registry-build-shape"
+    bad:
+      args: ["tests/fixtures/packet_registry_dep_forward"]
+      expect_severity: P0
+      expect_contains: "must reference a module ordered EARLIER"
+    good:
+      args: ["tests/fixtures/good_registry_packet"]
+
   # ── order-wall rider (proven THROUGH build-turn, P2-1) ──
 
   - id: MODULE-START-BLUEPRINT-READY
     check: build-turn
     kind: gate
-    clause: "a MODULE/MODE_A card whose target module is NOT BLUEPRINT-READY (stale/missing blueprint approval) is BLOCKED via cx check module-start at build-turn — the build-blocker rides the order wall, not a new gate family (PROP-039 P2-1)"
-    source: "MASTER-BLUEPRINT.md / GATES.md / PROP-039 §5.2"
+    clause: "a MODULE/MODE_A card whose target module is NOT BLUEPRINT-READY (stale/missing blueprint approval) is BLOCKED via cx check module-start at build-turn — the build-blocker rides the order wall, not a new gate family (P-PROP-005 P2-1)"
+    source: "MASTER-BLUEPRINT.md / GATES.md / P-PROP-005 §5.2"
     git_fixture: build_turn_blueprint_not_ready
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3557,7 +4043,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-001: expected controls are derived from the INDEPENDENT behaviour-contracts source, not the manifest field being validated — a manifest that OMITS a control the contracts source declares fails coverage (closes the circularity)"
-    source: "PROP-039 built-code xfam CXBP-001"
+    source: "P-PROP-005 built-code xfam CXBP-001"
     bad:
       args: ["tests/fixtures/blueprint_bad_omit_control_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_omit_control_packet_approval.yaml"]
       expect_severity: P0
@@ -3569,7 +4055,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-001: expected nav edges are derived from the INDEPENDENT screens-manifest, not the manifest field being validated — a manifest that OMITS a nav edge the screens-manifest declares fails coverage"
-    source: "PROP-039 built-code xfam CXBP-001"
+    source: "P-PROP-005 built-code xfam CXBP-001"
     bad:
       args: ["tests/fixtures/blueprint_bad_omit_nav_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_omit_nav_packet_approval.yaml"]
       expect_severity: P0
@@ -3581,7 +4067,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-003: review_ref must path-safe-resolve to a review file that EXISTS next to the approval — a non-existent review_ref is not a review (good fixture now points at a real file)"
-    source: "PROP-039 built-code xfam CXBP-003"
+    source: "P-PROP-005 built-code xfam CXBP-003"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_review_ref_missing.yaml"]
       expect_severity: P1
@@ -3593,7 +4079,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-003: reviewer_family must be the OPPOSITE cross-family group of the builder — a same-family review (builder anthropic, reviewer claude) is a blind-spot, not a cross-family catch"
-    source: "PROP-039 built-code xfam CXBP-003"
+    source: "P-PROP-005 built-code xfam CXBP-003"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_review_same_family.yaml"]
       expect_severity: P1
@@ -3605,7 +4091,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-004: NO-HIDDEN-SEVERITY fails CLOSED when state has no open_findings mapping — a missing tally cannot prove there is no hidden open severity"
-    source: "PROP-039 built-code xfam CXBP-004"
+    source: "P-PROP-005 built-code xfam CXBP-004"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_state_no_open_findings.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
       expect_severity: P1
@@ -3617,7 +4103,7 @@ clauses:
     check: blueprint
     kind: gate
     clause: "CXBP-004: NO-HIDDEN-SEVERITY fails CLOSED when open_findings.items is not a list — a non-list items can no longer silently become an empty, passing state"
-    source: "PROP-039 built-code xfam CXBP-004"
+    source: "P-PROP-005 built-code xfam CXBP-004"
     bad:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "home", "--state", "tests/fixtures/blueprint_bad_state_items_malformed.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
       expect_severity: P1
@@ -3632,7 +4118,7 @@ clauses:
     check: module-start
     kind: gate
     clause: "CXBP-006: cx check module-start directly fails at P0 for a module that is not BLUEPRINT-READY (stale approval) — the build-blocker's true severity, distinct from the build-turn aggregator wrapper which surfaces it at its honest P1 rail severity"
-    source: "PROP-039 built-code xfam CXBP-006 / EVAL-035"
+    source: "P-PROP-005 built-code xfam CXBP-006 / EVAL-035"
     git_fixture: build_turn_blueprint_not_ready
     bad:
       args: ["{REPO}/card.yaml", "--packet-dir", "{REPO}/packet", "--registry", "{REPO}/packet/MODULE-REGISTRY.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3648,8 +4134,8 @@ clauses:
   - id: MODULE-START-BLUEPRINT-APPROVAL-REF-PATHSAFE
     check: build-turn
     kind: gate
-    clause: "CXBP-005: state.blueprint_approval_ref is routed through safe_repo_ref — a symlinked / resolved-escape ref (the PROP-037 class, not just absolute/'..') is rejected at the order wall, proven through build-turn"
-    source: "PROP-039 built-code xfam CXBP-005"
+    clause: "CXBP-005: state.blueprint_approval_ref is routed through safe_repo_ref — a symlinked / resolved-escape ref (the B-PROP-011 class, not just absolute/'..') is rejected at the order wall, proven through build-turn"
+    source: "P-PROP-005 built-code xfam CXBP-005"
     git_fixture: build_turn_blueprint_approval_symlink
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -3658,3 +4144,553 @@ clauses:
     good:
       git_fixture: build_turn_blueprint_ready
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: kaizen  (PBF-PROP-012 Part F — closure safeguard)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT
+    check: kaizen
+    kind: gate
+    clause: "behavioural APPLIED PROP with no enforcement block rejected P0 (the B-PROP-005 dogfood class)"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_no_enforcement.md"]
+      expect_severity: P0
+      expect_contains: "KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-ENFORCEMENT-NOT-PRESENCE-ONLY
+    check: kaizen
+    kind: gate
+    clause: "enforcement.kind=presence_lint is BANNED for a behavioural APPLIED PROP; allowed kinds are clause/prompt_marker/judgment_limit"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_presence_only.md"]
+      expect_severity: P0
+      expect_contains: "presence-lint"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-ENFORCEMENT-CLAUSE-EXISTS
+    check: kaizen
+    kind: gate
+    clause: "enforcement.clause_id must resolve to a real id in check-contracts.yaml — a dangling clause ref is rejected P0"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_fake_clause.md"]
+      expect_severity: P0
+      expect_contains: "not found in check-contracts"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-BEHAVIOURAL-FIELD-PRESENT
+    check: kaizen
+    kind: gate
+    clause: "every APPLIED PROP must carry a 'behavioural' field — an APPLIED PROP with no behavioural field rejected P1"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_no_behavioural_field.md"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-BEHAVIOURAL-FIELD-PRESENT"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-PROMPT-REF-SHAPE
+    check: kaizen
+    kind: gate
+    clause: "enforcement.prompt_ref (kind=prompt_marker) must be a relative in-repo path — absolute/escaping prompt_ref rejected P1"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_promptref_unsafe.md"]
+      expect_severity: P1
+      expect_contains: "prompt_ref"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-APPLIED-ENTRY-PARSEABLE
+    check: kaizen
+    kind: gate
+    clause: "a yaml fence that cannot be parsed into PROP fields is flagged P2 debt by default; P1 with --strict-debt"
+    source: "PBF-PROP-012 Part F §3"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_unparseable_applied.md", "--strict-debt"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-APPLIED-ENTRY-PARSEABLE"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-JUDGMENT-LIMIT-SHAPE
+    check: kaizen
+    kind: gate
+    clause: "enforcement.kind=judgment_limit missing any of justification/review_lens/ceo_decision_ref rejected P1"
+    source: "PBF-PROP-012 Part F §3 + amendment A1"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_judgment_limit_incomplete.md"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-JUDGMENT-LIMIT-SHAPE"
+    good:
+      args: ["tests/fixtures/kaizen_good_judgment_limit.md"]
+
+  # ── PBF-PROP-014 — no-ambiguity / conflict_scan clauses ─────────────────────────
+
+  - id: KAIZEN-CONFLICT-SCAN-PRESENT
+    check: kaizen
+    kind: gate
+    clause: "every PROP must carry a conflict_scan block — absence rejected P1 (universal per CEO §10 ratification of PBF-PROP-014); activated by --conflict-scan flag"
+    source: "PBF-PROP-014 §3c + §10"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_conflict_scan_missing.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CONFLICT-SCAN-PRESENT"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-CONFLICT-SCAN-RESOLVED
+    check: kaizen
+    kind: gate
+    clause: "conflict_scan listing >=1 entry in duplicates/ambiguities/conflicts but resolution_ref blank/placeholder rejected P0 — admitted unresolved conflict fails closed; activated by --conflict-scan"
+    source: "PBF-PROP-014 §3c"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_conflict_scan_unresolved.md", "--conflict-scan"]
+      expect_severity: P0
+      expect_contains: "KAIZEN-CONFLICT-SCAN-RESOLVED"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-CONFLICT-SCAN-SHAPE
+    check: kaizen
+    kind: gate
+    clause: "conflict_scan missing required keys (duplicates/ambiguities/conflicts lists, resolution_ref, basis mapping) rejected P1; activated by --conflict-scan"
+    source: "PBF-PROP-014 §3c + §9-G4"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_conflict_scan_shape.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CONFLICT-SCAN-SHAPE"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-CONFLICT-SCAN-BASIS-CURRENT
+    check: kaizen
+    kind: gate
+    clause: "forward PROP conflict_scan basis with stale or absent queue_sha/ledger_sha/crosswalk_sha/prop_count/decision_count rejected P1; historical PROPs accepted with basis.source: backscan-2026-06-30; activated by --conflict-scan"
+    source: "PBF-PROP-014 §9-G4 + §10"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_conflict_scan_stale_basis.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CONFLICT-SCAN-BASIS-CURRENT"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: BUILD-CONFLICT-SCAN-STEP-MISSING
+    check: kaizen
+    kind: gate
+    clause: "conflict_scan.scan_step_marker absent rejected P1 — the PROP-authoring dispatch must inject the conflict-scan step and record its marker (mirrors Part C preamble-marker family); activated by --conflict-scan"
+    source: "PBF-PROP-014 §3d + §9-G2"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_conflict_scan_step_missing.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "BUILD-CONFLICT-SCAN-STEP-MISSING"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-ID-FORMAT
+    check: kaizen
+    kind: gate
+    clause: "active PROP id that does not match ^(P|B|F|PB|PF|BF|PBF)-PROP-NNN$ rejected P0 — every non-retired, non-template PROP must carry the stage-prefixed id introduced by PBF-PROP-013; activated by --conflict-scan"
+    source: "PBF-PROP-013 §2a"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_id_format.md", "--conflict-scan"]
+      expect_severity: P0
+      expect_contains: "KAIZEN-ID-FORMAT"
+    good:
+      args: ["tests/fixtures/kaizen_good_stage_rename.md", "--conflict-scan"]
+
+  - id: KAIZEN-PREFIX-MATCHES-STAGES
+    check: kaizen
+    kind: gate
+    clause: "active PROP whose id prefix does not match the encoding of its stages list rejected P0 — prefix must be the canonical sort of P/B/F letters for the stages listed (e.g. stages:[planning,fixing] → PF-PROP-NNN); activated by --conflict-scan"
+    source: "PBF-PROP-013 §2b"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_prefix_stages.md", "--conflict-scan"]
+      expect_severity: P0
+      expect_contains: "KAIZEN-PREFIX-MATCHES-STAGES"
+    good:
+      args: ["tests/fixtures/kaizen_good_stage_rename.md", "--conflict-scan"]
+
+  - id: KAIZEN-STAGE-SERIES-ORDER-GAPLESS
+    check: kaizen
+    kind: gate
+    clause: "within each prefix family the NNN counter must be gapless starting at 001 — a gap (e.g. B-PROP-001 then B-PROP-003) is rejected P1; activated by --conflict-scan"
+    source: "PBF-PROP-013 §2c"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_series_gap.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-STAGE-SERIES-ORDER-GAPLESS"
+    good:
+      args: ["tests/fixtures/kaizen_good_stage_rename.md", "--conflict-scan"]
+
+  - id: KAIZEN-LEGACY-ID-PRESENT-UNIQUE
+    check: kaizen
+    kind: gate
+    clause: "every active PROP must carry a legacy_id field mapping back to its PROP-NNN origin; duplicate legacy_id across two PROPs rejected P1; activated by --conflict-scan"
+    source: "PBF-PROP-013 §2d"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_legacy_dup.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-LEGACY-ID-PRESENT-UNIQUE"
+    good:
+      args: ["tests/fixtures/kaizen_good_stage_rename.md", "--conflict-scan"]
+
+  - id: KAIZEN-CROSSWALK-COMPLETE
+    check: kaizen
+    kind: gate
+    clause: "PROP-CROSSWALK.md and the live queue must be a perfect bijection — a queue PROP not in the crosswalk, or a crosswalk entry without a matching active PROP, is rejected P1; activated by --conflict-scan"
+    source: "PBF-PROP-013 §2e"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_crosswalk_missing.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CROSSWALK-COMPLETE"
+    good:
+      args: ["tests/fixtures/kaizen_good_stage_rename.md", "--conflict-scan"]
+
+  - id: KAIZEN-PROP-ID-PARSEABLE
+    check: kaizen
+    kind: gate
+    clause: "a yaml fence carrying semantic PROP fields (status/behavioural/conflict_scan) whose id matches neither old (^PROP-NNN$) nor new (^PREFIX-PROP-NNN$) canonical format is silently dropped/invisible to all KAIZEN-* clauses — malformed ids must be fixed (P1)"
+    source: "cx_kaizen.py _check_malformed_prop_ids / v1.21 self-review fold"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_malformed_id.md"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-PROP-ID-PARSEABLE"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: BUILD-PREVENTION-PREAMBLE-MISSING
+    check: card
+    kind: gate
+    clause: "a MODULE_BUILD/MODE_A_UI card without execution.prevention_preamble (or with a blank/invalid block) rejected P1 — the orchestrator must inject the B-PROP-005 do-less preamble into every builder dispatch"
+    source: "GATES.md G5 / PBF-PROP-012 Part C"
+    bad:
+      args: ["tests/fixtures/card_bad_no_prevention_preamble.yaml"]
+      expect_severity: P1
+      expect_contains: "prevention_preamble"
+    good:
+      args: ["tests/fixtures/card_good.yaml"]
+
+  - id: BUILD-PREVENTION-PREAMBLE-REF-UNSAFE
+    check: card
+    kind: gate
+    clause: "execution.prevention_preamble.standard_ref with path traversal (..) or absolute path rejected P1 — must be a relative in-repo path"
+    source: "GATES.md G5 / PBF-PROP-012 Part C"
+    bad:
+      args: ["tests/fixtures/card_bad_prevention_preamble_ref_unsafe.yaml"]
+      expect_severity: P1
+      expect_contains: "standard_ref"
+    good:
+      args: ["tests/fixtures/card_good.yaml"]
+
+  - id: EVALS-KAIZEN-LIVE-QUEUE-WIRED
+    check: evals
+    kind: gate
+    clause: "cx check evals runs the live kaizen-queue closure check (PBF-PROP-012 Part C A2 line) — a failing kaizen queue turns cx check evals red"
+    source: "GATES.md Build-session rails / PBF-PROP-012 Part C §4"
+    bad:
+      args: ["--checkers-dir", "tests/fixtures/evals_bad"]
+      expect_severity: P1
+    good:
+      args: ["--checkers-dir", "tests/fixtures/evals_good"]
+
+  # ──────────────────────────────────────────────────────────────
+  # xfam fold v1.21: P2-005 · P2-007 · P2-008 · P1-002 · P1-003 · D-P3-009 (added 2026-06-30)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: CARD-PREAMBLE-SHA12-FORMAT
+    check: card
+    kind: gate
+    clause: "execution.prevention_preamble.preamble_sha12 must be exactly 12 lowercase hex digits — a stub or non-hex value rejected P1 (P2-005)"
+    source: "GATES.md G5 / PBF-PROP-012 Part C / xfam-fold-v1.21 P2-005"
+    bad:
+      args: ["tests/fixtures/card_bad_preamble_sha12_stub.yaml"]
+      expect_severity: P1
+      expect_contains: "preamble_sha12"
+    good:
+      args: ["tests/fixtures/card_good.yaml"]
+
+  - id: CARD-PREAMBLE-STANDARD-REF
+    check: card
+    kind: gate
+    clause: "execution.prevention_preamble.standard_ref must equal 'BUILDER-STANDARD.md' — any other value rejected P1 (P2-005)"
+    source: "GATES.md G5 / PBF-PROP-012 Part C / xfam-fold-v1.21 P2-005"
+    bad:
+      args: ["tests/fixtures/card_bad_preamble_standard_ref_wrong.yaml"]
+      expect_severity: P1
+      expect_contains: "standard_ref"
+    good:
+      args: ["tests/fixtures/card_good.yaml"]
+
+  - id: KAIZEN-RESOLUTION-REF-RESOLVABLE
+    check: kaizen
+    kind: gate
+    clause: "when conflict_scan has non-empty hits, resolution_ref must be a real in-repo file path (with '/'), section ref (with '§' or '#'), or CEO-D id — free-form prose rejected P1 (P2-007); activated by --conflict-scan"
+    source: "PBF-PROP-014 §3 / xfam-fold-v1.21 P2-007"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_resolution_ref_prose.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-RESOLUTION-REF-RESOLVABLE"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-CONFLICT-SCAN-BASIS-COUNT-TYPE
+    check: kaizen
+    kind: gate
+    clause: "conflict_scan basis prop_count and decision_count must be integers — a string value rejected as shape error P1 before staleness comparison (P2-008); activated by --conflict-scan"
+    source: "PBF-PROP-014 §3 / xfam-fold-v1.21 P2-008"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_prop_count_non_int.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CONFLICT-SCAN-BASIS-CURRENT"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: KAIZEN-BACKSCAN-FORWARD-PROP
+    check: kaizen
+    kind: gate
+    clause: "a forward PROP (real PROP id not present in PROP-CROSSWALK.md) declaring basis.source: backscan-2026-06-30 is rejected P1 — backscan source is reserved for the pre-v1.21 historical PROP set; test-id (exempt from crosswalk) passes (P1-002); activated by --conflict-scan"
+    source: "PBF-PROP-014 §10 / xfam-fold-v1.21 P1-002"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_backscan_forward.md", "--conflict-scan"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-CONFLICT-SCAN-BASIS-CURRENT"
+    good:
+      args: ["tests/fixtures/kaizen_good_conflict_scan.md", "--conflict-scan"]
+
+  - id: STATE-ORCHESTRATION-INLINE-WAIVER-SCOPE
+    check: state
+    kind: gate
+    clause: "build-mode session with inline_waiver must also declare scope: single_card + card_ref — a waiver without scope rejected P2 so multi-card builds cannot blanket-waive orchestration dispatch (P1-003)"
+    source: "PBF-PROP-012 Part B (R-ORCH) / xfam-fold-v1.21 P1-003"
+    git_fixture: inline_waiver_no_scope
+    bad:
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+      expect_severity: P2
+      expect_contains: "single_card"
+    good:
+      git_fixture: inline_waiver_with_scope
+      args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: graduation (EVAL-041 — the reliability-bar graduation gate)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: GRADUATION-STREAK-UNPROVEN
+    check: graduation
+    kind: gate
+    clause: "THE GATE — under --authorize-decision, a recomputed consecutive-clean streak below N (or fewer than M user-facing) blocks authorization P0; also fires on a missing/unmatched decision row or a pending entry newer than the counted streak (EVAL-041 R1.1)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_streak.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "GRADUATION-STREAK-UNPROVEN"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-ENTRY-RECEIPT-UNBOUND
+    check: graduation
+    kind: gate
+    clause: "a criterion's snapshotted receipt is unreachable, or its full sha256 does not match the declared receipt_sha256 — the entry is NOT clean (fail-closed anti-forge; a forged/swapped/hand-edited receipt is rejected P0) (EVAL-041 R1.4)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.2/R1.4"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_forged.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "GRADUATION-ENTRY-RECEIPT-UNBOUND"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-ENTRY-CRITERION-UNMET
+    check: graduation
+    kind: gate
+    clause: "a criterion re-derives UNMET from its snapshotted receipt's REAL fields (never a self-declared flag) — the entry is NOT clean, surfacing a false clean-claim P1 (EVAL-041 R1.2)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.2"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_criterion.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "GRADUATION-ENTRY-CRITERION-UNMET"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-ENTRY-SHAPE
+    check: graduation
+    kind: gate
+    clause: "a ledger entry missing project_id/ship_commit(40-hex)/ship_date(ISO)/ship_timestamp_utc(ISO)/criteria(exactly the 7 keys)/evidence_manifest is unparseable and rejected P1 — never hand-ordered (EVAL-041 R1.3/R1.6)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.6"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_shape.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "GRADUATION-ENTRY-SHAPE"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  # ── EVAL-041 orchestrator self-review adds (2026-07-01): regression-LOCK each false-green path the
+  #    GPT-5.5 pre-build review flagged (P0-1 pending-newer, P0-3 auth marker) + the historical
+  #    criteria (c5/c6) + the vacuous-green status path. Built-code bite-proven manually at build; these
+  #    blocks put them in the automated harness so a future edit can never silently reintroduce a
+  #    false-green. Distinct test-ids, same emitted clause; matched to real output substrings. ──
+
+  - id: GRADUATION-AUTH-MARKER-UNMATCHED
+    check: graduation
+    kind: gate
+    clause: "under --authorize-decision, a decision id whose row EXISTS but whose text does NOT match the milestone marker cannot authorize — P0, never vacuous-green (EVAL-041 R1.1.1, pre-build P0-3)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_no_marker.md", "--authorize-decision", "CEO-D-999"]
+      expect_severity: P0
+      expect_contains: "does not match the milestone marker"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-AUTH-DECISION-MISSING
+    check: graduation
+    kind: gate
+    clause: "under --authorize-decision, a decision id with NO row in the decision ledger cannot authorize — P0 fail-closed, never vacuous-green (EVAL-041 R1.1.1, pre-build P0-3)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_no_marker.md", "--authorize-decision", "CEO-D-905"]
+      expect_severity: P0
+      expect_contains: "has no row in the decision ledger"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-STREAK-PENDING-NEWER
+    check: graduation
+    kind: gate
+    clause: "under --authorize-decision, a pending entry (post-ship window still open) NEWER than the counted streak blocks authorization P0 — authorizing while the most recent work is unproven is the premature-authorization risk (EVAL-041 R1.1.3, pre-build P0-1)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_pending_newer.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "a pending entry (post-ship window still open) is newer"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-CRITERION-C5-WINDOW
+    check: graduation
+    kind: gate
+    clause: "criterion 5 (zero post-ship P0/P1) re-derives UNMET when the CLOSED-window incident ledger records a P0/P1 dated inside the window for that build_tag — a historical fact a current-state receipt cannot prove (EVAL-041 R1.0/R1.2, pre-build P0-5)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.2"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_crit5_inwindow.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "post-ship window"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-CRITERION-C6-FIRSTPASS
+    check: graduation
+    kind: gate
+    clause: "criterion 6 (final-ready clean on FIRST pass) re-derives UNMET when the attempt-1 final-ready snapshot does not itself re-derive READY — a fail-then-pass history a current-state receipt cannot prove (EVAL-041 R1.0/R1.2, pre-build P0-6)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.2"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_crit6_notready.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "attempt-1 final-ready snapshot does NOT re-derive READY"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-STATUS-VACUOUS-GREEN
+    check: graduation
+    kind: gate
+    clause: "status mode (no --authorize-decision) over an all-clean ledger is informational and exits 0 (the ONLY vacuous-green path; proves the dormant gate stays free until authorization is requested) (EVAL-041 R1.1)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R1.1"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good.md", "--status"]
+
+  # ── REVISION R2 (post-build cross-family CODE review, 2026-07-01): regression-LOCK each
+  #    criterion-level/parser hole the GPT-5.5 post-build review flagged — c3/c4/c7 accepting thin
+  #    evidence, c5 shape gaps, the decision-ledger fence hole, a vanishing malformed entry, and the
+  #    naive-timestamp ordering crash risk. Distinct test-ids, same underlying wall labels. ──
+
+  - id: GRADUATION-CRITERION-C3-SIDECAR
+    check: graduation
+    kind: gate
+    clause: "criterion 3 (zero design/fidelity drift) requires each fidelity block to name a real, manifest-hash-bound sidecar_ref — a bare hand-typed {verdict: PASS} summary with no sidecar is UNMET, never a vacuous pass (EVAL-041 R2.1 finding #4)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_c3_nosidecar.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "c3 'design_fidelity' sidecar_ref '(absent)' missing/blank sidecar ref"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-CRITERION-C4-DIRREF
+    check: graduation
+    kind: gate
+    clause: "criterion 4 (matched blueprint) requires the packet/approval/state/review anchor refs the reader needs, manifest-hash-bound — any one absent is UNMET (EVAL-041 R2.1 finding #4)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_c4_nodir.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "c4 'dir_refs' is missing one of ('packet', 'approval', 'state', 'review')"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-CRITERION-C5-SHAPE
+    check: graduation
+    kind: gate
+    clause: "criterion 5's closed-window incident artifact must carry a non-blank build_tag AND an explicit 'rows' list — a blank build_tag or missing 'rows' key is malformed, never a valid zero-incidents declaration (EVAL-041 R2.2)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.2"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_c5_malformed.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "c5 'build_tag' is missing/blank"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-CRITERION-C7-EMPTY-MODULES
+    check: graduation
+    kind: gate
+    clause: "criterion 7's 'modules' list must be NON-EMPTY — a coderabbit receipt alone cannot vacuously prove the review pipeline ran over zero modules (EVAL-041 R2.1 finding #4)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.1"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_c7_empty_modules.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "c7 has an empty/missing 'modules' list"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-PARSER-MISSING-PROJECT-ID
+    check: graduation
+    kind: gate
+    clause: "a ```yaml ledger item carrying ship_commit/ship_date/ship_timestamp_utc/criteria (ledger-shaped) but missing project_id surfaces as an unparseable WALL, never a silent vanish (a vanished newest-dirty entry would let the prior clean entries authorize unopposed) (EVAL-041 R2.4)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.4"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_parser_no_projectid.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "could not be parsed as a ledger entry"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-DECISION-MARKER-FENCED
+    check: graduation
+    kind: gate
+    clause: "the decision-ledger scan ignores lines inside fenced ``` code blocks and restricts matching to the real '## Decisions' table's decision-text cell — a marker-bearing row that exists ONLY inside a fenced example can never authorize (EVAL-041 R2.3)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.3"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_marker_in_fence.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "does not match the milestone marker"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-TIMESTAMP-NAIVE
+    check: graduation
+    kind: gate
+    clause: "ship_timestamp_utc must be a timezone-aware datetime — a naive value is rejected (GRADUATION-ENTRY-SHAPE), never silently assumed UTC, so a naive/aware mix can never reach the streak sort's comparison (EVAL-041 R2.6)"
+    source: "design-history/eval041-reliability-bar-graduation-gate-spec-2026-07-01.md R2.6"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_naive_timestamp.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P1
+      expect_contains: "ship_timestamp_utc must be a timezone-aware ISO-8601 datetime"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]

@@ -1,11 +1,11 @@
 # Code-X V1 — FIXING-STAGE.md (the 3rd stage)
 
-> Added by PROP-035 (fold v1.16). Code-X had two stages — **Planning** → **Building**. Fixing is
+> Added by F-PROP-001 (fold v1.16). Code-X had two stages — **Planning** → **Building**. Fixing is
 > the third. It exists because **fixing the app drifts the app**: agents treat "fix X" as licence
 > to "improve X" (over-edit), and the AI forgets a decision the CEO already made and re-asks it
 > (decision-amnesia). Building CREATES; Fixing **PRESERVES — change only the defect.**
-> Siblings: PROP-031 (visual reference) · PROP-033 (render-fidelity) · PROP-034 (lock-fidelity
-> continuity). Fixing is the STAGE those locks live in; it EXTENDS PROP-034's `mode: FIX`, it does
+> Siblings: P-PROP-004 (visual reference) · B-PROP-009 (render-fidelity) · BF-PROP-007 (lock-fidelity
+> continuity). Fixing is the STAGE those locks live in; it EXTENDS BF-PROP-007's `mode: FIX`, it does
 > not parallel it. [RULE:fixing-stage-preserve-posture]
 
 ## The three stages
@@ -63,7 +63,7 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
   **file-tree / PATH changes only** — fully deterministic. Component/route/CSS restructuring that
   changes *structure without changing paths* is **Layer-2 ADVISORY WARN** in v1.16 (graduates to
   blocking via a follow-up PROP once machine-extraction + same-commit repeatability is proven — the
-  PROP-033 staging). The CEO's stated symptom (file/folder structure wandering) is fully covered at
+  B-PROP-009 staging). The CEO's stated symptom (file/folder structure wandering) is fully covered at
   Layer-1; same-file restructuring is meanwhile mitigated by the visual lock + `allowed_files`.
 
 - **Lever B — the anti-amnesia gate (file-backed questions).** Every FIX-stage CEO question must be
@@ -79,7 +79,7 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
 - **Lever C — per-target cross-lock.** The `fix_targets` taxonomy above. Each target has declared
   allowed surfaces; everything else is a frozen assertion.
 
-- **Lever D — always-on guardrails (presence + anti-drift, like PROP-024).** Cheap rules enforced by
+- **Lever D — always-on guardrails (presence + anti-drift, like B-PROP-005).** Cheap rules enforced by
   PRESENCE in canon (not mechanical detection):
   - **Always-read hard rule:** *never create, rename, move, delete, or refactor "for improvement"; if a
     fix seems to need a structural change, STOP and ask.* [RULE:fixing-stage-preserve-posture]
@@ -105,8 +105,8 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
   surface — not to build new locked scope. State carries `current_stage: FIXING_STAGE`; the seat cap is
   read from the `fixing_stage` profile in `BUILD-ENGINE-PROFILES.yaml`.
 - **Step 0 — freeze-baseline (forward-scope).** A lock can only be protected if it exists. For an
-  already-drifted app (e.g. a live-production app) the stage opens with a one-time freeze-baseline: accept current-good,
-  capture the `structure_lock` manifest, confirm the ledger. PROP-035 does **not** retroactively
+  already-drifted app (live-production, Sample) the stage opens with a one-time freeze-baseline: accept current-good,
+  capture the `structure_lock` manifest, confirm the ledger. F-PROP-001 does **not** retroactively
   un-drift already-built screens — it freezes current-good and protects forward (exactly like its
   siblings).
 - **Exit** a fix when its card passes `cx check build-turn` (structure + scope + evidence) and — for a
@@ -118,7 +118,7 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
   resolution; it cannot prove the AI actually USED the answer. A contradiction without a resolved
   override is a hard finding (P0 on a danger class).
 - Structural **Layer-1 = file tree only (blocking)**; same-file restructuring is Layer-2 advisory.
-- `deviation_class: SCOPE_CHANGE` honesty (inherited from PROP-034) — a builder could mislabel a
+- `deviation_class: SCOPE_CHANGE` honesty (inherited from BF-PROP-007) — a builder could mislabel a
   scope-change as a restore; the opposite-family reviewer audits the classification.
 - Freeze-baseline is forward-scope.
 
@@ -128,5 +128,5 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
 that fails-closed at the stated severity, proved by `tests/run_contracts.py`. Checkers: new
 `cx_structure.py` (the `structure` subcommand); anti-amnesia + revert-receipt folded into `cx check
 card` + `cx check close-turn`; structure rail-wired into `cx check build-turn` + the module-acceptance
-wall. See `GATES.md` (the Andon-wall wiring), `MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` (PROP-035), and
+wall. See `GATES.md` (the Andon-wall wiring), `MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` (F-PROP-001), and
 `design-history/prop035-fixing-stage-2026-06-23.md` (the spec).

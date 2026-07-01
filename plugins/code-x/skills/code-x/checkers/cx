@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 """cx — Code-X V1 checker CLI.
 Subcommands: card · state · scope · evidence · cost · final-ready · consistency · deck · packet
-            · boot · build-turn · close-turn · evals · design-fidelity   (PROP-018/019 rails)
+            · boot · build-turn · close-turn · evals · design-fidelity · kaizen   (PROP-018/019/042 rails)
 Exit 0 = PASS, 1 = FIX-FIRST, 2 = usage error.
 """
+import sys
+
+# Runtime floor: cx and its cx_*.py modules use PEP 604 `X | None` type unions (Python 3.10+).
+# Guard BEFORE any project import so an older interpreter gets a clear message, not a raw
+# import-time TypeError. (CXAUD-001)
+if sys.version_info < (3, 10):
+    sys.stderr.write(
+        "cx: Code-X V1 checker requires Python 3.10+ (it uses PEP 604 `X | None` type unions).\n"
+        f"    Active interpreter: Python {sys.version.split()[0]} at {sys.executable}\n"
+        "    Re-run with Python 3.10+ — e.g.  /opt/homebrew/bin/python3 Code-X-V1/checkers/cx <args>\n"
+    )
+    raise SystemExit(2)
+
 import argparse
 import os
-import sys
 
 # Make same-directory modules importable when cx is invoked by path (no .py extension).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +38,7 @@ from cx_close_turn import cmd_close_turn
 from cx_evals import cmd_evals
 from cx_design_fidelity import cmd_design_fidelity
 from cx_module_start import cmd_module_start
-from cx_module_acceptance import cmd_module_acceptance, cmd_verify_app
+from cx_module_acceptance import cmd_module_acceptance, cmd_verify_app, cmd_module_demo
 from cx_module_quality import cmd_module_quality
 from cx_dep_scan import cmd_dep_scan
 from cx_egress import cmd_egress
@@ -36,6 +48,8 @@ from cx_drift import cmd_drift
 from cx_structure import cmd_structure
 from cx_blueprint import cmd_blueprint
 from cx_whole_packet_review import cmd_whole_packet_review
+from cx_kaizen import cmd_kaizen
+from cx_graduation import cmd_graduation
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -218,6 +232,12 @@ def main():
                                 help="Validate a verify_app receipt: the verify-app agent drove the running build and its runtime acceptance-criteria check passed (bound by repo_sha, generator-stamped). Fires once per completed live_slice slice; a passing receipt is a PRECONDITION to the CEO live-drive accept (PROP-036)")
     p_va.add_argument("--acceptance", required=True, help="Path to the MODULE-ACCEPTANCE.yaml receipt carrying the verify_app block")
 
+    # module-demo (PROP-042 Part E: SEE-AND-TEST gate — the demo show-step receipt for a live_slice slice)
+    p_md = check_sub.add_parser("module-demo",
+                                help="Validate a module_demo receipt block: the demo collector captured the shown screenshot (hash-bound), CEO typed accept token embeds repo_sha prefix, ceo_turn_ref resolves, ceo_verdict: accepted. Fires at slice completion; a passing receipt is a PRECONDITION to the CEO live-drive accept (PROP-042 Part E)")
+    p_md.add_argument("--acceptance", required=True, help="Path to the MODULE-ACCEPTANCE.yaml receipt carrying the module_demo block")
+    p_md.add_argument("--repo-root", dest="repo_root", default=None, help="Repo root for resolving shown_screenshot_path and ceo_turn_ref (defaults to the receipt's directory)")
+
     # drift (PROP-034 Lever C: the drift alarm — Layer 1 deterministic BITES + Layer 2 advisory WARN)
     p_dr = check_sub.add_parser("drift",
                                 help="Drift alarm: Layer-1 deterministic divergences over the working set (BLOCKING at --at-acceptance) + Layer-2 advisory WARN; session-start = advisory (never blocks a boot)")
@@ -261,6 +281,45 @@ def main():
     p_wpr.add_argument("--repo-root", dest="repo_root", required=True,
                        help="Repo root the receipt ref resolves under (path-safety)")
 
+    # kaizen (PROP-042 Part F: Kaizen-queue closure safeguard)
+    p_kz = check_sub.add_parser(
+        "kaizen",
+        help="Kaizen-queue closure safeguard: audit APPLIED PROPs for behavioural enforcement (PROP-042 Part F)"
+    )
+    p_kz.add_argument("queue_file", help="Path to MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md")
+    p_kz.add_argument("--contracts", default=None,
+                      help="Path to check-contracts.yaml (default: canonical sibling file)")
+    p_kz.add_argument("--strict-debt", dest="strict_debt", action="store_true", default=False,
+                      help="Promote unparseable-entry P2 debt findings to P1 (blocking)")
+    p_kz.add_argument("--conflict-scan", dest="conflict_scan", action="store_true", default=False,
+                      help="Activate PROP-044 conflict_scan clauses (off by default until backfill complete)")
+
+    # graduation (EVAL-041: the reliability-bar graduation gate — recomputes the cross-project
+    # consecutive-clean streak from the append-only graduation ledger; dormant until a milestone
+    # decision is authorized. NOT wired into `cx check evals` — see design-history spec §5.)
+    p_gr = check_sub.add_parser(
+        "graduation",
+        help="Reliability-bar graduation gate: recompute the cross-project consecutive-clean "
+             "streak from the graduation ledger; --status is informational, --authorize-decision "
+             "is the fail-closed gate a future autonomy-switch PROP consumes (EVAL-041)"
+    )
+    p_gr.add_argument("--ledger", required=True, help="Path to MEMORY/GRADUATION-LEDGER.md")
+    p_gr.add_argument("--decision-ledger", dest="decision_ledger", default=None,
+                      help="Path to MEMORY/CEO-DECISION-LEDGER.md (required with --authorize-decision)")
+    p_gr.add_argument("--receipts-dir", dest="receipts_dir", default=None,
+                      help="Base directory entry-declared receipt/evidence_manifest paths resolve "
+                           "against (default: the ledger file's own directory, i.e. MEMORY/)")
+    _gr_mode = p_gr.add_mutually_exclusive_group()
+    _gr_mode.add_argument("--status", action="store_true", default=False,
+                          help="Informational readout only — exit 0, never blocks (default mode)")
+    _gr_mode.add_argument("--authorize-decision", dest="authorize_decision", default=None,
+                          help="THE GATE: fail-closed authorization check for CEO-D-0NN (a future "
+                               "autonomy-switch PROP's precondition)")
+    p_gr.add_argument("--n", type=int, default=None, help="Consecutive-clean threshold (default: locked GRADUATION_N=3)")
+    p_gr.add_argument("--m", type=int, default=None, help="Min user-facing among the N (default: locked GRADUATION_M=3)")
+    p_gr.add_argument("--window-days", dest="window_days", type=int, default=None,
+                      help="Post-ship observation window in days (default: locked POSTSHIP_WINDOW_DAYS=14)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -286,10 +345,13 @@ def main():
         "class-sweep": cmd_class_sweep,
         "render-fidelity": cmd_render_fidelity,
         "verify-app": cmd_verify_app,
+        "module-demo": cmd_module_demo,
         "drift": cmd_drift,
         "structure": cmd_structure,
         "blueprint": cmd_blueprint,
         "whole-packet-review": cmd_whole_packet_review,
+        "kaizen": cmd_kaizen,
+        "graduation": cmd_graduation,
     }
 
     fn = dispatch.get(args.check_cmd)

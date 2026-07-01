@@ -12,6 +12,30 @@ module_acceptance:
     regression: PASS
     tests: page render + nav links covered
     conformance: built page matches the locked home-screen contract
+  build_validation:
+    applicability: applies
+    status: PASS
+    ran: [tests]
+    reviewer: build-validator-agent
+    builder: cx-sonnet-builder
+    claims:
+      - claim_id: bv-mlive-tests
+        check: tests
+        claimed_verdict: PASS
+        command: "python3 tests/run.py"
+        exit_code: 0
+        log_path: logs/build_validation_pass.txt
+        produced_at: "2026-07-01T00:00:00Z"
+        produced_by: build-validator-agent
+  anti_slop:
+    status: PASS
+    role: slop_removal
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m-live-anti-slop.md
   live_slice_accept:
     live_url: http://localhost:8000/home
     ceo_drove: false

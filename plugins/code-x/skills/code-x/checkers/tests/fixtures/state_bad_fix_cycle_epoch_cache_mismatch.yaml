@@ -2,7 +2,7 @@
 # CONTRADICTS the epoch recomputed from engine_switch_log. engine_family is a cache;
 # the recomputed epoch is authoritative — a self-declared epoch must never override it.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

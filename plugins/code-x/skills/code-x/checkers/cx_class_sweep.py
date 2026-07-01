@@ -1,4 +1,4 @@
-# cmd_class_sweep: validate a class-sweep receipt (PROP-026 / GPT #6).
+# cmd_class_sweep: validate a class-sweep receipt (BF-PROP-005 / GPT #6).
 #
 #   cx check class-sweep <receipt>
 #
@@ -30,7 +30,7 @@ def cmd_class_sweep(args) -> int:
         findings.append(("P1", loc,
             "class_sweep block missing — a deterministic finding's fix ships with a class-sweep "
             "receipt {class, scope_boundary, detection_command, pre_fix_hits, post_fix_count, "
-            "positive_control} (PROP-026 / GPT #6)"))
+            "positive_control} (BF-PROP-005 / GPT #6)"))
         return findings_report(findings)
 
     missing = [k for k in CLASS_SWEEP_REQUIRED_KEYS if not field_present(blk, k)]
@@ -38,14 +38,14 @@ def cmd_class_sweep(args) -> int:
         findings.append(("P1", loc,
             f"class_sweep missing {missing} — the sweep must name the class, the scope boundary it "
             "covers, the detection command that finds ALL instances, the pre-fix hit list, the post-fix "
-            "count, and a positive control (PROP-026 / GPT #6)"))
+            "count, and a positive control (BF-PROP-005 / GPT #6)"))
         return findings_report(findings)
 
     pre = blk.get("pre_fix_hits")
     if not isinstance(pre, list) or not pre:
         findings.append(("P1", loc,
             "class_sweep.pre_fix_hits must be a non-empty list — the sweep enumerates EVERY instance of "
-            "the class found across the module; whack-a-mole is fixing one instance, not the class (PROP-026)"))
+            "the class found across the module; whack-a-mole is fixing one instance, not the class (BF-PROP-005)"))
 
     try:
         post = int(blk.get("post_fix_count"))
@@ -54,23 +54,23 @@ def cmd_class_sweep(args) -> int:
     if post != 0 and not field_present(blk, "post_fix_remainder_reason"):
         findings.append(("P1", loc,
             "class_sweep.post_fix_count != 0 without a post_fix_remainder_reason — a class is either "
-            "closed (post_fix_count 0) or the remainder is explicitly justified (PROP-026)"))
+            "closed (post_fix_count 0) or the remainder is explicitly justified (BF-PROP-005)"))
 
     pc = blk.get("positive_control")
     if not (isinstance(pc, dict) and str(pc.get("planted_instance_detected", "")).lower() in ("yes", "true")):
         findings.append(("P1", loc,
             "class_sweep.positive_control must show planted_instance_detected: yes — a detection method "
-            "that does not catch a planted instance does not prove it finds the class (PROP-022 discipline)"))
+            "that does not catch a planted instance does not prove it finds the class (B-PROP-004 discipline)"))
 
     if not field_present(blk, "regression_test_ref"):
         findings.append(("P1", loc,
             "class_sweep missing regression_test_ref — TRUST is the test, not a second opinion; a fix "
-            "with no pinning regression test is not 'done' (so it is safe to never re-review it) (PROP-026)"))
+            "with no pinning regression test is not 'done' (so it is safe to never re-review it) (BF-PROP-005)"))
     else:
         rt = str(blk.get("regression_test_ref"))
         if Path(rt).is_absolute() or ".." in Path(rt).parts:
             findings.append(("P1", loc,
                 f"class_sweep.regression_test_ref '{rt}' must be a repo-relative path (no absolute path / "
-                ".. escape) — the pinning test lives in the repo (PROP-026 / GPT review F7)"))
+                ".. escape) — the pinning test lives in the repo (BF-PROP-005 / GPT review F7)"))
 
     return findings_report(findings)

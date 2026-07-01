@@ -7,14 +7,14 @@
 ## What lives in this folder
 ```
 design-golden-master/
-  style-select/       # PROP-016 FIRST step: the style variants of ONE representative screen + index.md (matrix below)
+  style-select/       # P-PROP-002 FIRST step: the style variants of ONE representative screen + index.md (matrix below)
   screens/            # the approved screen for each core surface (HTML mock OR locked screenshot)
   index.md            # the list below — one row per screen
   click-path.md       # the Click-Path Contract (below)
   viewport.md         # the fixed device + size every screenshot is taken at (e.g. iPhone 13 Pro, 390×844)
 ```
 
-## style-select/index.md — the variant matrix (PROP-016)
+## style-select/index.md — the variant matrix (P-PROP-002)
 Default **3 variants** (4–5 only with a stated reason). Same representative screen, same `DESIGN_FIXTURE` rows, different visual language. **Every PAIR of variants must differ on ≥2 of the 4 axes.**
 ```yaml
 style_variants:
@@ -39,7 +39,7 @@ chosen:                    # must match PRODUCT-TASTE-LOCK locked_style_directio
 | HOME | <button A, button B, tab C> | <route → action → result> | yes/no |
 
 ## Rules
-- **Style-Select comes FIRST** (PROP-016): no other golden-master screen is produced before the CEO picks a style variant; every screen after it follows the locked style direction — a screen in a different style = **P1**. [RULE:locked-style-direction]
+- **Style-Select comes FIRST** (P-PROP-002): no other golden-master screen is produced before the CEO picks a style variant; every screen after it follows the locked style direction — a screen in a different style = **P1**. [RULE:locked-style-direction]
 - Every core screen here is **CEO-accepted** before the build factory opens (G7).
 - `DESIGN_FIXTURE` sample data is allowed in these mocks for layout proof only — never real/money data.
 - A built screen that drifts from its golden master = **P1** (see SEVERITY).

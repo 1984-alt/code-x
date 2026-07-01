@@ -1,7 +1,7 @@
 # BAD: built_app_audit.report_ref contains a `..` escape => P0 block (v1.12)
 # Mirrors acceptance_ref path-safety: traversal rejected before any read.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

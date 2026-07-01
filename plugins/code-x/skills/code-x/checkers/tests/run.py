@@ -7,8 +7,20 @@ Usage: python3 checkers/tests/run.py   (from Code-X-V1 root)
 Converts pytest-style class+method tests to unittest and runs them.
 Exit 0 = all pass, 1 = failures.
 """
-import subprocess
 import sys
+
+# Runtime floor: the cx checker uses PEP 604 `X | None` type unions (Python 3.10+).
+# Guard before importing/exec'ing cx so an older interpreter gets a clear message,
+# not a raw import-time TypeError that reads as a false test failure. (CXAUD-001)
+if sys.version_info < (3, 10):
+    sys.stderr.write(
+        "run.py: the cx test suite requires Python 3.10+ (cx uses PEP 604 `X | None` type unions).\n"
+        f"    Active interpreter: Python {sys.version.split()[0]} at {sys.executable}\n"
+        "    Re-run with Python 3.10+ — e.g.  /opt/homebrew/bin/python3 Code-X-V1/checkers/tests/run.py\n"
+    )
+    raise SystemExit(2)
+
+import subprocess
 import tempfile
 import os
 import unittest
@@ -24,6 +36,11 @@ CX_ROOT = CHECKERS_DIR.parent  # Code-X-V1 root
 # Pin BUILD-ENGINE-PROFILES to the test mirror (stable fixture hashes — see profiles_test.yaml)
 os.environ["CODE_X_TEST_MODE"] = "1"  # PROP-014: CX_PROFILES honored only in test mode
 os.environ["CX_PROFILES"] = str(FIXTURES / "profiles_test.yaml")
+
+# Direct import for in-process hermetic tests (git-resolution path can't be exercised via a
+# static fixture — it needs a real commit graph mirroring the nested-worktree layout).
+sys.path.insert(0, str(CHECKERS_DIR))
+import cx_kaizen  # noqa: E402
 
 
 def run_cx(*args) -> tuple[int, str]:
@@ -119,6 +136,34 @@ class TestCheckCard(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("FIX-FIRST", out)
         self.assertIn("module_id", out)
+
+    def test_module_build_missing_coderabbit_fails(self):
+        """PROP-042-DRAFT / V1.21-candidate: a code-diff module build card must plan CodeRabbit."""
+        rc, out = run_cx("check", "card", fix("card_bad_missing_coderabbit.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("CodeRabbit", out)
+
+    def test_module_build_missing_prevention_preamble_fails(self):
+        """BUILD-PREVENTION-PREAMBLE-MISSING (PROP-042 Part C): a MODULE_BUILD card without
+        execution.prevention_preamble must be rejected P1."""
+        rc, out = run_cx("check", "card", fix("card_bad_no_prevention_preamble.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("prevention_preamble", out)
+
+    def test_module_build_prevention_preamble_ref_unsafe_fails(self):
+        """BUILD-PREVENTION-PREAMBLE-REF-UNSAFE (PROP-042 Part C): a MODULE_BUILD card with
+        execution.prevention_preamble.standard_ref containing path traversal must be rejected P1."""
+        rc, out = run_cx("check", "card", fix("card_bad_prevention_preamble_ref_unsafe.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("standard_ref", out)
+
+    def test_module_build_good_prevention_preamble_passes(self):
+        """BUILD-PREVENTION-PREAMBLE-MISSING: card_good.yaml (with valid prevention_preamble) passes."""
+        rc, out = run_cx("check", "card", fix("card_good.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS for card_good.yaml with prevention_preamble, got rc={rc}.\n{out}")
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +856,14 @@ class TestModuleQualityBar(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("quality_card", out)
 
+    def test_missing_self_review_fails(self):
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_no_self_review.yaml"),
+                         "--registry", fix("module_registry_good.yaml"),
+                         "--module-id", "m1")
+        self.assertEqual(rc, 1)
+        self.assertIn("same-family self_review", out)
+
     def test_shared_shell_regression_fail(self):
         rc, out = run_cx("check", "module-quality",
                          "--acceptance", fix("module_acceptance_regression_fail.yaml"),
@@ -875,6 +928,245 @@ class TestModuleQualityBar(unittest.TestCase):
                          "--registry", fix("module_registry_good.yaml"),
                          "--module-id", "m_qfalse")
         self.assertEqual(rc, 0, f"quoted live_slice:'false' must not fire the live-drive gate.\n{out}")
+
+
+# ---------------------------------------------------------------------------
+# EVAL-040 (PBF-PROP-012-EVAL040) — build_validation + anti_slop evidence-bound legs
+# ---------------------------------------------------------------------------
+class TestEval040BuildValidationAntiSlop(unittest.TestCase):
+    def _mq(self, fixture, module_id="m1"):
+        return run_cx("check", "module-quality",
+                      "--acceptance", fix(fixture),
+                      "--registry", fix("module_registry_good.yaml"),
+                      "--module-id", module_id)
+
+    # --- shared good paths ---
+    def test_build_antislop_good_passes(self):
+        """PROP-037 per-clause hygiene: PASS_AFTER_FIX enum branch + distinct identities."""
+        rc, out = self._mq("module_acceptance_build_antislop_good.yaml")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_build_validation_na_good_passes(self):
+        """A declared, reasoned applicability: not_applicable is a PASS for a no-build module."""
+        rc, out = self._mq("module_acceptance_build_validation_na_good.yaml", module_id="m3")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    # --- BUILD-VALIDATION-REQUIRED ---
+    def test_no_build_validation_fails(self):
+        rc, out = self._mq("module_acceptance_no_build_validation.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("build_validation leg missing", out)
+
+    # --- BUILD-VALIDATION-MALFORMED (all sub-classes) ---
+    def test_build_validation_bad_status_fails(self):
+        rc, out = self._mq("module_acceptance_build_validation_bad_status.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("not PASS/PASS_AFTER_FIX", out)
+
+    def test_build_validation_ran_empty_fails(self):
+        rc, out = self._mq("module_acceptance_build_validation_ran_empty.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("ran is empty/not-a-list", out)
+
+    def test_build_validation_missing_coverage_fails(self):
+        rc, out = self._mq("module_acceptance_build_validation_missing_coverage.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("no re-readable PASS claims row covers it", out)
+
+    def test_build_validation_nonscalar_reviewer_fails(self):
+        """field_present would accept reviewer: [null] as 'present' — _str_field must not."""
+        rc, out = self._mq("module_acceptance_build_validation_nonscalar_reviewer.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("identity missing", out)
+
+    def test_build_validation_na_no_reason_fails(self):
+        # non-risk module m3 so ONLY the na-branch MALFORMED fires (isolation, xfam #7)
+        rc, out = self._mq("module_acceptance_build_validation_na_no_reason.yaml", module_id="m3")
+        self.assertEqual(rc, 1)
+        self.assertIn("not_applicable requires na_reason", out)
+
+    # --- BUILD-VALIDATION-MALFORMED na-branch: artifact-type enum (xfam P0#1 part 2) ---
+    def test_build_validation_na_bad_artifact_type_fails(self):
+        rc, out = self._mq("module_acceptance_build_validation_na_bad_type.yaml", module_id="m3")
+        self.assertEqual(rc, 1)
+        self.assertIn("acceptance_artifact_type 'banana' is not one of", out)
+
+    # --- BUILD-VALIDATION-NA-INVALID (P0) — a risk module cannot escape via N/A (xfam P0#1) ---
+    def test_build_validation_na_on_risk_module_is_p0(self):
+        """A money/data risk-flagged module declaring applicability: not_applicable with otherwise
+        valid N/A fields is a P0 — the registry cross-check closes the dangerous escape. Live probe
+        the reviewer confirmed: risk module + N/A + acceptance_artifact_type: banana previously PASSED."""
+        rc, out = self._mq("module_acceptance_build_validation_na_on_risk_module.yaml", module_id="m1")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("cannot skip build_validation via the N/A escape", out)
+
+    # --- BUILD-VALIDATION-CONTRADICTED (P0) — the re-read must actually OPEN the log ---
+    def test_build_validation_expect_contains_absent_is_p0(self):
+        """xfam P0#3: expect_contains was ignored (grep found zero refs in cx_module_quality). A PASS
+        claim over a real passing log with an expect_contains marker ABSENT from that log must P0 —
+        proves the marker is now checked, mirroring cx_evidence.py:90-93."""
+        rc, out = self._mq("module_acceptance_build_validation_expect_contains_absent.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("expect_contains marker 'MARKER-THAT-IS-NOT-IN-THE-LOG' absent from the log", out)
+
+    def test_build_validation_absolute_log_path_is_p0(self):
+        """xfam P0#2: _read_log used an absolute log_path as-is → a claim could point at any
+        always-passing file OUTSIDE the receipt dir. The hardened _read_log rejects absolute paths →
+        None → P0 (does not resolve), fail-closed."""
+        rc, out = self._mq("module_acceptance_build_validation_abs_log_path.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("does not resolve", out)
+
+    def test_read_log_rejects_absolute_and_dotdot(self):
+        """Direct unit on the hardened shared helper: an absolute path, a '..'-escape, and a path
+        resolving outside the card dir all return None (fail-closed); a real relative log reads."""
+        import cx_evidence
+        d = FIXTURES / "logs"
+        self.assertIsNone(cx_evidence._read_log(d, "/etc/hostname"))
+        self.assertIsNone(cx_evidence._read_log(d, "../../../../etc/hostname"))
+        self.assertIsNone(cx_evidence._read_log(d, "../module_registry_good.yaml"))
+        self.assertIsNotNone(cx_evidence._read_log(d, "build_validation_pass.txt"))
+
+    # --- BUILD-VALIDATION-CONTRADICTED (P0) — the re-read must actually OPEN the log ---
+    def test_build_validation_contradicted_exit_is_p0_from_real_reread(self):
+        """The log file EXISTS and resolves; the claim's own declared exit_code (1) is what
+        contradicts it — proves the P0 fires from the exit-code re-read, not from a missing log."""
+        rc, out = self._mq("module_acceptance_build_validation_contradicted_exit.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("exit_code 1 with no declared nonzero_pass_semantics", out)
+        self.assertIn("fabricated PASS", out)
+
+    def test_build_validation_contradicted_marker_is_p0_from_real_reread(self):
+        """The log file logs/build_validation_fail_marker.txt EXISTS on disk and genuinely CONTAINS
+        'ERROR' — the P0 fires because module-quality actually opened and scanned it, not because
+        the log was absent (that is a distinct -REQUIRED/-CONTRADICTED unresolvable-log path)."""
+        log = FIXTURES / "logs" / "build_validation_fail_marker.txt"
+        self.assertTrue(log.is_file(), "fixture log must exist on disk for the re-read to be real")
+        self.assertIn("ERROR", log.read_text(), "fixture log must genuinely contain the declared marker")
+        rc, out = self._mq("module_acceptance_build_validation_contradicted_marker.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("fail_marker 'ERROR' present in the log", out)
+
+    def test_build_validation_unresolvable_log_is_p0(self):
+        """A claims row that claims PASS but whose log_path does not resolve on disk is a fabricated
+        PASS (P0), fail-closed — never a silent skip."""
+        with tempfile.TemporaryDirectory() as tmp:
+            body = fix_text("module_acceptance_full_good.yaml").replace(
+                "log_path: logs/build_validation_pass.txt",
+                "log_path: logs/does-not-exist.txt")
+            bundle = Path(tmp) / "module_acceptance_unresolvable_log.yaml"
+            bundle.write_text(body, encoding="utf-8")
+            rc, out = run_cx("check", "module-quality",
+                             "--acceptance", str(bundle),
+                             "--registry", fix("module_registry_good.yaml"),
+                             "--module-id", "m1")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("does not resolve", out)
+
+    def test_build_validation_real_pass_log_reread_passes(self):
+        """Mirror good case: the log EXISTS and genuinely shows a PASS (exit 0, no fail markers) —
+        the leg passes on true re-read evidence, not on an unread assertion."""
+        log = FIXTURES / "logs" / "build_validation_pass.txt"
+        self.assertTrue(log.is_file())
+        self.assertNotIn("ERROR", log.read_text())
+        rc, out = self._mq("module_acceptance_full_good.yaml")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    # --- BUILD-VALIDATION-SELF-GRADED ---
+    def test_build_validation_self_graded_fails(self):
+        rc, out = self._mq("module_acceptance_build_validation_self_graded.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("same-wave self-grading", out)
+
+    # --- ANTI-SLOP-REQUIRED ---
+    def test_no_anti_slop_fails(self):
+        rc, out = self._mq("module_acceptance_no_anti_slop.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("anti_slop leg missing", out)
+
+    # --- ANTI-SLOP-MALFORMED (all sub-classes) ---
+    def test_anti_slop_bad_status_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_bad_status.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("anti_slop.status is 'PENDING'", out)
+
+    def test_anti_slop_wrong_family_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_wrong_family.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("family_relation must be 'same_family'", out)
+
+    def test_anti_slop_wrong_role_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_wrong_role.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("not 'slop_removal'", out)
+
+    def test_anti_slop_missing_families_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_missing_families.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("reviewer_family/builder_family missing", out)
+
+    def test_anti_slop_no_anchor_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_no_anchor.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("no evidence anchor", out)
+
+    def test_anti_slop_empty_anchor_fails(self):
+        """xfam P1#5: the anchor used field_present, so review_ref: [] passed with no real anchor.
+        _str_field now requires a NON-EMPTY scalar ref."""
+        rc, out = self._mq("module_acceptance_anti_slop_empty_anchor.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("no evidence anchor", out)
+
+    # --- ANTI-SLOP-MALFORMED: identity required (xfam P1#4) ---
+    def test_anti_slop_missing_identity_fails(self):
+        """xfam P1#4: anti_slop.reviewer/builder were not required (unlike build_validation), so
+        omitting builder silently bypassed the self-grading check. Both are now REQUIRED scalars."""
+        rc, out = self._mq("module_acceptance_anti_slop_missing_identity.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("anti_slop.reviewer/builder identity missing", out)
+
+    # --- ANTI-SLOP-SELF-GRADED ---
+    def test_anti_slop_self_graded_fails(self):
+        rc, out = self._mq("module_acceptance_anti_slop_self_graded.yaml")
+        self.assertEqual(rc, 1)
+        self.assertIn("self-grading of the anti-slop pass", out)
+
+    # --- #6: self-grading equality is case/space-insensitive (both legs) ---
+    def test_self_grading_casefold_build_validation(self):
+        """xfam #6: ' Sonnet ' vs 'sonnet' must still be caught as self-grading (casefold + strip)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            body = fix_text("module_acceptance_full_good.yaml").replace(
+                "reviewer: build-validator-agent\n    builder: cx-sonnet-builder",
+                "reviewer: ' Sonnet '\n    builder: sonnet")
+            bundle = Path(tmp) / "ma_casefold_bv.yaml"
+            bundle.write_text(body, encoding="utf-8")
+            rc, out = run_cx("check", "module-quality",
+                             "--acceptance", str(bundle),
+                             "--registry", fix("module_registry_good.yaml"),
+                             "--module-id", "m1")
+        self.assertEqual(rc, 1)
+        self.assertIn("reviewer == builder", out)
+
+    def test_self_grading_casefold_anti_slop(self):
+        """xfam #6: anti_slop self-grading also casefold/strip-insensitive."""
+        with tempfile.TemporaryDirectory() as tmp:
+            body = fix_text("module_acceptance_full_good.yaml").replace(
+                "reviewer: sonnet-anti-slop-reviewer\n    builder: cx-sonnet-builder",
+                "reviewer: ' Slopper '\n    builder: slopper")
+            bundle = Path(tmp) / "ma_casefold_as.yaml"
+            bundle.write_text(body, encoding="utf-8")
+            rc, out = run_cx("check", "module-quality",
+                             "--acceptance", str(bundle),
+                             "--registry", fix("module_registry_good.yaml"),
+                             "--module-id", "m1")
+        self.assertEqual(rc, 1)
+        self.assertIn("anti_slop.reviewer == builder", out)
 
 
 # ---------------------------------------------------------------------------
@@ -1199,6 +1491,40 @@ class TestXfamCapability(unittest.TestCase):
         rc, out = run_cx("check", "state", fix("state_bad_xfam_capability_evidence_unsafe.yaml"))
         self.assertEqual(rc, 1)
         self.assertIn("must be a repo-relative path", out)
+
+
+# ---------------------------------------------------------------------------
+# PROP-042-DRAFT / V1.21-candidate — review routing hardening from a real project's planning skip
+# ---------------------------------------------------------------------------
+class TestReviewRoutingHardening(unittest.TestCase):
+    def test_build_state_rejects_coderabbit_not_applicable(self):
+        rc, out = run_cx("check", "state", fix("state_bad_review_boundary_coderabbit_na.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("CodeRabbit", out)
+        self.assertIn("MODULE_BUILD", out)
+
+    def test_build_state_rejects_final_only_self_review_boundary(self):
+        rc, out = run_cx("check", "state", fix("state_bad_review_boundary_self_final.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("self_review_boundary", out)
+        self.assertIn("module", out)
+
+    def test_codex_app_rejects_module_xfam_boundary(self):
+        rc, out = run_cx("check", "state", fix("state_bad_codex_module_xfam_boundary.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("CODEX_APP", out)
+        self.assertIn("whole-app", out)
+
+    def test_final_xfam_route_requires_built_app_audit(self):
+        rc, out = run_cx("check", "state", fix("state_bad_final_xfam_without_built_app_audit.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("Built-App Audit", out)
+        self.assertIn("final xfam", out)
+
+    def test_final_xfam_route_with_built_app_audit_passes(self):
+        rc, out = run_cx("check", "state", fix("state_good_final_xfam_with_built_app_audit.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
 
 
 # ---------------------------------------------------------------------------
@@ -1859,6 +2185,31 @@ class TestCheckEvidenceNewFindings(unittest.TestCase):
             "test" in out.lower() and ("authoris" in out.lower() or "allowed" in out.lower())
         )
 
+    def test_module_build_can_create_declared_test_outputs(self):
+        """P1-05 is a FIX-card guard, not a module-build ban on writing tests."""
+        import yaml, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            card = {
+                "id": "MODTEST-001",
+                "mode": "MODULE_BUILD",
+                "model_tier": "standard",
+                "objective": "Build module code and tests.",
+                "allowed_operations": ["write-python", "write-test"],
+                "allowed_files": ["app/module.py", "tests/test_module.py"],
+                "new_outputs": ["app/module.py", "tests/test_module.py"],
+                "evidence_required": [],
+            }
+            card_file = Path(tmp) / "card.yaml"
+            card_file.write_text(yaml.dump(card))
+            diff_file = Path(tmp) / "diff.txt"
+            diff_file.write_text("app/module.py\ntests/test_module.py\n")
+
+            rc, out = run_cx("check", "evidence", str(card_file), "--diff", str(diff_file))
+            self.assertEqual(rc, 0,
+                f"Expected PASS — MODULE_BUILD cards may create declared tests.\n"
+                f"Got {rc}.\nOutput:\n{out}")
+            self.assertIn("PASS", out)
+
     def test_evidence_path_resolves_relative_to_card_dir(self):
         """P2-06: evidence paths resolve from card dir not CWD.
         BUG PROOF: before fix, paths were resolved from CWD — running cx from a different
@@ -1890,6 +2241,43 @@ class TestCheckEvidenceNewFindings(unittest.TestCase):
 
             self.assertEqual(rc, 0,
                 f"Expected PASS — relative evidence path should resolve from card dir, not CWD.\n"
+                f"Got {rc}.\nOutput:\n{out}")
+            self.assertIn("PASS", out)
+
+    def test_evidence_path_resolves_relative_to_project_root_for_cards_dir(self):
+        """PROP-041 follow-up: cards may declare repo-root evidence paths.
+        sample cards live under cards/ and require evidence/... at the project root; the
+        checker must not turn that into cards/evidence/... and block a real build.
+        """
+        import yaml, tempfile, os
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / ".git").mkdir()
+            cards = repo / "cards"
+            cards.mkdir()
+            ev_dir = repo / "evidence"
+            ev_dir.mkdir()
+            (ev_dir / "output.txt").write_text("PASS — real evidence\n")
+
+            card = {
+                "id": "EVPATH-002",
+                "mode": "MODULE_BUILD",
+                "model_tier": "standard",
+                "objective": "Test project-root evidence path.",
+                "evidence_required": ["evidence/output.txt"],
+            }
+            card_file = cards / "card.yaml"
+            card_file.write_text(yaml.dump(card))
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(str(Path(__file__).parent.parent))
+                rc, out = run_cx("check", "evidence", str(card_file))
+            finally:
+                os.chdir(orig_cwd)
+
+            self.assertEqual(rc, 0,
+                f"Expected PASS — repo-root evidence path should resolve from project root.\n"
                 f"Got {rc}.\nOutput:\n{out}")
             self.assertIn("PASS", out)
 
@@ -1925,6 +2313,21 @@ class TestCheckCardRound2(unittest.TestCase):
         self.assertIn("FIX-FIRST", out)
         self.assertTrue("FAIL CLOSED" in out or "fail closed" in out or "--state" in out,
                         f"Expected fail-closed message in output:\n{out}")
+
+    def test_foundation_card_does_not_self_block(self):
+        """PROP-041(b): a FOUNDATION card (foundation_checkpoint_required: yes, with reason)
+        must PASS its own `cx check card` even when its id is NOT yet in
+        state.foundation_checkpoints_passed. The checkpoint can only be recorded AFTER the
+        card builds + is xfam-reviewed (chicken-and-egg), so a self-block would make the
+        foundation card unbuildable forever. Per GATES.md:48 the checkpoint blocks every
+        DEPENDENT card, never the foundation card itself.
+        PRE-FIX PROOF: cx_card.py self-blocked (returned exit 1) on unfixed code."""
+        rc, out = run_cx("check", "card",
+                          fix("card_foundation_self_unmet.yaml"),
+                          "--state", fix("state_foundation_unmet.yaml"))
+        self.assertEqual(rc, 0,
+            f"Expected PASS (exit 0) — foundation card must not self-block, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
 
     # F2 P1-06: empty source_sections
     def test_empty_source_sections_fails(self):
@@ -2162,12 +2565,18 @@ class TestWholePacketReview(unittest.TestCase):
                 h = _compute_packet_hash(Path(packet_dir))
             finally:
                 sys.path.pop(0)
+        sys.path.insert(0, str(CHECKERS_DIR))
+        try:
+            from cx_deck import _compute_substantive_source_hash
+            sub_h = _compute_substantive_source_hash(Path(packet_dir))
+        finally:
+            sys.path.pop(0)
         reviews = Path(repo) / "reviews"
         reviews.mkdir(parents=True, exist_ok=True)
         receipt = reviews / "whole-packet-review.yaml"
         receipt.write_text(
             "whole_packet_review:\n  schema_version: 1\n  review_kind: WHOLE_PACKET_G7\n"
-            f"  frozen_packet_hash: {h}\n  reviewed_source_set_hash: abc123abc123\n"
+            f"  frozen_packet_hash: {h}\n  reviewed_source_set_hash: {sub_h}\n"
             "  authoring_family: anthropic\n  reviewer_family: gpt\n"
             "  three_leg_ask:\n    continuity: prior decisions re-checked\n    problems: no P0\n"
             "    approach_improvement: no simpler structure\n"
@@ -2222,23 +2631,215 @@ class TestWholePacketReview(unittest.TestCase):
             self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
             self.assertIn("is a symlink", out)
 
+    def test_buildmeta_only_delta_carries(self):
+        """Build-metadata-only registry edit (card_ids/dependency_modules/frozen_packet_hash/protocol_version)
+        must NOT invalidate the WPR — the review carries (PROP-041)."""
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            packet = repo / "packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", packet)
+            state = self._mk(repo, packet)
+            # Now mutate ONLY build-metadata fields in MODULE-REGISTRY.yaml
+            reg = packet / "MODULE-REGISTRY.yaml"
+            txt = reg.read_text()
+            reg.write_text(txt.replace("module_registry:\n", "module_registry:\n  protocol_version: \"1.99-test\"\n"))
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 0, f"Build-metadata-only delta should carry. rc={rc}\n{out}")
 
-class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_is_1_19(self):
-        """The checker constant must equal the shipping protocol version (v1.19) so cx identity
-        can never silently lag the ledger again (VERSION-HISTORY current = v1.19, PROP-040)."""
+    def test_substantive_doc_change_invalidates(self):
+        """Appending to requirements-manifest.yaml (substantive) invalidates the WPR (PROP-041)."""
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            packet = repo / "packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", packet)
+            state = self._mk(repo, packet)
+            mf = packet / "requirements-manifest.yaml"
+            with open(mf, "ab") as f:
+                f.write(b"\n# substantive-stale-marker\n")
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 1, f"Substantive change should invalidate. rc={rc}\n{out}")
+            self.assertIn("SUBSTANTIVE packet doc", out)
+
+    def test_registry_order_change_invalidates(self):
+        """ANTI-LAUNDERING: a SUBSTANTIVE registry edit (a module title/set/order — NOT one of the
+        four stripped build-metadata fields) MUST still invalidate the WPR. Proves the partial-strip
+        of MODULE-REGISTRY.yaml cannot smuggle a real change past the carry (PROP-041)."""
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            packet = repo / "packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", packet)
+            state = self._mk(repo, packet)
+            reg = packet / "MODULE-REGISTRY.yaml"
+            reg.write_text(reg.read_text().replace(
+                "Expense category editor", "Expense category editor RENAMED"))
+            rc, out = run_cx("check", "whole-packet-review", "--state", state,
+                             "--packet-dir", str(packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 1, f"Substantive registry edit should invalidate. rc={rc}\n{out}")
+            self.assertIn("SUBSTANTIVE packet doc", out)
+
+    def test_missing_reviewed_source_set_hash_blocks(self):
+        """A receipt with reviewed_source_set_hash absent is rejected (PROP-041)."""
+        import shutil, hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"; repo.mkdir()
+            packet = repo / "packet"
+            shutil.copytree(FIXTURES / "module_start_good_packet", packet)
+            sys.path.insert(0, str(CHECKERS_DIR))
+            try:
+                from cx_deck import _compute_packet_hash
+                h = _compute_packet_hash(packet)
+            finally:
+                sys.path.pop(0)
+            reviews = repo / "reviews"; reviews.mkdir()
+            receipt = reviews / "whole-packet-review.yaml"
+            receipt.write_text(
+                "whole_packet_review:\n  schema_version: 1\n  review_kind: WHOLE_PACKET_G7\n"
+                f"  frozen_packet_hash: {h}\n  reviewed_source_set_hash: \"\"\n"
+                "  authoring_family: anthropic\n  reviewer_family: gpt\n"
+                "  three_leg_ask:\n    continuity: prior decisions re-checked\n    problems: no P0\n"
+                "    approach_improvement: no simpler structure\n"
+                "  verdict: PASS\n  findings_ref: reviews/whole-packet-review.md\n")
+            rh = hashlib.sha256(receipt.read_bytes()).hexdigest()[:12]
+            state = repo / "state.yaml"
+            state.write_text(
+                "project: x\npacket_dir: packet\nwhole_packet_review_receipt:\n"
+                "  receipt: reviews/whole-packet-review.yaml\n"
+                f'  receipt_hash: "{rh}"\n')
+            rc, out = run_cx("check", "whole-packet-review", "--state", str(state),
+                             "--packet-dir", str(packet), "--repo-root", str(repo))
+            self.assertEqual(rc, 1)
+            self.assertIn("WHOLE-PACKET-REVIEW-SUBSTANTIVE-HASH-PRESENT", out)
+
+
+class TestSubstantiveSourceHash(unittest.TestCase):
+    """Unit tests for cx_deck._compute_substantive_source_hash — the anti-laundering hash
+    that carve-out (c) keys WPR currency on (PROP-041). Gated copy of the test_cx.py mirror."""
+
+    @staticmethod
+    def _make_packet(base, files: dict):
+        pkt = Path(base) / "packet"
+        pkt.mkdir(parents=True, exist_ok=True)
+        for rel, content in files.items():
+            p = pkt / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(content, bytes):
+                p.write_bytes(content)
+            else:
+                p.write_text(content)
+        return pkt
+
+    @staticmethod
+    def _sub_hash(pkt):
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
-            import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.19")
+            from cx_deck import _compute_substantive_source_hash
+            return _compute_substantive_source_hash(pkt)
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_19(self):
-        """`cx --version` surfaces V1.19."""
+    def test_buildmeta_only_registry_edit_identical_hash(self):
+        """Editing ONLY the four build-metadata fields yields the SAME substantive hash (carry)."""
+        import yaml, copy
+        base_reg = {"module_registry": {"frozen_packet_hash": "old-hash", "protocol_version": "1.0",
+                                         "modules": [{"module_id": "m_a", "card_ids": ["C-001"],
+                                                       "dependency_modules": ["m_b"],
+                                                       "requirement_ids": ["REQ-001"]},
+                                                      {"module_id": "m_b", "card_ids": [],
+                                                       "dependency_modules": [], "requirement_ids": []}]}}
+        manifest = "requirements:\n  - id: REQ-001\n    disposition: BUILDING\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            pkt1 = self._make_packet(tmp + "/p1", {
+                "requirements-manifest.yaml": manifest, "MODULE-REGISTRY.yaml": yaml.safe_dump(base_reg)})
+            mutated = copy.deepcopy(base_reg)
+            mutated["module_registry"]["frozen_packet_hash"] = "new-hash"
+            mutated["module_registry"]["protocol_version"] = "1.99"
+            mutated["module_registry"]["modules"][0]["card_ids"] = ["C-999"]
+            mutated["module_registry"]["modules"][0]["dependency_modules"] = []
+            pkt2 = self._make_packet(tmp + "/p2", {
+                "requirements-manifest.yaml": manifest, "MODULE-REGISTRY.yaml": yaml.safe_dump(mutated)})
+            self.assertEqual(self._sub_hash(pkt1), self._sub_hash(pkt2),
+                             "build-metadata-only registry edit must yield identical substantive hash")
+
+    def test_substantive_registry_edit_different_hash(self):
+        """Editing a substantive registry field (a module title) yields a DIFFERENT hash (no laundering)."""
+        import yaml, copy
+        base_reg = {"module_registry": {"frozen_packet_hash": "h", "protocol_version": "1.0",
+                                         "modules": [{"module_id": "m_a", "title": "Importer",
+                                                       "card_ids": ["C-001"], "dependency_modules": [],
+                                                       "requirement_ids": ["REQ-001"]}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            pkt1 = self._make_packet(tmp + "/p1", {"MODULE-REGISTRY.yaml": yaml.safe_dump(base_reg)})
+            mutated = copy.deepcopy(base_reg)
+            mutated["module_registry"]["modules"][0]["title"] = "Importer RENAMED"
+            pkt2 = self._make_packet(tmp + "/p2", {"MODULE-REGISTRY.yaml": yaml.safe_dump(mutated)})
+            self.assertNotEqual(self._sub_hash(pkt1), self._sub_hash(pkt2),
+                                "substantive registry field edit must yield a different hash")
+
+    def test_substantive_doc_edit_different_hash(self):
+        """Editing a non-registry packet doc (TRD) yields a DIFFERENT hash."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkt1 = self._make_packet(tmp + "/p1", {"requirements-manifest.yaml": "requirements: []\n",
+                                                    "TRD.md": "# TRD v1\n"})
+            pkt2 = self._make_packet(tmp + "/p2", {"requirements-manifest.yaml": "requirements: []\n",
+                                                    "TRD.md": "# TRD v2 CHANGED\n"})
+            self.assertNotEqual(self._sub_hash(pkt1), self._sub_hash(pkt2),
+                                "substantive doc edit must yield a different hash")
+
+    def test_symlink_under_packet_raises_valueerror(self):
+        """A symlink under the packet fails closed (ValueError) — same guard as _compute_packet_hash."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkt = self._make_packet(tmp + "/p", {"a.md": "x\n"})
+            ext = Path(tmp) / "ext.md"; ext.write_text("y\n")
+            os.symlink(ext, pkt / "link.md")
+            self.assertRaises(ValueError, self._sub_hash, pkt)
+
+    def test_date_typed_substantive_field_does_not_launder(self):
+        """GPT xfam P2: a YAML date in a substantive registry field must NOT collapse to its string
+        form (json default= coercion removed) — changing the date value MUST invalidate, never carry.
+        Without the fix, json.dumps(default=str) hashed a date and its string form identically."""
+        reg1 = ("module_registry:\n  frozen_packet_hash: h\n  modules:\n"
+                "  - module_id: m_a\n    review_due: 2026-06-28\n    card_ids: [C-001]\n"
+                "    dependency_modules: []\n    requirement_ids: [REQ-001]\n")
+        reg2 = reg1.replace("2026-06-28", "2026-06-29")
+        with tempfile.TemporaryDirectory() as tmp:
+            pkt1 = self._make_packet(tmp + "/p1", {"MODULE-REGISTRY.yaml": reg1})
+            pkt2 = self._make_packet(tmp + "/p2", {"MODULE-REGISTRY.yaml": reg2})
+            self.assertNotEqual(self._sub_hash(pkt1), self._sub_hash(pkt2),
+                "a date-typed substantive registry field must invalidate on change, not collapse")
+
+
+class TestProtocolVersionIdentity(unittest.TestCase):
+    def test_protocol_version_constant_marks_1_21_4_locked(self):
+        """The checker reports v1.21.4 as the locked canonical protocol version (CEO-D-037, canon-hygiene patch)."""
+        sys.path.insert(0, str(CHECKERS_DIR))
+        try:
+            import cx_common
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.21.4")
+        finally:
+            sys.path.pop(0)
+
+    def test_cx_version_reports_1_21_locked(self):
+        """`cx --version` reports the locked v1.21 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.19", out)
+        self.assertIn("V1.21", out)
+        self.assertNotIn("candidate", out)
+
+    def test_entrypoints_guard_old_python(self):
+        """CXAUD-001: every checker entrypoint (cx, run.py, run_contracts.py) fail-fasts on
+        Python <3.10 with a clear message — the modules use PEP 604 `X | None` unions, so an
+        older interpreter must not reach a raw import-time TypeError (a false red)."""
+        for name in ("cx", "tests/run.py", "tests/run_contracts.py"):
+            src = (CHECKERS_DIR / name).read_text()
+            self.assertIn("sys.version_info < (3, 10)", src,
+                          f"{name} lost its Python-version guard (CXAUD-001 regression)")
+            self.assertIn("3.10+", src,
+                          f"{name} guard must name the Python 3.10+ requirement (CXAUD-001)")
 
 
 # ---------------------------------------------------------------------------
@@ -2401,15 +3002,21 @@ _STATE_BASE_SS = {
     "cost_this_week": {"cards_run": 1, "top_model_cards": 0, "cheap_model_cards": 0,
                        "full_reviews": 0, "loops_used": 1, "waste_alarm": "LOW"},
     # PROP-014: build-mode sessions must acknowledge BUILDER-STANDARD.md at session start.
-    "session_start": {"builder_standard_read": {
-        "status": "PASS", "file": "BUILDER-STANDARD.md", "hash": "deadbeef0123",
-        "read_by": "cx-test", "timestamp": "2026-06-10T00:00:00"}},
+    # PROP-042 Part B: a build session declares it runs as an orchestrator dispatching subagents.
+    "session_start": {
+        "builder_standard_read": {
+            "status": "PASS", "file": "BUILDER-STANDARD.md", "hash": "deadbeef0123",
+            "read_by": "cx-test", "timestamp": "2026-06-10T00:00:00"},
+        "orchestration_mode": {"dispatch_subagents": "yes", "lead_role": "orchestrator"},
+        # PROP-042 Part E: build sessions declare SEE-AND-TEST demo mode (R-DEMO).
+        "module_demo_mode": {"demo_every_user_facing_module": "yes", "surfaces": ["web", "mobile"]}},
     # PROP-020: reviewer taxonomy/timing as typed state (required at session-start in build modes).
     "review_boundary": {
         "deterministic_checks_each_card": "yes",
-        "coderabbit_before_self_review": "not_applicable",
+        "coderabbit_before_self_review": "yes",
         "self_review_boundary": "module",
         "cross_family_boundary": "module",
+        "xfam_capability": "stage_1",
     },
 }
 
@@ -2564,6 +3171,45 @@ class TestCheckStateSessionStart(unittest.TestCase):
         self.assertEqual(rc, 0, f"Back-compat FAIL: state_good.yaml got {rc}.\n{out}")
         self.assertIn("PASS", out)
 
+    def test_orchestration_mode_missing_bites(self):
+        """PROP-042 Part B: a build-mode session-start state without
+        session_start.orchestration_mode bites (R-ORCH)."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            _git_init(repo)
+            _git_commit(repo, "first")
+            sha = _git_commit(repo, "second")
+            state = os.path.join(tmp, "state.yaml")
+            _write_state_ss(state, sha)
+            with open(state) as f:
+                data = yaml.safe_load(f)
+            data["session_start"].pop("orchestration_mode", None)
+            with open(state, "w") as f:
+                yaml.dump(data, f)
+            rc, out = run_cx("check", "state", state, "--session-start", "--repo-root", repo)
+            self.assertNotEqual(rc, 0, f"missing orchestration_mode must bite.\n{out}")
+            self.assertIn("orchestration_mode", out)
+
+    def test_orchestration_mode_inline_waiver_needs_ceo_ref(self):
+        """PROP-042 Part B: inline_waiver without ceo_decision_ref bites."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            _git_init(repo)
+            _git_commit(repo, "first")
+            sha = _git_commit(repo, "second")
+            state = os.path.join(tmp, "state.yaml")
+            _write_state_ss(state, sha)
+            with open(state) as f:
+                data = yaml.safe_load(f)
+            data["session_start"]["orchestration_mode"] = {"inline_waiver": "yes"}
+            with open(state, "w") as f:
+                yaml.dump(data, f)
+            rc, out = run_cx("check", "state", state, "--session-start", "--repo-root", repo)
+            self.assertNotEqual(rc, 0, f"inline_waiver without ceo_decision_ref must bite.\n{out}")
+            self.assertIn("ceo_decision_ref", out)
+
 
 class TestCLISurface(unittest.TestCase):
     def test_help_lists_check_subcommand(self):
@@ -2658,12 +3304,12 @@ class TestCheckPacketProp031(unittest.TestCase):
     def test_missing_provenance_bites(self):
         rc, out = run_cx("check", "packet", fix("packet_bad_prop031_no_provenance"))
         self.assertEqual(rc, 1)
-        self.assertIn("look-source unstated (PROP-031)", out)
+        self.assertIn("look-source unstated (P-PROP-004)", out)
 
     def test_external_uncaptured_bites(self):
         rc, out = run_cx("check", "packet", fix("packet_bad_prop031_uncaptured"))
         self.assertEqual(rc, 1)
-        self.assertIn("the captured reference must be pinned inside the packet (PROP-031)", out)
+        self.assertIn("the captured reference must be pinned inside the packet (P-PROP-004)", out)
 
     def test_capture_hash_mismatch_bites(self):
         rc, out = run_cx("check", "packet", fix("packet_bad_prop031_capture_hash"))
@@ -3293,6 +3939,355 @@ class TestContractHarnessResolveArgs(unittest.TestCase):
                 flagged.append(a)
         self.assertEqual(len(flagged), 1,
                          "a missing path-valued flag value must still be reported MISSING FIXTURE")
+
+
+# ---------------------------------------------------------------------------
+# KaizenChecks (PROP-042 Part F)
+# ---------------------------------------------------------------------------
+class KaizenChecks(unittest.TestCase):
+    """cx check kaizen — KAIZEN-* clause suite (PROP-042 Part F)."""
+
+    _CONTRACTS = str(CHECKERS_DIR / "check-contracts.yaml")
+
+    def test_good_queue_passes(self):
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_behavioural_applied_no_enforcement_fails(self):
+        """KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT: PROP-024 class."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_no_enforcement.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT", out)
+
+    def test_fake_clause_ref_fails(self):
+        """KAIZEN-ENFORCEMENT-CLAUSE-EXISTS: clause_id not in check-contracts."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_fake_clause.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("not found in check-contracts", out)
+
+    def test_presence_only_rejected(self):
+        """KAIZEN-ENFORCEMENT-NOT-PRESENCE-ONLY: presence_lint kind is banned."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_presence_only.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("presence-lint", out)
+
+    def test_behavioural_field_missing_is_p1(self):
+        """KAIZEN-BEHAVIOURAL-FIELD-PRESENT: APPLIED PROP missing behavioural field."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_no_behavioural_field.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-BEHAVIOURAL-FIELD-PRESENT", out)
+
+    def test_prompt_ref_unsafe_rejected(self):
+        """KAIZEN-PROMPT-REF-SHAPE: absolute prompt_ref is rejected."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_promptref_unsafe.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("prompt_ref", out)
+
+    def test_unparseable_applied_is_debt_not_hardfail(self):
+        """KAIZEN-APPLIED-ENTRY-PARSEABLE: malformed yaml is P2 (non-blocking) by default."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_unparseable_applied.md"),
+                         "--contracts", self._CONTRACTS)
+        # P2 = debt, not blocking — gate stays green
+        self.assertEqual(rc, 0, f"Expected PASS (P2 debt non-blocking), got {rc}.\n{out}")
+
+    def test_strict_debt_promotes_to_p1(self):
+        """--strict-debt promotes unparseable P2 to P1 (gate fails)."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_unparseable_applied.md"),
+                         "--contracts", self._CONTRACTS, "--strict-debt")
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST under --strict-debt, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+
+    def test_judgment_limit_complete_passes(self):
+        """judgment_limit with all 3 required fields passes."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good_judgment_limit.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_judgment_limit_incomplete_fails(self):
+        """KAIZEN-JUDGMENT-LIMIT-SHAPE: missing ceo_decision_ref → P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_judgment_limit_incomplete.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-JUDGMENT-LIMIT-SHAPE", out)
+
+    def test_prop024_dogfood_fixture_trips_p0(self):
+        """PROP-024 dogfood: kaizen_bad_prop024_real trips KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_prop024_real.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1)
+        self.assertIn("KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT", out)
+
+
+# ---------------------------------------------------------------------------
+# ConflictScanChecks (PROP-044 — no-ambiguity / conflict_scan clauses)
+# ---------------------------------------------------------------------------
+class ConflictScanChecks(unittest.TestCase):
+    """cx check kaizen — KAIZEN-CONFLICT-SCAN-* + BUILD-CONFLICT-SCAN-STEP-MISSING suite (PROP-044)."""
+
+    _CONTRACTS = str(CHECKERS_DIR / "check-contracts.yaml")
+
+    def test_good_conflict_scan_passes(self):
+        """Good fixture with complete conflict_scan passes all clauses."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good_conflict_scan.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_conflict_scan_missing_fails(self):
+        """KAIZEN-CONFLICT-SCAN-PRESENT: PROP without conflict_scan block is rejected P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_missing.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CONFLICT-SCAN-PRESENT", out)
+
+    def test_conflict_scan_unresolved_fails(self):
+        """KAIZEN-CONFLICT-SCAN-RESOLVED: hits listed but resolution_ref blank → P0."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_unresolved.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CONFLICT-SCAN-RESOLVED", out)
+
+    def test_conflict_scan_shape_fails(self):
+        """KAIZEN-CONFLICT-SCAN-SHAPE: missing required keys → P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_shape.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CONFLICT-SCAN-SHAPE", out)
+
+    def test_conflict_scan_stale_basis_fails(self):
+        """KAIZEN-CONFLICT-SCAN-BASIS-CURRENT: forward PROP with zeroed shas → P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_stale_basis.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CONFLICT-SCAN-BASIS-CURRENT", out)
+
+    def test_conflict_scan_step_missing_fails(self):
+        """BUILD-CONFLICT-SCAN-STEP-MISSING: conflict_scan present but scan_step_marker absent → P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_step_missing.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("BUILD-CONFLICT-SCAN-STEP-MISSING", out)
+
+    def test_conflict_scan_live_basis_passes(self):
+        """PBF-PROP-014-CSFIX: real-format forward PROP carrying the scan_commit test sentinel
+        passes under CODE_X_TEST_MODE=1 (SHAPE-only carve-out) — the first-ever GOOD live-basis
+        case, impossible before the commit anchor. Production fail-closed is proven separately by
+        the bad-commit fixture + the hermetic resolution test."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good_conflict_scan_live_basis.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_conflict_scan_bad_commit_fails(self):
+        """PBF-PROP-014-CSFIX: malformed (non-40-hex) scan_commit is rejected on SHAPE
+        alone, before any git call — a fabricated anchor cannot be rubber-stamped."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_conflict_scan_bad_commit.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CONFLICT-SCAN-BASIS-CURRENT", out)
+        self.assertIn("scan_commit", out)
+
+    def test_example_fence_in_prose_passes(self):
+        """G1: non-PROP yaml fences embedded in prose are ignored — PROP passes."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_example_fence_in_prose.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 0, f"Expected PASS (example fence ignored), got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+
+# ---------------------------------------------------------------------------
+# ConflictScanResolution (PBF-PROP-014-CSFIX — the git-resolution/recompute/floor path)
+# ---------------------------------------------------------------------------
+class ConflictScanResolution(unittest.TestCase):
+    """Exercise the commit-anchored GIT-RESOLUTION path against a real temp git repo that
+    mirrors the nested-worktree layout (git root -> Code-X-V1/ subdir). Static fixtures can
+    only reach SHAPE; this proves the recompute, the ancestor/version-floor, and the `./`
+    cwd-relative object resolution (P0-1) actually bite."""
+
+    def _git(self, *args):
+        return subprocess.run(["git", "-C", str(self.root), *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def _blob_sha(self, commit, rel):
+        # cwd = the subdir; `./` resolves relative to it (the production code path).
+        return subprocess.run(["git", "rev-parse", f"{commit}:./{rel}"],
+                              capture_output=True, text=True, cwd=self.subdir,
+                              check=True).stdout.strip()
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp(prefix="cx-csfix-resolve-")
+        self.root = Path(self._tmp)
+        self.subdir = self.root / "Code-X-V1"
+        (self.subdir / "MEMORY").mkdir(parents=True)
+        self._orig_this_dir = cx_kaizen._THIS_DIR
+        cx_kaizen._THIS_DIR = self.subdir / "checkers"  # cx_root -> self.subdir
+
+        self.queue_rel = "MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md"
+        self.ledger_rel = "MEMORY/CEO-DECISION-LEDGER.md"
+        self.cw_rel = "PROP-CROSSWALK.md"
+        self.vh = self.subdir / "VERSION-HISTORY.md"
+        self.version = cx_kaizen.PROTOCOL_VERSION
+
+        self._git("init", "-q")
+        self._git("config", "user.email", "cx@test")
+        self._git("config", "user.name", "cx")
+
+        # commit1 (sha1): initial scanned state; VERSION-HISTORY has a placeholder row.
+        (self.subdir / self.queue_rel).write_text(
+            "# queue\n\n```yaml\n- id: PBF-PROP-001\n  status: APPLIED\n```\n", encoding="utf-8")
+        (self.subdir / self.ledger_rel).write_text(
+            "- id: CEO-D-001\n- id: CEO-D-002\n", encoding="utf-8")
+        (self.subdir / self.cw_rel).write_text("| PROP-001 | P-PROP-001 | seed |\n", encoding="utf-8")
+        self.vh.write_text(f"| v{self.version} | 2026-07-01 | test | `pending` | CEO-D-x |\n",
+                           encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "c1")
+        self.sha1 = self._git("rev-parse", "HEAD")
+
+        # commit2 (sha2): the scanned state a forward PROP anchors to (queue grows by one block).
+        (self.subdir / self.queue_rel).write_text(
+            "# queue\n\n```yaml\n- id: PBF-PROP-001\n  status: APPLIED\n```\n"
+            "\n```yaml\n- id: PBF-PROP-002\n  status: APPLIED\n```\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "c2")
+        self.sha2 = self._git("rev-parse", "HEAD")
+
+        # commit3 (HEAD): the version-lock row now points at sha2 -> lock_commit resolves to sha2.
+        self.vh.write_text(f"| v{self.version} | 2026-07-01 | test | `{self.sha2}` | CEO-D-x |\n",
+                           encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "c3")
+
+    def tearDown(self):
+        cx_kaizen._THIS_DIR = self._orig_this_dir
+
+    def _block(self, scan_commit, **overrides):
+        basis = {
+            "scan_commit": scan_commit,
+            "queue_sha": self._blob_sha(scan_commit, self.queue_rel),
+            "ledger_sha": self._blob_sha(scan_commit, self.ledger_rel),
+            "crosswalk_sha": self._blob_sha(scan_commit, self.cw_rel),
+            "prop_count": overrides.pop("prop_count", None),
+            "decision_count": 2,
+        }
+        # prop_count depends on which commit: sha1 has 1 block, sha2 has 2.
+        if basis["prop_count"] is None:
+            basis["prop_count"] = 2 if scan_commit == self.sha2 else 1
+        basis.update(overrides)
+        return {"id": "P-PROP-099-A", "status": "QUEUED", "behavioural": False,
+                "conflict_scan": {"basis": basis, "duplicates": [], "ambiguities": [],
+                                  "conflicts": [], "resolution_ref": "n/a — none",
+                                  "scan_step_marker": "present"}}
+
+    def _run(self, block):
+        return cx_kaizen._check_conflict_scan(
+            block["id"], block, self.subdir / self.queue_rel)
+
+    def test_resolution_correct_basis_passes(self):
+        """(a) Correct commit-anchored shas/counts at a real scan_commit -> no BASIS-CURRENT finding."""
+        findings = self._run(self._block(self.sha2))
+        basis_hits = [f for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertEqual(basis_hits, [], f"Expected clean recompute, got: {basis_hits}")
+
+    def test_resolution_wrong_sha_bites(self):
+        """(b) One wrong declared sha -> recompute BITES P1."""
+        findings = self._run(self._block(self.sha2, queue_sha="a" * 40))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected a BASIS-CURRENT P1")
+        self.assertIn("queue_sha stale", msgs[0])
+
+    def test_resolution_below_version_floor_bites(self):
+        """(c) scan_commit before the version-lock commit -> tighter floor BITES P1."""
+        findings = self._run(self._block(self.sha1))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected a BASIS-CURRENT P1")
+        self.assertIn("predates", msgs[0])
+
+    def test_resolution_unresolvable_commit_fails_closed(self):
+        """P0-2: a well-formed but non-existent scan_commit fails CLOSED, not SHAPE-only."""
+        block = self._block(self.sha2)
+        block["conflict_scan"]["basis"]["scan_commit"] = "b" * 40
+        findings = self._run(block)
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected a fail-closed P1")
+        self.assertIn("does not resolve to a committed blob", msgs[0])
+
+
+# StageRenameChecks (PBF-PROP-013 — stage-prefix id format + crosswalk clauses)
+# ---------------------------------------------------------------------------
+class StageRenameChecks(unittest.TestCase):
+    """cx check kaizen --conflict-scan — KAIZEN-ID-FORMAT + KAIZEN-PREFIX-MATCHES-STAGES +
+    KAIZEN-STAGE-SERIES-ORDER-GAPLESS + KAIZEN-LEGACY-ID-PRESENT-UNIQUE + KAIZEN-CROSSWALK-COMPLETE
+    suite (PBF-PROP-013)."""
+
+    _CONTRACTS = str(CHECKERS_DIR / "check-contracts.yaml")
+
+    def test_good_stage_rename_passes(self):
+        """Good fixture with PROP-TEST-* ids passes all stage-rename clauses (exempt by id format)."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good_stage_rename.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_id_format_bad_fails(self):
+        """KAIZEN-ID-FORMAT: old-format PROP-001 id in active PROP is rejected P0."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_id_format.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-ID-FORMAT", out)
+
+    def test_prefix_stages_mismatch_fails(self):
+        """KAIZEN-PREFIX-MATCHES-STAGES: PBF prefix with stages:[planning] only is rejected P0."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_prefix_stages.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-PREFIX-MATCHES-STAGES", out)
+
+    def test_series_gap_fails(self):
+        """KAIZEN-STAGE-SERIES-ORDER-GAPLESS: B-PROP-001 + B-PROP-003 without B-PROP-002 is rejected P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_series_gap.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-STAGE-SERIES-ORDER-GAPLESS", out)
+
+    def test_legacy_id_duplicate_fails(self):
+        """KAIZEN-LEGACY-ID-PRESENT-UNIQUE: two PROPs sharing the same legacy_id is rejected P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_legacy_dup.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-LEGACY-ID-PRESENT-UNIQUE", out)
+
+    def test_crosswalk_missing_fails(self):
+        """KAIZEN-CROSSWALK-COMPLETE: P-PROP-999 not in PROP-CROSSWALK.md is rejected P1."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_crosswalk_missing.md"),
+                         "--contracts", self._CONTRACTS, "--conflict-scan")
+        self.assertEqual(rc, 1)
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-CROSSWALK-COMPLETE", out)
 
 
 # ---------------------------------------------------------------------------

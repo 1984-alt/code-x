@@ -12,8 +12,20 @@ Exit 1 = any failure.
 git_fixture support: clauses may include `git_fixture: <recipe>` to build a temp
 git repo deterministically. {REPO} and {STATE} tokens in clause args are substituted.
 """
-import subprocess
 import sys
+
+# Runtime floor: the cx checker uses PEP 604 `X | None` type unions (Python 3.10+).
+# Guard before importing/exec'ing cx so an older interpreter gets a clear message,
+# not a raw import-time TypeError that reads as a false red. (CXAUD-001)
+if sys.version_info < (3, 10):
+    sys.stderr.write(
+        "run_contracts.py: the cx contract-bite harness requires Python 3.10+ (cx uses PEP 604 `X | None` type unions).\n"
+        f"    Active interpreter: Python {sys.version.split()[0]} at {sys.executable}\n"
+        "    Re-run with Python 3.10+ — e.g.  /opt/homebrew/bin/python3 Code-X-V1/checkers/tests/run_contracts.py\n"
+    )
+    raise SystemExit(2)
+
+import subprocess
 import tempfile
 import os
 import hashlib as _hashlib
@@ -38,8 +50,8 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
-                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app",
-                        "blueprint", "whole-packet-review"}
+                        "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app", "module-demo",
+                        "blueprint", "whole-packet-review", "kaizen", "graduation"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -63,19 +75,24 @@ _STATE_BASE = {
         "full_reviews": 0, "loops_used": 1, "waste_alarm": "LOW",
     },
     # PROP-014: build-mode sessions must acknowledge BUILDER-STANDARD.md at session start.
+    # PROP-042 Part B: build sessions declare orchestrator dispatch (R-ORCH).
     "session_start": {
         "builder_standard_read": {
             "status": "PASS", "file": "BUILDER-STANDARD.md",
             "hash": "deadbeef0123", "read_by": "cx-contract-test",
             "timestamp": "2026-06-10T00:00:00",
         },
+        "orchestration_mode": {"dispatch_subagents": "yes", "lead_role": "orchestrator"},
+        # PROP-042 Part E: build sessions declare SEE-AND-TEST demo mode (R-DEMO).
+        "module_demo_mode": {"demo_every_user_facing_module": "yes", "surfaces": ["web", "mobile"]},
     },
     # PROP-020: reviewer taxonomy/timing as typed state (required at session-start in build modes).
     "review_boundary": {
         "deterministic_checks_each_card": "yes",
-        "coderabbit_before_self_review": "not_applicable",
+        "coderabbit_before_self_review": "yes",
         "self_review_boundary": "module",
         "cross_family_boundary": "module",
+        "xfam_capability": "stage_1",
     },
 }
 
@@ -228,6 +245,90 @@ def _recipe_no_builder_std_ack(tmp: str) -> tuple[str, str]:
     return repo, state
 
 
+def _recipe_no_orchestration_mode(tmp: str) -> tuple[str, str]:
+    """Build-mode state WITH builder_standard_read + boot ack but WITHOUT
+    session_start.orchestration_mode → bites P2 (PROP-042 Part B, R-ORCH)."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    _git_commit(repo, "first")
+    sha = _git_commit(repo, "second")
+    state = os.path.join(tmp, "state.yaml")
+    _write_state(state, sha, overrides={"session_start": {
+        "builder_standard_read": {
+            "status": "PASS", "file": "BUILDER-STANDARD.md",
+            "hash": "deadbeef0123", "read_by": "cx-contract-test",
+            "timestamp": "2026-06-10T00:00:00"}}})
+    _finalize_boot(repo, state)
+    return repo, state
+
+
+def _recipe_inline_waiver_no_scope(tmp: str) -> tuple[str, str]:
+    """Build-mode state with inline_waiver set + ceo_decision_ref present BUT missing
+    scope: single_card and card_ref → bites P2 (P1-003 R-ORCH inline_waiver scope guard)."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    _git_commit(repo, "first")
+    sha = _git_commit(repo, "second")
+    state = os.path.join(tmp, "state.yaml")
+    _write_state(state, sha, overrides={"session_start": {
+        "builder_standard_read": {
+            "status": "PASS", "file": "BUILDER-STANDARD.md",
+            "hash": "deadbeef0123", "read_by": "cx-contract-test",
+            "timestamp": "2026-06-10T00:00:00"},
+        "orchestration_mode": {
+            "inline_waiver": True,
+            "ceo_decision_ref": "CEO-D-TEST-001",
+            # scope and card_ref intentionally omitted
+        },
+        "module_demo_mode": {"demo_every_user_facing_module": "yes", "surfaces": ["web"]},
+    }})
+    _finalize_boot(repo, state)
+    return repo, state
+
+
+def _recipe_inline_waiver_with_scope(tmp: str) -> tuple[str, str]:
+    """Build-mode state with inline_waiver set + ceo_decision_ref + scope: single_card + card_ref
+    → passes STATE-ORCHESTRATION-INLINE-WAIVER-SCOPE (P1-003 good fixture)."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    _git_commit(repo, "first")
+    sha = _git_commit(repo, "second")
+    state = os.path.join(tmp, "state.yaml")
+    _write_state(state, sha, overrides={"session_start": {
+        "builder_standard_read": {
+            "status": "PASS", "file": "BUILDER-STANDARD.md",
+            "hash": "deadbeef0123", "read_by": "cx-contract-test",
+            "timestamp": "2026-06-10T00:00:00"},
+        "orchestration_mode": {
+            "inline_waiver": True,
+            "ceo_decision_ref": "CEO-D-TEST-001",
+            "scope": "single_card",
+            "card_ref": "BUILD-001",
+        },
+        "module_demo_mode": {"demo_every_user_facing_module": "yes", "surfaces": ["web"]},
+    }})
+    _finalize_boot(repo, state)
+    return repo, state
+
+
+def _recipe_no_module_demo_mode(tmp: str) -> tuple[str, str]:
+    """Build-mode state WITH builder_standard_read + orchestration_mode + boot ack but WITHOUT
+    session_start.module_demo_mode → bites P2 (PROP-042 Part E, SEE-AND-TEST)."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    _git_commit(repo, "first")
+    sha = _git_commit(repo, "second")
+    state = os.path.join(tmp, "state.yaml")
+    _write_state(state, sha, overrides={"session_start": {
+        "builder_standard_read": {
+            "status": "PASS", "file": "BUILDER-STANDARD.md",
+            "hash": "deadbeef0123", "read_by": "cx-contract-test",
+            "timestamp": "2026-06-10T00:00:00"},
+        "orchestration_mode": {"dispatch_subagents": "yes", "lead_role": "orchestrator"}}})
+    _finalize_boot(repo, state)
+    return repo, state
+
+
 def _recipe_planning_no_lessons_ack(tmp: str) -> tuple[str, str]:
     """PLANNING_STUDIO state WITHOUT session_start.lessons_preload → bites P2 (PROP-017)."""
     repo = os.path.join(tmp, "repo")
@@ -312,6 +413,18 @@ def _packet_hash(packet_dir: str) -> str:
     return h.hexdigest()
 
 
+def _substantive_hash(pkt) -> str:
+    """sha256 over packet with MODULE-REGISTRY.yaml build-metadata stripped — same recipe as
+    cx_deck._compute_substantive_source_hash (kept inline to avoid import-path dependency)."""
+    import sys as _sys
+    _sys.path.insert(0, str(CHECKERS_DIR))
+    try:
+        from cx_deck import _compute_substantive_source_hash
+        return _compute_substantive_source_hash(Path(pkt))
+    finally:
+        _sys.path.pop(0)
+
+
 def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --version",
                      module_id: str = "m1") -> tuple[str, str]:
     """Shared build-turn recipe: repo with a shape-valid card, existing allowed
@@ -359,7 +472,7 @@ def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --versi
     os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
     _wpr = {"whole_packet_review": {
         "schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": pkt_hash,
-        "reviewed_source_set_hash": _hashlib.sha256(pkt_hash.encode()).hexdigest()[:12],
+        "reviewed_source_set_hash": _substantive_hash(packet),
         "authoring_family": "anthropic", "reviewer_family": "gpt",
         "three_leg_ask": {"continuity": "prior decisions re-checked", "problems": "no P0; drift swept",
                           "approach_improvement": "no simpler structure found"},
@@ -368,6 +481,21 @@ def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --versi
     with open(_wpr_path, "w") as f:
         yaml.safe_dump(_wpr, f)
     _wpr_hash = _hashlib.sha256(open(_wpr_path, "rb").read()).hexdigest()[:12]
+    _egress_path = os.path.join(repo, "reviews", "coderabbit-egress.yaml")
+    with open(_egress_path, "w") as f:
+        yaml.safe_dump({"egress_scrub": {"target": "coderabbit", "diff_hash": "fixture"}}, f)
+    _cr = {"coderabbit_review": {
+        "commit": "abcdef012345",
+        "diff_hash": "fixture-diff",
+        "tool_version": "fixture",
+        "findings_hash": "fixture-findings",
+        "egress_receipt_ref": "reviews/coderabbit-egress.yaml",
+        "produced_at": "2026-06-29T00:00:00Z",
+    }}
+    _cr_path = os.path.join(repo, "reviews", "coderabbit-review.yaml")
+    with open(_cr_path, "w") as f:
+        yaml.safe_dump(_cr, f)
+    card["coderabbit"] = {"required": "yes", "receipt": "reviews/coderabbit-review.yaml"}
     card_path = os.path.join(repo, "card.yaml")
     with open(card_path, "w") as f:
         yaml.dump(card, f)
@@ -510,6 +638,173 @@ def _recipe_build_turn_coderabbit_receipt_symlink(tmp: str) -> tuple[str, str]:
     return _build_turn_ref_symlink_repo(tmp, "coderabbit")
 
 
+def _build_turn_ref_real_repo(tmp: str, field: str) -> tuple[str, str]:
+    """PROP-038 item 1: per-field good fixtures for DEP-SCAN / RENDER-BUNDLE / CODERABBIT-RECEIPT
+    symlink-escape clauses. The base _build_turn_repo already includes a passing coderabbit receipt
+    and all other required fields. For dep_scan and render_bundle we add the specific ref as a REAL
+    in-repo non-symlink file + commit it, then point the state/card at it — proving the safe-ref
+    pass path is exercised through the WHOLE build-turn for that specific field, not just
+    field-agnostically via build_turn_verify_app_rail_ok (PROP-037 note).
+
+    render_bundle uses a two-phase commit: first commit to get HEAD (the render evidence must bind
+    to the authoritative --repo-head which is the live git HEAD at check time), then write the bundle
+    with that HEAD baked in, then commit again — so the bundle's repo_head matches the live HEAD."""
+    import hashlib as _hl
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    with open(state) as f:
+        sdoc = yaml.safe_load(f)
+
+    if field == "dep_scan":
+        # Write a real in-repo dep-scan receipt (non-symlink) and set state to point at it.
+        os.makedirs(os.path.join(repo, "scans"), exist_ok=True)
+        lock_body = b"lockfile-contents-v1\n"
+        lock_hash = _hl.sha256(lock_body).hexdigest()[:12]
+        with open(os.path.join(repo, "package.json"), "w") as f:
+            f.write('{"name":"x","dependencies":{"a":"1.0.0"}}\n')
+        with open(os.path.join(repo, "package-lock.json"), "wb") as f:
+            f.write(lock_body)
+        receipt = {"dependency_scan": {"scans": [{
+            "ecosystem": "npm", "command": "npm audit --json",
+            "scanner_version": "npm/10.8.0", "db_timestamp": "2026-06-18T00:00:00Z",
+            "manifest": "package.json", "lockfile": "package-lock.json",
+            "lockfile_hash": lock_hash, "produced_at": "2026-06-18T09:00:00Z",
+            "high_count": 0, "critical_count": 0}], "waivers": []}}
+        rpath = os.path.join(repo, "scans", "dep-scan.yaml")
+        with open(rpath, "w") as f:
+            yaml.safe_dump(receipt, f)
+        sdoc["dependency_scan_receipt_ref"] = "scans/dep-scan.yaml"
+        with open(cpath, "w") as f:
+            yaml.safe_dump(card, f)
+        with open(state, "w") as f:
+            yaml.safe_dump(sdoc, f)
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                        "prop038 dep_scan real-ref good fixture\n\nCode-X-Provenance: cx-test"],
+                       check=True)
+        sha = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"],
+                                      text=True).strip()
+        sdoc["last_commit"] = sha
+        with open(state, "w") as f:
+            yaml.safe_dump(sdoc, f)
+        return repo, state
+
+    elif field == "render_bundle":
+        # Render-fidelity requires render_evidence[].repo_head == live HEAD at build-turn call time.
+        # Technique: (1) commit card with render_bundle ref, (2) get HEAD SHA, (3) write bundle
+        # on disk (no additional commit) with that HEAD baked in. build-turn reads FS not git objects,
+        # so it sees the updated bundle; `git rev-parse HEAD` returns the commit SHA that matches.
+        # Screenshot is also written to disk (not committed); the render-fidelity checker only
+        # needs the file to exist on the FS (it reads real bytes for hash verification).
+        os.makedirs(os.path.join(repo, "render"), exist_ok=True)
+        profile_hash = "c7c416dfa9b0"  # matches render_good.yaml pinned hash
+
+        # Step 1: commit card with render_bundle ref + screenshot (both in allowed_files) using a
+        # placeholder bundle. The screenshot bytes are final here (hash is stable for step 2).
+        shot_body = b"fake-screenshot-bytes\n"
+        shot_hash = _hl.sha256(shot_body).hexdigest()[:12]
+        with open(os.path.join(repo, "render", "home-390.png"), "wb") as f:
+            f.write(shot_body)
+        with open(os.path.join(repo, "render", "bundle.yaml"), "w") as f:
+            f.write("placeholder: true\n")
+        with open(cpath) as f:
+            card2 = yaml.safe_load(f)
+        card2["render_bundle"] = "render/bundle.yaml"
+        card2["allowed_files"] = card2.get("allowed_files", ["src/app.py"]) + [
+            "render/bundle.yaml", "render/home-390.png"]
+        with open(cpath, "w") as f:
+            yaml.safe_dump(card2, f)
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                        "prop038 render_bundle card+screenshot commit\n\nCode-X-Provenance: cx-test"],
+                       check=True)
+        commit_sha = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"],
+                                             text=True).strip()
+
+        # Step 2: write the REAL render bundle on disk (dirty tree) with commit_sha baked in.
+        # build-turn reads the FS; `git rev-parse HEAD` returns commit_sha; render-fidelity
+        # sees repo_head == HEAD. The dirty bundle.yaml IS in card.allowed_files so scope passes.
+        # The screenshot (home-390.png) is already at the right bytes and already committed —
+        # if it stays unchanged the scope check won't flag it as modified.
+        bundle = {
+            "current_repo_head": commit_sha,
+            "render_profile": {
+                "chromium_revision": "1234.5", "device_pixel_ratio": 2,
+                "viewport": "390x844",
+                "viewports": [{"viewport_id": "phone", "width": 390}],
+                "color_schemes": ["light", "dark"], "reduced_motion": True,
+                "locale": "en-US", "timezone": "UTC", "fonts": "bundled",
+                "animations": "disabled", "network": "blocked",
+                "fixture": "DESIGN_FIXTURE", "profile_hash": profile_hash},
+            "coverage_matrix": {
+                "ui_card": True,
+                "required_rows": [{"screen_id": "home", "viewport_id": "phone",
+                                   "theme": "light", "content_state": "populated"}]},
+            "render_evidence": [{
+                "card_id": "BUILD-001", "screen_id": "home",
+                "viewport_id": "phone", "theme": "light",
+                "content_state": "populated", "route": "/home",
+                "repo_head": commit_sha, "state_sha12": "state00aabbcc",
+                "locked_packet_hash": "pktfixture0011",
+                "render_profile_hash": profile_hash,
+                "tool_version": "cx-render/1.0.0",
+                "command": "cx render collect --screen home",
+                "generated_by": "cx render collect",
+                "screenshot_path": "home-390.png",  # relative to bundle parent dir (render/)
+                "screenshot_hash": shot_hash,
+                "measured_metrics": {
+                    "viewport_width": 390, "content_width": 390,
+                    "has_horizontal_overflow": False,
+                    "max_visible_right": 389.4, "nonblank": True,
+                    "app_ready": True,
+                    "controls_in_frame": [{"id": "add_expense", "in_frame": True}]},
+                "produced_at": "2026-06-30T00:00:00Z"}],
+            "golden_drift": [{"screen_id": "home", "viewport_id": "phone",
+                               "baseline_ref": "render/golden-home.png",
+                               "baseline_hash": "goldenhash0011",
+                               "diff_score": 0.4, "tolerance": 2.0}]}
+        with open(os.path.join(repo, "render", "bundle.yaml"), "w") as f:
+            yaml.safe_dump(bundle, f)
+
+        sdoc["last_commit"] = commit_sha
+        with open(state, "w") as f:
+            yaml.safe_dump(sdoc, f)
+        return repo, state
+
+    elif field == "coderabbit":
+        # The base _build_turn_repo already writes a real non-symlink coderabbit receipt at
+        # reviews/coderabbit-review.yaml and sets card.coderabbit.receipt to it — the field
+        # is already proven to pass the whole build-turn by the base fixture. Return as-is.
+        return repo, state
+
+    else:
+        raise ValueError(f"unknown field {field}")
+
+
+def _recipe_build_turn_dep_scan_ref_ok(tmp: str) -> tuple[str, str]:
+    """PROP-038 item 1: dep_scan per-field good — real in-repo dep-scan receipt, passes whole build-turn."""
+    return _build_turn_ref_real_repo(tmp, "dep_scan")
+
+
+def _recipe_build_turn_render_bundle_ref_ok(tmp: str) -> tuple[str, str]:
+    """PROP-038 item 1: render_bundle per-field good — real in-repo render bundle, passes whole build-turn."""
+    return _build_turn_ref_real_repo(tmp, "render_bundle")
+
+
+def _recipe_build_turn_coderabbit_receipt_ref_ok(tmp: str) -> tuple[str, str]:
+    """PROP-038 item 1: coderabbit per-field good — real in-repo receipt, passes whole build-turn."""
+    return _build_turn_ref_real_repo(tmp, "coderabbit")
+
+
+def _recipe_module_start_registry_alias_symlink(tmp: str) -> tuple[str, str]:
+    """PROP-038 item 2: --registry is a SYMLINK-ALIAS to the canonical in-packet registry.
+    The alias resolves to the canonical file (same bytes), but it is a symlink — rejected for
+    consistency with the safe_repo_ref helper pattern (hygiene, P1)."""
+    return _module_start_symlink_repo(tmp, where="alias")
+
+
 _MS_MANIFEST = ("requirements:\n  - id: REQ-001\n    disposition: BUILDING\n"
                 "  - id: REQ-003\n    disposition: BUILDING\n")
 _MS_FULL_REGISTRY = (
@@ -528,11 +823,25 @@ def _module_start_symlink_repo(tmp: str, where: str) -> tuple[str, str]:
       where='root' (GPT R6): the packet dir itself is a SYMLINK to an external dir holding a trimmed
         registry → packet hash + module-start reject the symlinked root → P0.
       where='none': a real, symlink-free packet with the canonical registry, card module_id=m1 (no
-        priors) → PASS."""
+        priors) → PASS.
+      where='alias' (PROP-038 item 2): canonical registry is REAL (packet hash OK, m1 passes), but
+        the --registry arg used by the build-turn rail is a SYMLINK-ALIAS (reg-alias.yaml → canonical).
+        Rejected P1 for hygiene (consistent with safe_repo_ref helper; no external-byte hole)."""
     repo = os.path.join(tmp, "repo")
     os.makedirs(repo, exist_ok=True)
     packet = os.path.join(repo, "packet")
-    if where == "ancestor":
+    if where == "alias":
+        # PROP-038 item 2: canonical registry is REAL (packet hash OK), but --registry arg is a symlink.
+        os.makedirs(packet, exist_ok=True)
+        with open(os.path.join(packet, "requirements-manifest.yaml"), "w") as f:
+            f.write(_MS_MANIFEST)
+        with open(os.path.join(packet, "MODULE-REGISTRY.yaml"), "w") as f:
+            f.write(_MS_FULL_REGISTRY)
+        # Create a SYMLINK-ALIAS to the canonical registry (same target, different entry path)
+        os.symlink(os.path.join(packet, "MODULE-REGISTRY.yaml"),
+                   os.path.join(repo, "reg-alias.yaml"))
+        module_id, locked = "m1", _packet_hash(packet)  # hash is correct (canonical is real)
+    elif where == "ancestor":
         # repo/link -> external dir; repo/link/packet is a REAL dir (final component not a symlink),
         # but the ancestor 'link' is — so the packet resolves OUTSIDE the repo (GPT R7).
         ext_packet = os.path.join(repo, "external_real", "packet")
@@ -773,6 +1082,7 @@ _LIVE_SLICE_ACCEPT_BLOCK = (
     "    ceo_drove: true\n"
     "    ceo_turn_ref: handoffs/2026-06-20-slice-home.md\n"
     "    repo_sha: NONE_TEST_FIXTURE\n"
+    "    ceo_accept_token: \"ACCEPT-m1-abcdef\"\n"
     "    viewport: 390x844\n")
 # PROP-036: a valid live_slice acceptance also needs a passing verify_app block (precondition to the
 # CEO live-drive). verify_app.repo_sha is presence+hex-shape only (honest scope, like live_slice_accept),
@@ -783,14 +1093,34 @@ _VERIFY_APP_BLOCK = (
     "    repo_sha: abcdef012345\n"
     "    generated_by: verify-app-agent\n"
     "    criteria_ref: cards/m1-card.yaml#acceptance_criteria\n")
+# PROP-042 Part E: a valid live_slice acceptance also needs a module_demo block (precondition to the
+# CEO live-drive accept, SEE-AND-TEST gate). The shown_screenshot_path must be a real in-repo file;
+# the test recipe writes a dummy turn artifact to the repo so ceo_turn_ref resolves.
+# Screenshot hash: dummy value (the file is generated in the recipe as binary content matching this hash).
+# repo_sha abcdef012345 → prefix abcdef; token "ACCEPT-m1-abcdef" embeds it.
+_MODULE_DEMO_BLOCK_TEMPLATE = (
+    "  module_demo:\n"
+    "    surface: web\n"
+    "    generated_by: cx demo collect\n"
+    "    repo_sha: abcdef012345\n"
+    "    shown_screenshot_path: {shot_path}\n"
+    "    shown_screenshot_hash: {shot_hash}\n"
+    "    live_url: http://localhost:8000/home\n"
+    "    ceo_accept_token: \"ACCEPT-m1-abcdef\"\n"
+    "    ceo_turn_ref: {turn_path}\n"
+    "    ceo_verdict: accepted\n"
+    "    viewport: 390x844\n")
 
 
 def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]:
     """m1 = a live_slice; m2 depends on m1. m1's acceptance receipt carries (with_drive) or omits a
     live_slice_accept block. cx check module-start for m2 BLOCKS when m1 has no live-drive accept
     (P0 — the next slice cannot start until the CEO drove the prior), PASSES when it does (PROP-032).
-    repo_sha_before uses the test-mode fresh-clone sentinel so the PROP-028 git leg is skipped."""
-    import hashlib
+    repo_sha_before uses the test-mode fresh-clone sentinel so the PROP-028 git leg is skipped.
+    PROP-042 Part E: when with_drive=True the receipt also carries a well-formed module_demo block
+    (surface: web, machine-stamped, real screenshot bytes committed, ceo_verdict: accepted,
+    ceo_accept_token embedding repo_sha prefix abcdef)."""
+    import hashlib, struct, zlib
     repo = os.path.join(tmp, "repo")
     _git_init(repo)
     packet = os.path.join(repo, "packet")
@@ -800,11 +1130,40 @@ def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]
     with open(os.path.join(packet, "MODULE-REGISTRY.yaml"), "w") as f:
         f.write(_MS_LIVE_REGISTRY)
     os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+
+    # PROP-042 Part E: write a real tiny PNG (1x1 red pixel) and a turn artifact into the repo
+    # so the module_demo.shown_screenshot_path and ceo_turn_ref resolve when with_drive=True.
+    def _tiny_png():
+        def chunk(name, data):
+            c = struct.pack('>I', len(data)) + name + data
+            c += struct.pack('>I', zlib.crc32(name + data) & 0xffffffff)
+            return c
+        header = b'\x89PNG\r\n\x1a\n'
+        ihdr = chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+        idat = chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00'))
+        iend = chunk(b'IEND', b'')
+        return header + ihdr + idat + iend
+
+    shot_rel = "acc/m1-demo-shot.png"
+    turn_rel = "acc/m1-turn.md"
+    if with_drive:
+        png_bytes = _tiny_png()
+        with open(os.path.join(repo, shot_rel), "wb") as f:
+            f.write(png_bytes)
+        shot_hash = hashlib.sha256(png_bytes).hexdigest()[:12]
+        with open(os.path.join(repo, turn_rel), "w") as f:
+            f.write("# CEO turn — m1 accept\n\nCEO typed: ACCEPT-m1-abcdef\n")
+        demo_block = _MODULE_DEMO_BLOCK_TEMPLATE.format(
+            shot_path=shot_rel, shot_hash=shot_hash, turn_path=turn_rel)
+    else:
+        demo_block = ""
+        shot_hash = ""
+
     body = ("module_acceptance:\n  module_id: m1\n  verdict: accepted\n  generated_by: cx-accept\n"
             "  state_sha_before: abc123\n  quality_card_hash: qc0011223344\n"
             "  repo_sha_before: NONE_TEST_FIXTURE\n")
     if with_drive:
-        body += _LIVE_SLICE_ACCEPT_BLOCK + _VERIFY_APP_BLOCK
+        body += demo_block + _LIVE_SLICE_ACCEPT_BLOCK + _VERIFY_APP_BLOCK
     receipt = os.path.join(repo, "acc", "m1.yaml")
     with open(receipt, "w") as f:
         f.write(body)
@@ -1036,7 +1395,7 @@ def _mk_wpr_repo(tmp, review_override=None, drop_receipt_block=False, receipt_re
     shutil.copytree(FIXTURES / "module_start_good_packet", pkt)
     pkt_hash = _packet_hash(pkt)
     review = {"schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": pkt_hash,
-              "reviewed_source_set_hash": _hashlib.sha256(pkt_hash.encode()).hexdigest()[:12],
+              "reviewed_source_set_hash": _substantive_hash(pkt),
               "authoring_family": "anthropic", "reviewer_family": "gpt",
               "three_leg_ask": {"continuity": "prior packet decisions re-checked vs the frozen registry",
                                 "problems": "no P0; cross-document drift swept (TRD vs stack-lock)",
@@ -1099,7 +1458,85 @@ def _recipe_wpr_bad_verdict(tmp):
     return _mk_wpr_repo(tmp, review_override={"verdict": "FIX_FIRST"})
 
 def _recipe_wpr_stale_packet(tmp):
-    return _mk_wpr_repo(tmp, review_override={"frozen_packet_hash": "deadbeef" * 8})
+    # Write a valid receipt with the CURRENT substantive hash, then append a byte to a
+    # SUBSTANTIVE file (requirements-manifest.yaml) — making the recomputed substantive
+    # hash differ from the receipt's recorded value (WHOLE-PACKET-REVIEW-SUBSTANTIVE-CURRENT).
+    import shutil
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
+    pkt = os.path.join(repo, "packet")
+    shutil.copytree(FIXTURES / "module_start_good_packet", pkt)
+    # Compute substantive hash BEFORE the edit
+    sub_hash = _substantive_hash(pkt)
+    pkt_hash = _packet_hash(pkt)
+    review = {"schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": pkt_hash,
+              "reviewed_source_set_hash": sub_hash,
+              "authoring_family": "anthropic", "reviewer_family": "gpt",
+              "three_leg_ask": {"continuity": "prior packet decisions re-checked vs the frozen registry",
+                                "problems": "no P0; cross-document drift swept (TRD vs stack-lock)",
+                                "approach_improvement": "no simpler structure found; coverage adequate"},
+              "verdict": "PASS", "findings_ref": "reviews/whole-packet-review.md"}
+    rpath = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    with open(rpath, "w") as f:
+        yaml.safe_dump({"whole_packet_review": review}, f)
+    rhash = _hashlib.sha256(open(rpath, "rb").read()).hexdigest()[:12]
+    # NOW append a byte to requirements-manifest.yaml (substantive change) AFTER writing receipt
+    mf = os.path.join(pkt, "requirements-manifest.yaml")
+    with open(mf, "ab") as f:
+        f.write(b"\n# stale-marker\n")
+    state_doc = {"project": "wpr-contract-test", "packet_dir": "packet",
+                 "whole_packet_review_receipt": {
+                     "receipt": "reviews/whole-packet-review.yaml",
+                     "receipt_hash": rhash}}
+    spath = os.path.join(tmp, "state.yaml")
+    with open(spath, "w") as f:
+        yaml.safe_dump(state_doc, f)
+    return repo, spath
+
+
+def _recipe_wpr_missing_sub_hash(tmp):
+    return _mk_wpr_repo(tmp, review_override={"reviewed_source_set_hash": ""})
+
+
+def _recipe_wpr_buildmeta_delta(tmp):
+    # Build-metadata-only registry edit: add protocol_version to registry AFTER receipt
+    import shutil
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
+    pkt = os.path.join(repo, "packet")
+    shutil.copytree(FIXTURES / "module_start_good_packet", pkt)
+    # Write receipt with CURRENT substantive hash
+    sub_hash_before = _substantive_hash(pkt)
+    pkt_hash_before = _packet_hash(pkt)
+    review = {"schema_version": 1, "review_kind": "WHOLE_PACKET_G7",
+              "frozen_packet_hash": pkt_hash_before,
+              "reviewed_source_set_hash": sub_hash_before,
+              "authoring_family": "anthropic", "reviewer_family": "gpt",
+              "three_leg_ask": {"continuity": "prior packet decisions re-checked vs the frozen registry",
+                                "problems": "no P0; cross-document drift swept (TRD vs stack-lock)",
+                                "approach_improvement": "no simpler structure found; coverage adequate"},
+              "verdict": "PASS", "findings_ref": "reviews/whole-packet-review.md"}
+    rpath = os.path.join(repo, "reviews", "whole-packet-review.yaml")
+    with open(rpath, "w") as f:
+        yaml.safe_dump({"whole_packet_review": review}, f)
+    rhash = _hashlib.sha256(open(rpath, "rb").read()).hexdigest()[:12]
+    # NOW mutate ONLY build-metadata fields in MODULE-REGISTRY.yaml
+    reg_path = os.path.join(pkt, "MODULE-REGISTRY.yaml")
+    with open(reg_path, "r") as f:
+        content = f.read()
+    # Add protocol_version under module_registry (build-metadata only)
+    content = content.replace("module_registry:\n", "module_registry:\n  protocol_version: \"1.99-test\"\n")
+    with open(reg_path, "w") as f:
+        f.write(content)
+    state_doc = {"project": "wpr-contract-test", "packet_dir": "packet",
+                 "whole_packet_review_receipt": {
+                     "receipt": "reviews/whole-packet-review.yaml",
+                     "receipt_hash": rhash}}
+    spath = os.path.join(tmp, "state.yaml")
+    with open(spath, "w") as f:
+        yaml.safe_dump(state_doc, f)
+    return repo, spath
+
 
 def _recipe_wpr_receipt_symlink(tmp):
     # the in-repo receipt ref is a SYMLINK to bytes OUTSIDE the repo — safe_repo_ref must reject it
@@ -1689,6 +2126,7 @@ def _build_turn_blueprint_repo(tmp: str, *, blueprint_ready: bool) -> tuple[str,
     card["evidence_required"] = ["evidence.txt"]
     card["module_id"] = "m1"
     card["test_command"] = "git --version"
+    card["coderabbit"] = {"required": "yes", "receipt": "reviews/coderabbit-review.yaml"}
     with open(os.path.join(repo, "card.yaml"), "w") as f:
         yaml.safe_dump(card, f)
 
@@ -1711,7 +2149,7 @@ def _build_turn_blueprint_repo(tmp: str, *, blueprint_ready: bool) -> tuple[str,
     os.makedirs(os.path.join(repo, "reviews"), exist_ok=True)
     _wpr = {"whole_packet_review": {
         "schema_version": 1, "review_kind": "WHOLE_PACKET_G7", "frozen_packet_hash": packet_hash,
-        "reviewed_source_set_hash": hashlib.sha256(packet_hash.encode()).hexdigest()[:12],
+        "reviewed_source_set_hash": _substantive_hash(packet),
         "authoring_family": "anthropic", "reviewer_family": "gpt",
         "three_leg_ask": {"continuity": "prior decisions re-checked", "problems": "no P0; drift swept",
                           "approach_improvement": "no simpler structure found"},
@@ -1720,6 +2158,19 @@ def _build_turn_blueprint_repo(tmp: str, *, blueprint_ready: bool) -> tuple[str,
     with open(_wpr_path, "w") as f:
         yaml.safe_dump(_wpr, f)
     _wpr_hash = hashlib.sha256(open(_wpr_path, "rb").read()).hexdigest()[:12]
+    _egress_path = os.path.join(repo, "reviews", "coderabbit-egress.yaml")
+    with open(_egress_path, "w") as f:
+        yaml.safe_dump({"egress_scrub": {"target": "coderabbit", "diff_hash": "fixture"}}, f)
+    _cr = {"coderabbit_review": {
+        "commit": "abcdef012345",
+        "diff_hash": "fixture-diff",
+        "tool_version": "fixture",
+        "findings_hash": "fixture-findings",
+        "egress_receipt_ref": "reviews/coderabbit-egress.yaml",
+        "produced_at": "2026-06-29T00:00:00Z",
+    }}
+    with open(os.path.join(repo, "reviews", "coderabbit-review.yaml"), "w") as f:
+        yaml.safe_dump(_cr, f)
 
     subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
     sha = _git_commit(repo, "build-turn blueprint fixture")
@@ -1829,6 +2280,8 @@ _RECIPES = {
     "wpr_three_leg_placeholder": _recipe_wpr_three_leg_placeholder,
     "wpr_bad_verdict": _recipe_wpr_bad_verdict,
     "wpr_stale_packet": _recipe_wpr_stale_packet,
+    "wpr_missing_sub_hash": _recipe_wpr_missing_sub_hash,
+    "wpr_buildmeta_delta": _recipe_wpr_buildmeta_delta,
     "build_turn_wpr_missing": _recipe_build_turn_wpr_missing,
     "foreign_lineage": _recipe_foreign_lineage,
     "dirty_unmarked": _recipe_dirty_unmarked,
@@ -1836,6 +2289,9 @@ _RECIPES = {
     "wip_marked_unowned": _recipe_wip_marked_unowned,
     "behind_warn": _recipe_behind_warn,
     "no_builder_std_ack": _recipe_no_builder_std_ack,
+    "no_orchestration_mode": _recipe_no_orchestration_mode,
+    "inline_waiver_no_scope": _recipe_inline_waiver_no_scope,
+    "inline_waiver_with_scope": _recipe_inline_waiver_with_scope,
     "planning_no_lessons_ack": _recipe_planning_no_lessons_ack,
     "planning_lessons_ack_ok": _recipe_planning_lessons_ack_ok,
     "no_boot_ack": _recipe_no_boot_ack,
@@ -1851,14 +2307,19 @@ _RECIPES = {
     "build_turn_render_bundle_symlink": _recipe_build_turn_render_bundle_symlink,
     "build_turn_dep_scan_symlink": _recipe_build_turn_dep_scan_symlink,
     "build_turn_coderabbit_receipt_symlink": _recipe_build_turn_coderabbit_receipt_symlink,
+    "build_turn_dep_scan_ref_ok": _recipe_build_turn_dep_scan_ref_ok,
+    "build_turn_render_bundle_ref_ok": _recipe_build_turn_render_bundle_ref_ok,
+    "build_turn_coderabbit_receipt_ref_ok": _recipe_build_turn_coderabbit_receipt_ref_ok,
     "module_start_symlink_registry": _recipe_module_start_symlink_registry,
     "module_start_symlink_root": _recipe_module_start_symlink_root,
     "module_start_symlink_ancestor": _recipe_module_start_symlink_ancestor,
     "module_start_symlink_ok": _recipe_module_start_symlink_ok,
+    "module_start_registry_alias_symlink": _recipe_module_start_registry_alias_symlink,
     "module_acceptance_external_ref": _recipe_module_acceptance_external_ref,
     "module_acceptance_inrepo_ref": _recipe_module_acceptance_inrepo_ref,
     "module_start_live_slice_blocks": _recipe_module_start_live_slice_blocks,
     "module_start_live_slice_ok": _recipe_module_start_live_slice_ok,
+    "no_module_demo_mode": _recipe_no_module_demo_mode,
     "boot_receipt_forged": _recipe_boot_receipt_forged,
     "close_turn_row_untyped": _recipe_close_turn_row_untyped,
     "close_turn_ok": _recipe_close_turn_ok,
@@ -1890,7 +2351,8 @@ def run_cx(*args, env_overrides: dict | None = None):
 # following one of these is left unresolved; EVERY other token (positional or value of a path-flag
 # like --state/--approval/--repo-root/--registry/--packet-dir) is still resolved to an absolute
 # fixture path — so a genuinely-missing path-valued flag value is still reported MISSING FIXTURE.
-_NON_PATH_VALUE_FLAGS = {"--module", "--module-id", "--target", "--repo-head"}
+_NON_PATH_VALUE_FLAGS = {"--module", "--module-id", "--target", "--repo-head",
+                         "--authorize-decision", "--n", "--m", "--window-days"}
 
 
 def resolve_args(args_list):
@@ -1932,6 +2394,8 @@ def main():
     for clause in clauses:
         if clause.get("git_fixture"):
             continue
+        if "bad" not in clause:
+            continue
         raw = clause["bad"]["args"]
         bad_args = resolve_args(raw)
         for idx, a in enumerate(bad_args):
@@ -1948,7 +2412,6 @@ def main():
         cid = clause["id"]
         check = clause["check"]
         kind = clause.get("kind", "gate")
-        expect_sev = clause["bad"].get("expect_severity")
         git_recipe = clause.get("git_fixture")
 
         subcommands_covered.add(check)
@@ -1956,6 +2419,41 @@ def main():
             gate_count += 1
         else:
             heuristic_count += 1
+
+        # ── good-only clause (no bad: key) ──────────────────────────────────
+        if "bad" not in clause:
+            # root git_fixture (or good.git_fixture) provides the repo for the good case
+            good_recipe = clause.get("good", {}).get("git_fixture") or clause.get("git_fixture")
+            if good_recipe:
+                good_fn = _RECIPES.get(good_recipe)
+                if good_fn is None:
+                    failures.append(f"UNKNOWN-GOOD-RECIPE [{cid}]: {good_recipe}")
+                    continue
+                with tempfile.TemporaryDirectory() as tmp_g:
+                    try:
+                        repo_g, state_g = good_fn(tmp_g)
+                    except Exception as e:
+                        failures.append(f"RECIPE-ERROR-GOOD [{cid}]: {e}")
+                        continue
+                    good_args_g = substitute_tokens(clause["good"]["args"], repo_g, state_g)
+                    rc_g, out_g = run_cx("check", check, *good_args_g)
+                    if rc_g != 0:
+                        failures.append(
+                            f"GOOD-FAILS [{cid}]: expected rc=0, got {rc_g}\n  output: {out_g[:200]}")
+                    else:
+                        print(f"  PASS  [{cid}] good-only fixture OK")
+            else:
+                good_args_g = resolve_args(clause.get("good", {}).get("args", []))
+                if good_args_g:
+                    rc_g, out_g = run_cx("check", check, *good_args_g)
+                    if rc_g != 0:
+                        failures.append(
+                            f"GOOD-FAILS [{cid}]: expected rc=0, got {rc_g}\n  output: {out_g[:200]}")
+                    else:
+                        print(f"  PASS  [{cid}] good-only fixture OK")
+            continue
+
+        expect_sev = clause["bad"].get("expect_severity")
 
         if git_recipe:
             # Build temp git repo from recipe, substitute {REPO}/{STATE} tokens

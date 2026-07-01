@@ -1,0 +1,9 @@
+# c7 sidecar: a typed CodeRabbit/build-turn receipt (cx_build_turn.py:186 field set), egress-bound
+# to the existing good egress_scrub receipt.
+coderabbit_review:
+  commit: 7d1408c9aa21
+  diff_hash: diffhash00010203
+  tool_version: coderabbit-cli-1.0.0
+  findings_hash: findingshash0405
+  egress_receipt_ref: egress_scrub_good.yaml
+  produced_at: "2026-06-20T16:30:00Z"

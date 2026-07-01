@@ -1,4 +1,4 @@
-# cmd_build_turn: the every-card aggregate gate (PROP-018 build-session rail).
+# cmd_build_turn: the every-card aggregate gate (B-PROP-002 build-session rail).
 #
 #   cx check build-turn <card> --state <CODE-X-STATE.yaml> --repo-root <dir> [--diff <path>]
 #
@@ -183,17 +183,17 @@ def cmd_build_turn(args) -> int:
             findings.append(("P1", "project-tests",
                 f"named test command failed (rc={result.returncode}): {tail[:300]}"))
 
-    # 7. CodeRabbit receipt — TYPED + egress-bound, verified when required, never invoked (PROP-026,
+    # 7. CodeRabbit receipt — TYPED + egress-bound, verified when required, never invoked (BF-PROP-005,
     #    GPT built-code review F1). The receipt must be a typed coderabbit_review artifact whose
     #    egress_receipt_ref resolves to a valid scrub/carve-out receipt (scrub-before-egress precedes
-    #    CodeRabbit). CodeRabbit is MANDATORY on a code-diff module review once the project declares the
-    #    v1.11 review model (state.review_boundary.xfam_capability) — it cannot be silently skipped.
+    #    CodeRabbit). PROP-042 / v1.21 hardens the planning-stage gap:
+    #    CodeRabbit is MANDATORY on every MODULE_BUILD / MODE_A_UI code-diff card, even if state
+    #    forgot to declare xfam_capability.
     cr = card.get("coderabbit") or {}
     code_diff_review = card_mode in ("MODULE_BUILD", "MODE_A_UI")
-    xfam_declared = bool(str((state.get("review_boundary") or {}).get("xfam_capability", "")).strip())
     if isinstance(cr, dict) and str(cr.get("required", "no")).lower() in ("yes", "true"):
         receipt = cr.get("receipt")
-        # PROP-037: the receipt ref is card-authored — path-safety it (absolute / '..' / symlink /
+        # B-PROP-011: the receipt ref is card-authored — path-safety it (absolute / '..' / symlink /
         # resolved-escape) BEFORE the .is_file() read, or a symlink/escaping ref reads arbitrary
         # external bytes as a "review" (this read previously carried NO guard at all — the worst
         # of the build-turn root/ref reads). Shared helper, mirrors the Andon wall acceptance_ref.
@@ -213,7 +213,7 @@ def cmd_build_turn(args) -> int:
                 findings.append(("P1", "coderabbit-receipt",
                     "CodeRabbit receipt is not a typed coderabbit_review artifact {commit, diff_hash, "
                     "tool_version, findings_hash, egress_receipt_ref, produced_at} — an arbitrary file is "
-                    "not a review (PROP-026 / GPT #8)"))
+                    "not a review (BF-PROP-005 / GPT #8)"))
             else:
                 miss = [k for k in ("commit", "diff_hash", "tool_version", "findings_hash",
                                     "egress_receipt_ref", "produced_at") if not field_present(cblk, k)]
@@ -221,7 +221,7 @@ def cmd_build_turn(args) -> int:
                     findings.append(("P1", "coderabbit-receipt",
                         f"CodeRabbit receipt missing {miss} — a non-deterministic CLI's receipt must pin "
                         "the commit, diff hash, tool version, findings hash, egress receipt, and time "
-                        "(PROP-026 / GPT #8)"))
+                        "(BF-PROP-005 / GPT #8)"))
                 else:
                     eref = str(cblk.get("egress_receipt_ref"))
                     safe_eref, eerr = safe_repo_ref(eref, root)
@@ -235,24 +235,24 @@ def cmd_build_turn(args) -> int:
                             findings.append(("P1", "coderabbit-receipt",
                                 "CodeRabbit receipt egress_receipt_ref does not resolve to a valid "
                                 "egress_scrub / sensitive_code_carveout receipt — scrub-before-egress must "
-                                "precede CodeRabbit (PROP-026 / GPT #1)"))
+                                "precede CodeRabbit (BF-PROP-005 / GPT #1)"))
                         else:
                             print("  [INFO] PASS coderabbit-receipt (typed + egress-bound)")
-    elif code_diff_review and xfam_declared:
+    elif code_diff_review:
         findings.append(("P1", "coderabbit-receipt",
-            "card is a code-diff module review and state declares xfam_capability (the v1.11 review "
-            "model) but the card requires no CodeRabbit — CodeRabbit is MANDATORY before cross-family on "
-            "a code-diff review; it unblocks the build but never satisfies xfam (PROP-026)"))
+            "card is a code-diff module review but the card requires no CodeRabbit — CodeRabbit is "
+            "MANDATORY before self/cross review on every MODULE_BUILD / MODE_A_UI code diff; it "
+            "unblocks the build but never satisfies xfam (PROP-042 / v1.21)"))
     else:
         print("  [INFO] NOT_APPLICABLE coderabbit-receipt")
 
-    # 8. dependency scan — supply-chain gate (PROP-027). Validate the declared receipt
+    # 8. dependency scan — supply-chain gate (B-PROP-006). Validate the declared receipt
     #    (which re-checks each lockfile hash against the LIVE tree, catching a lockfile that
     #    drifted after the G7 scan — GPT #11). If dependency manifests exist under the repo
     #    but no receipt is declared, fail closed — a package-manager root must be scanned.
     dep_ref = str(state.get("dependency_scan_receipt_ref", "") or "").strip()
     if dep_ref:
-        # PROP-037: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
+        # B-PROP-011: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
         # dep_ref slipped through and let the rail scan an external receipt as in-repo. Full class now.
         safe_dep, derr = safe_repo_ref(dep_ref, root)
         if derr:
@@ -267,17 +267,17 @@ def cmd_build_turn(args) -> int:
             findings.append(("P1", "dep-scan",
                 f"dependency manifests found under the repo ({found[:3]}) but state declares no "
                 "dependency_scan_receipt_ref — a package-manager root must be scanned before build "
-                "(fail-closed, PROP-027)"))
+                "(fail-closed, B-PROP-006)"))
         else:
             print("  [INFO] NOT_APPLICABLE dep-scan (no dependency manifests)")
 
-    # 9. render-fidelity — the in-loop RENDERED-fidelity gate (PROP-033). A UI build card that
+    # 9. render-fidelity — the in-loop RENDERED-fidelity gate (B-PROP-009). A UI build card that
     #    declares a render bundle (card.render_bundle) must pass cx check render-fidelity BEFORE
     #    the turn passes / before self-review (Layer 1 P0 blocks the card; P1 = the layout defect).
     #    A card with no render_bundle is NOT_APPLICABLE (non-UI cards / functions-only modules).
     rb_ref = str(card.get("render_bundle", "") or "").strip()
     if rb_ref:
-        # PROP-037: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
+        # B-PROP-011: shared path-safety — absolute/'..' WAS guarded here, but a symlink / resolved-escape
         # render_bundle slipped through. Full class now (the rail reads only an in-repo bundle).
         safe_rb, rberr = safe_repo_ref(rb_ref, root)
         if rberr:
@@ -299,7 +299,7 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE render-fidelity (card declares no render_bundle)")
 
-    # 10. structure — the STRUCTURE LOCK (PROP-035 Lever A). Every mode: FIX card must not restructure
+    # 10. structure — the STRUCTURE LOCK (F-PROP-001 Lever A). Every mode: FIX card must not restructure
     #     the file tree outside its allowed_files vs the frozen structure_lock. Rail-wired here (not
     #     opt-in, xfam P1-1) so the preserve-the-architecture gate bites on the normal fix path; a
     #     mode: FIX card with no structure_lock_ref fails closed inside cx check structure. The RAIL
@@ -311,17 +311,17 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE structure (non-FIX card)")
 
-    # 11. verify-app — the runtime-behavior gate (PROP-036). The MECHANICAL guarantee ("every live_slice,
+    # 11. verify-app — the runtime-behavior gate (B-PROP-010). The MECHANICAL guarantee ("every live_slice,
     #     once, before the CEO live-drive") is the module-acceptance PRECONDITION (validate_verify_app
     #     inside validate_live_slice_accept) — NOT this step. This build-turn step is an OPT-IN EARLY-CATCH:
     #     a card declaring `verify_app_ref` (mirror of render_bundle) has its verify_app receipt validated
     #     HERE so a malformed/forged/failing receipt is caught at slice completion, before the screen is
-    #     surfaced, not only later at the wall. HONEST SCOPE (PROP-036 xfam, GPT-5.5): a slice-completion
+    #     surfaced, not only later at the wall. HONEST SCOPE (B-PROP-010 xfam, GPT-5.5): a slice-completion
     #     card that OMITS verify_app_ref is NOT_APPLICABLE here — the wall still catches it, so this step
     #     does not (and is not claimed to) mechanically force the check; it is the convenience early-catch.
     va_ref = str(card.get("verify_app_ref", "") or "").strip()
     if va_ref:
-        # PROP-036 xfam landed the absolute/'..'/symlink/resolved-escape guard inline here; PROP-037
+        # B-PROP-010 xfam landed the absolute/'..'/symlink/resolved-escape guard inline here; B-PROP-011
         # moves it onto the shared safe_repo_ref helper so all build-turn root/ref reads carry the
         # identical class (mirrors the Andon wall acceptance_ref path-safety).
         safe_va, vaerr = safe_repo_ref(va_ref, root)
@@ -334,10 +334,10 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE verify-app (card declares no verify_app_ref)")
 
-    # 12. whole-packet cross-family review — the G7 build-authorization INTEGRATION gate (PROP-040).
+    # 12. whole-packet cross-family review — the G7 build-authorization INTEGRATION gate (P-PROP-006).
     #     A module-advancing card means building is underway, so the WHOLE frozen packet must already
     #     have passed a CURRENT, PASS, OPPOSITE-family integration review (the cross-document coherence
-    #     pass the per-card audit + the deterministic checker structurally cannot provide — a real-project
+    #     pass the per-card audit + the deterministic checker structurally cannot provide — the real-project
     #     TRD-vs-stack-lock drift class). Fail-closed: a module build with no current receipt blocks the
     #     entire build (mirrors module-start's fail-closed on a missing registry). The standalone check
     #     does the path-safety + sha + opposite-family + verdict + packet-hash-currency validation; the
@@ -347,13 +347,13 @@ def cmd_build_turn(args) -> int:
         if not pkt_ref:
             findings.append(("P1", "whole-packet-review",
                 "module-advancing build but state has no packet_dir — the whole-packet integration review "
-                "(PROP-040) cannot recompute the frozen-packet hash to prove the review is current; "
+                "(P-PROP-006) cannot recompute the frozen-packet hash to prove the review is current; "
                 "fail-closed"))
         elif Path(pkt_ref).is_absolute() or ".." in Path(pkt_ref).parts:
             findings.append(("P1", "whole-packet-review",
                 f"state.packet_dir '{pkt_ref}' must be a repo-relative path (no absolute / .. escape) — "
                 "the whole-packet integration gate reads only the frozen packet committed in the repo "
-                "(PROP-040)"))
+                "(P-PROP-006)"))
         else:
             pkt_path = str(Path(repo_root) / pkt_ref)
             rc, out = _run_cx("check", "whole-packet-review", "--state", state_path,

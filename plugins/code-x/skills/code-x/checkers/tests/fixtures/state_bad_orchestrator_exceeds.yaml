@@ -1,7 +1,7 @@
 # BAD: orchestrator fable max exceeds the opus-max seat, no top_allowed_reason -> P1
 # GOOD state file — should PASS cx check state
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

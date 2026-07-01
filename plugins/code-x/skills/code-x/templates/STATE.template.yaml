@@ -1,10 +1,10 @@
 # CODE-X-STATE.yaml — "you are here". The ONLY state file. Read EVERY turn (with the kernel).
 # Keep it tiny (target < 600 tokens). One project = one state file. Copy this template per project.
 
-project:              # project slug (e.g. my-app)
+project:              # project slug (e.g. sample)
 protocol_stamp:       # Code-X V1   (must match this protocol — NEVER mix with v0.13 in one project)
 
-current_stage:        # PLANNING_STUDIO | BUILD_FACTORY | FIXING_STAGE  (FIXING_STAGE = PROP-035 preserve-posture repair; needs a fixing_stage seat in BUILD-ENGINE-PROFILES)
+current_stage:        # PLANNING_STUDIO | BUILD_FACTORY | FIXING_STAGE  (FIXING_STAGE = F-PROP-001 preserve-posture repair; needs a fixing_stage seat in BUILD-ENGINE-PROFILES)
 current_mode:         # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY | PROOF
 current_card:         # id of the ONE work-order in play (e.g. BUILD-003) — or null
 current_module:       # (V1.10) module_id in play — or null
@@ -18,8 +18,8 @@ engine_switch_log: [] # append-only rows: {date, from, to, reason}   (e.g. weekl
 build_authorized:     no        # yes only AFTER planning + card-compilation gate PASS
 mode_a_status:        NOT_STARTED   # NOT_STARTED | IN_PROGRESS | CEO_APPROVED | NOT_APPLICABLE
 
-session_start:        # PROP-014: a BUILD-mode session acknowledges the coding standard at start [RULE:builder-standard-session-read]
-  protocol_boot_ack:  # PROP-018: REFERENCE to the cx-generated boot receipt (`cx check boot` prints this block verbatim) — checked by cx check state --session-start (P1 when missing/stale in a build mode); the model never authors hashes
+session_start:        # P-PROP-001: a BUILD-mode session acknowledges the coding standard at start [RULE:builder-standard-session-read]
+  protocol_boot_ack:  # B-PROP-002: REFERENCE to the cx-generated boot receipt (`cx check boot` prints this block verbatim) — checked by cx check state --session-start (P1 when missing/stale in a build mode); the model never authors hashes
     receipt:          # path to protocol-boot-receipt.yaml (cx wrote it)
     receipt_hash:     # sha256-12 of the receipt file (cx printed it)
     acked_by:         # model+family
@@ -30,7 +30,17 @@ session_start:        # PROP-014: a BUILD-mode session acknowledges the coding s
     hash:             # sha256-12 of the file as read — drift since ack = re-read + re-acknowledge
     read_by:          # model+family (e.g. codex / gpt-5.5 medium)
     timestamp:        # ISO datetime
-  lessons_preload:    # PROP-017: PLANNING session acks the lessons preload — checked by cx check state --session-start (P2) [RULE:lessons-preload-ack]
+  orchestration_mode: # PBF-PROP-012 Part B (R-ORCH): a BUILD/FIXING session runs as an orchestrator dispatching fresh subagents per task — session_start.orchestration_mode, checked by cx check state --session-start (P2) [RULE:orchestration-mode-ack]
+    dispatch_subagents:  # yes — the lead dispatches a fresh subagent per build/review leg; never builds inline
+    lead_role:           # orchestrator — compile → dispatch → verify each leg → synthesise
+    # inline_waiver:     # OPTIONAL — yes ONLY for a trivial single-card project; then ceo_decision_ref is required
+    # ceo_decision_ref:  # CEO-DECISION-LEDGER row id authorizing an inline (no-dispatch) build
+  module_demo_mode: # PBF-PROP-012 Part E (SEE-AND-TEST): a BUILD/FIXING session declares it will DEMO every user-facing module on its real surface before the CEO live-drive accept — session_start.module_demo_mode, checked by cx check state --session-start (P2) [RULE:module-demo-mode-ack]
+    demo_every_user_facing_module:  # yes — orchestrator opens the running build on the correct surface for every live_slice module before accept
+    surfaces:            # [web, mobile] — web → Chrome (live_url); mobile → iPhone 13 Pro simulator (iphone-13-pro constant, E-A2)
+    # no_user_facing_modules: # OPTIONAL — yes ONLY for a purely backend project with no live_slice modules; then ceo_decision_ref is required
+    # ceo_decision_ref:  # CEO-DECISION-LEDGER row id authorizing a backend-only waiver
+  lessons_preload:    # PBF-PROP-010: PLANNING session acks the lessons preload — checked by cx check state --session-start (P2) [RULE:lessons-preload-ack]
     status:           # PASS
     file:             # Code-X-V1/MEMORY/LESSONS.yaml
     hash:             # sha256-12 of the file as read
@@ -38,15 +48,16 @@ session_start:        # PROP-014: a BUILD-mode session acknowledges the coding s
     timestamp:        # ISO datetime
     active_lesson_count:   # ACTIVE stage:planning lessons counted at read
 
-review_boundary:      # PROP-020: reviewer taxonomy/timing as TYPED state (required in build modes at session-start; partial prose rejected by cx check state)
+review_boundary:      # BF-PROP-002: reviewer taxonomy/timing as TYPED state (required in build modes at session-start; partial prose rejected by cx check state)
   deterministic_checks_each_card: yes   # always yes — G5, no opt-out
-  coderabbit_before_self_review:        # yes | no | not_applicable
-  self_review_boundary:                 # card | module | foundation_checkpoint | final
-  cross_family_boundary:                # module | foundation_checkpoint | final | ceo_deferred
+  coderabbit_before_self_review:        # yes | no | not_applicable; BUILD_FACTORY MODULE_BUILD/MODE_A_UI MUST be yes
+  self_review_boundary:                 # card | module | foundation_checkpoint | final; BUILD_FACTORY code-diff builds MUST be module
+  cross_family_boundary:                # module | foundation_checkpoint | final | ceo_deferred; CODEX_APP builds use final whole-app xfam after built_app_audit; CLAUDE_CODE may use module/foundation xfam after self-review
+  xfam_capability:                      # stage_1 | stage_2 | stage_3 (CodeRabbit never satisfies true xfam)
   ceo_decision_ref:                     # REQUIRED when cross_family_boundary = ceo_deferred
   deferred_review_blocks: []            # REQUIRED when ceo_deferred — what the debt blocks (e.g. [ship, final_ready])
 
-protocol_deviations: []   # PROP-020: CEO-authorized departures from canonical timing — TYPED rows, never blended into state as if normal
+protocol_deviations: []   # BF-PROP-002: CEO-authorized departures from canonical timing — TYPED rows, never blended into state as if normal
   # - id:
   #   ceo_authorized: yes
   #   ceo_decision_ref:
@@ -55,14 +66,14 @@ protocol_deviations: []   # PROP-020: CEO-authorized departures from canonical t
   #   blocks:               # next_card | ship | final_ready | none
   #   review_debt_items: [] # stays visible until repaid
 
-protocol_incident:    # PROP-020: set (with stop_status: PROTOCOL_INCIDENT) on a missed gate / skipped check / false state — PROTOCOL corrections only, never a mere product rejection
+protocol_incident:    # BF-PROP-002: set (with stop_status: PROTOCOL_INCIDENT) on a missed gate / skipped check / false state — PROTOCOL corrections only, never a mere product rejection
   # id:
   # status:           # OPEN | REPAIRED
   # cause:
   # repair:
   # repair_card:      # the ONLY card allowed to build while OPEN (cx check card --state blocks the rest; cross-family + final-ready forbidden)
 
-lock_deviations: []   # PROP-034 Lever A: TYPED rows logging a departure from the FROZEN PROJECT LOCK during a fix (distinct from protocol_deviations, which depart from the PROTOCOL). An OPEN row BLOCKS module-acceptance (logged ambiguity can never quietly ship). refs path-safety-validated (v1.10).
+lock_deviations: []   # BF-PROP-007 Lever A: TYPED rows logging a departure from the FROZEN PROJECT LOCK during a fix (distinct from protocol_deviations, which depart from the PROTOCOL). An OPEN row BLOCKS module-acceptance (logged ambiguity can never quietly ship). refs path-safety-validated (v1.10).
   # - deviation_id:        # unique id (e.g. LOCKDEV-001)
   #   card_id:             # the fix card that introduced the deviation
   #   lock_anchor_ref:     # {card_id, requirement_id} the fix anchored to in the frozen packet
@@ -96,7 +107,7 @@ open_findings:        # final-ready requires ALL zero (counts AND items empty)
     #   should_have_been_caught_by:   # escaped bugs only (found AFTER approval): the gate that SHOULD have caught it
     #   found_post_ship / found_by:   # (V1.10) post-ship CEO-found defect (Q2 defect ledger)
 
-built_app_audit:      # v1.12: REQUIRED before final-ready (BUILT-APP-AUDIT.md / GATES.md G8) — cx check final-ready P0-blocks if missing or incomplete
+built_app_audit:      # v1.21 route guard; Built-App Audit itself was locked in v1.12 (BUILT-APP-AUDIT.md / GATES.md G8)
   status:               # run    (the read-only whole-app audit has completed; any other value blocks final-ready)
   report_ref:           # repo-relative, non-symlink path to the audit report DIRECTORY — must EXIST and contain AUDIT-SUMMARY.md
   findings_dispositioned:   # true  (every finding fixed via a normal Code-X card, OR CEO-deferred as a scope decision; a known bug/accepted-risk stays OPEN — zero means zero)

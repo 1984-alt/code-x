@@ -21,7 +21,7 @@
 ## 5. Non-negotiables (break = P1)
 - <e.g. amounts always right-aligned; expense in red; never truncate a balance>
 
-## 6. Locked style direction (PROP-016 — REQUIRED for user-facing apps; G7 blocks without it)
+## 6. Locked style direction (P-PROP-002 — REQUIRED for user-facing apps; G7 blocks without it)
 > Filled at Style-Select: ONE representative core screen in 3 variants (4–5 with stated reason), variant matrix in `design-golden-master/style-select/index.md`. Every screen after this follows the chosen style; different style = P1 drift.
 ```yaml
 locked_style_direction:

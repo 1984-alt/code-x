@@ -1,6 +1,6 @@
 # Code-X V1 — BUILDER-STANDARD.md (the coding standard)
 
-> Ported from v0.13 `CODE-X-BUILDER-STANDARD.md` at the PROP-014 fold (2026-06-10).
+> Ported from v0.13 `CODE-X-BUILDER-STANDARD.md` at the P-PROP-001 fold (2026-06-10).
 > v0.13's embedded Build-Runbook section is NOT ported — KERNEL/GATES/ROUTING own runbook
 > duties in V1. [RULE:builder-standard-session-read]
 
@@ -15,7 +15,7 @@ standard drifted since acknowledgment → re-read + re-acknowledge). Honest scop
 proves WHICH version the session started from; it cannot prove the standard was internalized
 — that is what module reviews are for.
 
-## Build-session command rail (PROP-018, folded 2026-06-12)
+## Build-session command rail (B-PROP-002, folded 2026-06-12)
 
 A build session's protocol obligations are COMMANDS, not remembered prose (engine-agnostic —
 Codex app and Claude alike). The paste-ready session prompt carries this rail VERBATIM:
@@ -29,7 +29,7 @@ protocol evals -> cx check evals          (protocol-change sessions; build sessi
 ```
 
 No file edits, reviews, or builds before the boot check passes. After ANY CEO protocol
-correction: stop, re-run the current-stage rail, record a PROTOCOL_INCIDENT (GATES, PROP-020)
+correction: stop, re-run the current-stage rail, record a PROTOCOL_INCIDENT (GATES, BF-PROP-002)
 — never patch only the named symptom and continue.
 *✅ The four subcommands are BUILT + biting (2026-06-12) — run the rail verbatim; falling back
 to constituent checks is no longer an allowed substitute.*
@@ -44,7 +44,9 @@ handover. If you cannot tell how to implement the card without guessing, write t
 or blocker and STOP — never invent product, data, UX, security, privacy, money, legal,
 release, or architecture decisions.
 
-## The do-less ladder (PROP-024 — prevention, not review)
+## The do-less ladder (B-PROP-005 — prevention, not review) [RULE:builder-prevention-preamble]
+
+> **Orchestrator injection (PBF-PROP-012 Part C):** this ladder is the canonical builder prevention preamble — the orchestrator MUST inject it as the prevention preamble into the builder subagent's prompt before every builder dispatch on every engine. The Card Compiler records the injection in `execution.prevention_preamble`; `cx check card` bites if absent.
 
 Before writing code for a card, **decide what NOT to build first.** Walk these rungs in order;
 take the highest one that honestly satisfies the card, then stop climbing. This is a PREVENTION
@@ -75,7 +77,7 @@ explicitly **NOT** imported from the source it came from: "minimal prose / code-
 fights plain-English for a non-coder CEO — `VOICE.md`) and "YAGNI applies to tests too" (it
 fights the verification spine — green ≠ enforcing). Prose and tests are never what you cut.
 
-## Fixing-stage rules (PROP-035 — preserve, don't improve)
+## Fixing-stage rules (F-PROP-001 — preserve, don't improve)
 
 When the card's job is to REPAIR an existing surface (`mode: FIX`, any fix — even a mid-build
 self-heal), the posture flips from CREATE to **PRESERVE: change only the defect.** These rules apply to
@@ -152,7 +154,7 @@ for **decisions you must not invent**:
 - a security/privacy concern cannot be resolved inside the card;
 - the card touches CEO-accepted UI screens (templates/static/HTML routes, or purges Mode A
   fixtures) but does NOT carry the `ui_contract` locked visual artifacts in its read set —
-  **never infer the visual contract** (PROP-019; a real scar from an engine build wave: approved shells deleted,
+  **never infer the visual contract** (B-PROP-003; the Sample W4 scar: approved shells deleted,
   generic templates built, all checks green).
 
 ## Builder self-check (written into the card's evidence before claiming done)
@@ -174,15 +176,18 @@ Security/privacy defaults preserved: PASS | FIX-FIRST | STOP
 Dependencies unchanged or approved: PASS | FIX-FIRST | STOP
 Tests/evidence mapped to acceptance criteria: PASS | FIX-FIRST | STOP
 Code easier to review than before: PASS | FIX-FIRST | STOP
+CodeRabbit receipt present for code-diff build cards: PASS | NOT_APPLICABLE | FIX-FIRST
+Module self-review evidence recorded for module-quality: PASS | NOT_APPLICABLE | FIX-FIRST
 Unresolved stop decisions:
 Verdict: PASS | FIX-FIRST | STOP
 Evidence paths:
 Actor + timestamp:
 ```
 
-A module cannot clear its review checkpoint unless this verdict is `PASS`, or the CEO
-explicitly accepts a documented exception. Project-specific deltas to this standard live in
-the packet (coverage-map category 20), never as silent local conventions.
+A module cannot clear its review checkpoint unless this verdict is `PASS`, the required
+CodeRabbit rail has a receipt, and module-quality carries same-family self-review evidence,
+or the CEO explicitly accepts a documented exception. Project-specific deltas to this standard
+live in the packet (coverage-map category 20), never as silent local conventions.
 
 **Plain-talk lens (`VOICE.md`) — judgment, NOT a deterministic check:** model reviews ALSO
 check that CEO-facing text (status updates, questions, stop cards, summaries) obeys `VOICE.md`

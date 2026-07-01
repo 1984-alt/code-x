@@ -1,6 +1,6 @@
 # BAD state file — wrong protocol_stamp + counts/items mismatch
 
-project: sample
+project: my-app
 protocol_stamp: Code-X v0.13   # WRONG — must be "Code-X V1"
 
 current_stage: BUILD_FACTORY

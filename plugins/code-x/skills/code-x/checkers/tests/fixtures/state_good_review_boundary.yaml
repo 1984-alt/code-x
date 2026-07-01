@@ -38,6 +38,7 @@ active_build_engine: CLAUDE_CODE
 orchestrator_model: opus max
 review_boundary:
   deterministic_checks_each_card: 'yes'
-  coderabbit_before_self_review: not_applicable
+  coderabbit_before_self_review: 'yes'
   self_review_boundary: module
   cross_family_boundary: module
+  xfam_capability: stage_1

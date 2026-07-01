@@ -1,6 +1,6 @@
 # Incident open, repair_card FIX-009 -> any other build card BLOCKED (card-side clause)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: REVIEW

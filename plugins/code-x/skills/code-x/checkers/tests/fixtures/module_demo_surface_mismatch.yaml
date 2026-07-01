@@ -1,0 +1,26 @@
+# BAD: surface: mobile + live_url present (wrong surface evidence) → MODULE-DEMO-SURFACE-MISMATCH P0 (PROP-042 Part E).
+module_acceptance:
+  module_id: m_live
+  module_demo:
+    surface: mobile
+    generated_by: cx demo collect
+    repo_sha: 7d1408c9aa21
+    shown_screenshot_path: module_demo_shot.png
+    shown_screenshot_hash: b1ff9c8ea3a7
+    live_url: http://localhost:8000/home
+    simulator: iphone-13-pro
+    ceo_accept_token: "ACCEPT-m_live-7d1408"
+    ceo_turn_ref: module_demo_shot.png
+    ceo_verdict: accepted
+  live_slice_accept:
+    live_url: http://localhost:8000/home
+    ceo_drove: true
+    ceo_turn_ref: handoffs/2026-06-20-slice-home-accept.md
+    repo_sha: 7d1408c9aa21
+    ceo_accept_token: "ACCEPT-m_live-7d1408"
+    viewport: 390x844
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_live-home-card.yaml#acceptance_criteria

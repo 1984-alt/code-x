@@ -1,4 +1,4 @@
-# cmd_boot: GENERATES the session boot receipt (PROP-018 build-session rail).
+# cmd_boot: GENERATES the session boot receipt (B-PROP-002 build-session rail).
 #
 # The receipt is machine-authored — cx hashes the canonical files itself, runs the
 # session-start state check, and records the latest handoff. The actor only

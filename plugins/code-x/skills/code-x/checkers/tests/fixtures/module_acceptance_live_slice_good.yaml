@@ -1,6 +1,8 @@
 # GOOD: a live_slice (m_live) accepted WITH a valid live_slice_accept block (PROP-032) — the CEO
-# drove the running build live on the Mac — AND a passing verify_app block (PROP-036): the verify-app
+# drove the running build live on the local machine — AND a passing verify_app block (PROP-036): the verify-app
 # agent drove the running build and its acceptance-criteria check passed BEFORE the CEO live-drive.
+# AND a valid module_demo block (PROP-042 Part E): real shown-screenshot hash + CEO-typed accept token
+# embedding repo_sha prefix + ceo_verdict: accepted + ceo_turn_ref resolves to a real file.
 # Full quality card so module-quality passes overall.
 module_acceptance:
   module_id: m_live
@@ -14,11 +16,51 @@ module_acceptance:
     regression: PASS
     tests: page render + nav links covered
     conformance: built page matches the locked home-screen contract
+  self_review:
+    family_relation: same_family
+    status: PASS
+    review_ref: reviews/m-live-self-review.md
+  build_validation:
+    applicability: applies
+    status: PASS
+    ran: [tests]
+    reviewer: build-validator-agent
+    builder: cx-sonnet-builder
+    claims:
+      - claim_id: bv-mlive-tests
+        check: tests
+        claimed_verdict: PASS
+        command: "python3 tests/run.py"
+        exit_code: 0
+        log_path: logs/build_validation_pass.txt
+        produced_at: "2026-07-01T00:00:00Z"
+        produced_by: build-validator-agent
+  anti_slop:
+    status: PASS
+    role: slop_removal
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m-live-anti-slop.md
+  module_demo:
+    surface: web
+    generated_by: cx demo collect
+    repo_sha: 7d1408c9aa21
+    shown_screenshot_path: module_demo_shot.png
+    shown_screenshot_hash: b1ff9c8ea3a7
+    live_url: http://localhost:8000/home
+    ceo_accept_token: "ACCEPT-m_live-7d1408"
+    ceo_turn_ref: module_demo_shot.png
+    ceo_verdict: accepted
+    viewport: 390x844
   live_slice_accept:
     live_url: http://localhost:8000/home
     ceo_drove: true
     ceo_turn_ref: handoffs/2026-06-20-slice-home-accept.md
     repo_sha: 7d1408c9aa21
+    ceo_accept_token: "ACCEPT-m_live-7d1408"
     viewport: 390x844
   verify_app:
     passed: true

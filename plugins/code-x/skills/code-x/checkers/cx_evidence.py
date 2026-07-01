@@ -1,5 +1,5 @@
 # cmd_evidence: checks that all evidence_required paths exist and are valid.
-# PROP-022 (proof-card honesty): also re-reads typed evidence_claims rows —
+# B-PROP-004 (proof-card honesty): also re-reads typed evidence_claims rows —
 # a verdict is never a sentence next to a log path.
 import re
 from pathlib import Path
@@ -7,7 +7,7 @@ from pathlib import Path
 from cx_common import findings_report, load_yaml, scan_faked_pass
 from cx_scope import _parse_touched_files, _file_matches
 
-# PROP-022: claim types whose green run REQUIRES a demonstrated red run
+# B-PROP-004: claim types whose green run REQUIRES a demonstrated red run
 # (positive control) — "green ≠ enforcing", applied to project proof tests.
 POSITIVE_CONTROL_CLAIM_TYPES = {
     "design_fidelity", "interaction", "click", "swipe", "source_truth",
@@ -29,17 +29,26 @@ BASELINE_CLAIM_TYPES = {"design_fidelity", "route_map", "click_path", "snapshot"
 
 
 def _read_log(card_dir: Path, log_path: str) -> str | None:
+    # Path-safety (EVAL-040 xfam P0): a model-authored log_path that is absolute, '..'-escaping, a
+    # symlink, or resolves OUTSIDE card_dir lets a claim point at any always-passing file → a forged
+    # proof. Reject before reading; both callers treat None as fail-closed. Mirrors safe_repo_ref
+    # (cx_common.py) but rooted at the card/receipt dir.
     p = Path(str(log_path))
-    if not p.is_absolute():
-        p = card_dir / p
-    p = p.resolve()
-    if not p.is_file():
+    if p.is_absolute() or ".." in p.parts:
         return None
-    return p.read_text(encoding="utf-8", errors="replace")
+    full = card_dir / p
+    if full.is_symlink():
+        return None
+    resolved = full.resolve()
+    if not resolved.is_relative_to(Path(card_dir).resolve()):
+        return None
+    if not resolved.is_file():
+        return None
+    return resolved.read_text(encoding="utf-8", errors="replace")
 
 
 def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list) -> None:
-    """PROP-022 claim-evidence binding + scoped positive control + modality +
+    """B-PROP-004 claim-evidence binding + scoped positive control + modality +
     universal baseline pinning. All rows live on the proof card as
     evidence_claims; cx RE-READS every referenced log."""
     claims = card.get("evidence_claims")
@@ -50,10 +59,10 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
             findings.append(("P1", loc,
                 "PROOF card with no evidence_claims — every PASS/FAIL verdict in a "
                 "proof card carries a typed evidence_claims row; omission is not an "
-                "exemption (PROP-022)"))
+                "exemption (B-PROP-004)"))
         return
     if not isinstance(claims, list):
-        findings.append(("P0", loc, "evidence_claims must be a list of typed rows (PROP-022)"))
+        findings.append(("P0", loc, "evidence_claims must be a list of typed rows (B-PROP-004)"))
         return
 
     for i, row in enumerate(claims):
@@ -66,7 +75,7 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
             if key not in row or row.get(key) in (None, ""):
                 findings.append(("P1", loc,
                     f"{tag} ({cid}).{key} missing — a verdict is never a sentence next "
-                    "to a log path; the row must be fully typed (PROP-022)"))
+                    "to a log path; the row must be fully typed (B-PROP-004)"))
 
         # --- claim-evidence binding: re-read the log ---
         log_path = row.get("log_path")
@@ -74,7 +83,7 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
         if log_path and log is None:
             findings.append(("P0", loc,
                 f"{tag} ({cid}) log missing: {log_path} — a claim without its log is "
-                "unverifiable (PROP-022)"))
+                "unverifiable (B-PROP-004)"))
         verdict = str(row.get("claimed_verdict", "")).upper()
         if log is not None and verdict == "PASS":
             try:
@@ -86,17 +95,17 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                 findings.append(("P0", loc,
                     f"{tag} ({cid}) claims PASS with exit_code {row.get('exit_code')} and "
                     "no declared nonzero_pass_semantics — claimed PASS contradicted by "
-                    "its own evidence (PROP-022)"))
+                    "its own evidence (B-PROP-004)"))
             for marker in (row.get("expect_contains") or []):
                 if str(marker) not in log:
                     findings.append(("P0", loc,
                         f"{tag} ({cid}) claims PASS but expect_contains marker "
-                        f"'{marker}' is absent from the log — claim/log mismatch (PROP-022)"))
+                        f"'{marker}' is absent from the log — claim/log mismatch (B-PROP-004)"))
             for fm in (row.get("fail_markers") or []):
                 if str(fm) in log:
                     findings.append(("P0", loc,
                         f"{tag} ({cid}) claims PASS but fail_marker '{fm}' appears in "
-                        "the log — claim/log mismatch (PROP-022)"))
+                        "the log — claim/log mismatch (B-PROP-004)"))
 
         claim_type = str(row.get("claim_type", "")).lower()
 
@@ -108,14 +117,14 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                 findings.append(("P1", loc,
                     f"{tag} ({cid}) claim_type '{claim_type or 'sole high-risk proof'}' "
                     "requires a positive_control red run — a green run with no "
-                    "demonstrated red run does not count (green ≠ enforcing, PROP-022)"))
+                    "demonstrated red run does not count (green ≠ enforcing, B-PROP-004)"))
             else:
                 pc_log_path = pc.get("log_path")
                 pc_log = _read_log(card_dir, pc_log_path) if pc_log_path else None
                 if pc_log is None:
                     findings.append(("P0", loc,
                         f"{tag} ({cid}) positive_control log missing: {pc_log_path} — "
-                        "the red run must be recorded alongside the green run (PROP-022)"))
+                        "the red run must be recorded alongside the green run (B-PROP-004)"))
                 else:
                     try:
                         pc_exit = int(pc.get("exit_code"))
@@ -131,7 +140,7 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                             f"{tag} ({cid}) positive_control does not demonstrate the "
                             "EXPECTED failure (expected_failure_marker absent from the red "
                             "log / exit 0) — a red run for an unrelated reason does not "
-                            "qualify (PROP-022)"))
+                            "qualify (B-PROP-004)"))
 
         # --- event modality: hard P1 for interaction proof ---
         if claim_type in INTERACTION_CLAIM_TYPES:
@@ -140,12 +149,12 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                 findings.append(("P1", loc,
                     f"{tag} ({cid}) interaction claim without a typed modality block "
                     f"{{{', '.join(MODALITY_REQUIRED_KEYS)}}} — modality cannot stay "
-                    "advisory (PROP-022)"))
+                    "advisory (B-PROP-004)"))
             else:
                 for key in MODALITY_REQUIRED_KEYS:
                     if not mod.get(key):
                         findings.append(("P1", loc,
-                            f"{tag} ({cid}) modality.{key} missing (PROP-022)"))
+                            f"{tag} ({cid}) modality.{key} missing (B-PROP-004)"))
                 handler = str(mod.get("handler_event_family", "")).lower()
                 dispatched = str(mod.get("dispatched_event_family", "")).lower()
                 for fam_name, fam in (("handler_event_family", handler),
@@ -158,7 +167,7 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                     findings.append(("P1", loc,
                         f"{tag} ({cid}) dispatched event family '{dispatched}' != handler "
                         f"family '{handler}' — a {dispatched}-event test never touches a "
-                        f"{handler} handler (hard P1, PROP-022)"))
+                        f"{handler} handler (hard P1, B-PROP-004)"))
                 # GPT cross-review 2026-06-12: the handler-reach evidence must be a
                 # real artifact, not a self-attested sentence.
                 ev_ref = str(mod.get("event_reaches_handler_evidence", "") or "")
@@ -166,7 +175,7 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                     findings.append(("P2", loc,
                         f"{tag} ({cid}) modality.event_reaches_handler_evidence "
                         f"'{ev_ref}' does not resolve to an existing file — handler-reach "
-                        "evidence is an artifact, never an assertion (PROP-022)"))
+                        "evidence is an artifact, never an assertion (B-PROP-004)"))
 
         # --- baseline pinning, universal ---
         # GPT cross-review 2026-06-12: comparison-class claim types pin a baseline
@@ -180,12 +189,12 @@ def _check_evidence_claims(card: dict, card_dir: Path, loc: str, findings: list)
                 findings.append(("P0", loc,
                     f"{tag} ({cid}) compares actual output to a reference but does not "
                     "pin {baseline_ref, baseline_hash, baseline_source} — comparison "
-                    "baseline must be the frozen lock/contract hash (PROP-022)"))
+                    "baseline must be the frozen lock/contract hash (B-PROP-004)"))
             elif str(baseline.get("baseline_source", "")).lower() in INVALID_BASELINE_SOURCES:
                 findings.append(("P0", loc,
                     f"{tag} ({cid}) baseline_source '{baseline.get('baseline_source')}' is "
                     "builder-produced output from the same implementation wave — INVALID "
-                    "as 'expected'; pin the frozen lock/contract hash (PROP-022)"))
+                    "as 'expected'; pin the frozen lock/contract hash (B-PROP-004)"))
 
 
 def cmd_evidence(args) -> int:
@@ -198,8 +207,14 @@ def cmd_evidence(args) -> int:
     findings = []
     loc = card_path
 
-    # P2-06: resolve evidence paths relative to card file's directory, not CWD
+    # P2-06 / PB-PROP-002 follow-up: resolve evidence paths relative to the card
+    # first, then the project root when the card lives in a repo.
     card_dir = Path(card_path).resolve().parent
+    repo_root = None
+    for candidate in (card_dir, *card_dir.parents):
+        if (candidate / ".git").exists() or (candidate / "CODE-X-STATE.yaml").exists():
+            repo_root = candidate
+            break
 
     ev_required = card.get("evidence_required") or []
     mode = card.get("mode", "")
@@ -209,7 +224,12 @@ def cmd_evidence(args) -> int:
     for ev_path in ev_required:
         p = Path(str(ev_path))
         if not p.is_absolute():
-            p = card_dir / p
+            card_relative = card_dir / p
+            repo_relative = (repo_root / p) if repo_root is not None else None
+            if card_relative.exists() or repo_relative is None:
+                p = card_relative
+            else:
+                p = repo_relative
         p = p.resolve()
         if not p.exists():
             findings.append(("P0", loc, f"evidence_required path missing: {ev_path}"))
@@ -225,7 +245,7 @@ def cmd_evidence(args) -> int:
             except Exception:
                 pass
 
-    # PROP-022: proof-card honesty — typed evidence_claims re-read against their logs
+    # B-PROP-004: proof-card honesty — typed evidence_claims re-read against their logs
     _check_evidence_claims(card, card_dir, loc, findings)
 
     # P1-05: diff-aware test-edit guard
@@ -242,7 +262,7 @@ def cmd_evidence(args) -> int:
     test_edits_reason = (fix_test_edits.get("reason") or "").strip()
     touched_test_files_declared = [str(f) for f in (fix_test_edits.get("touched_test_files") or [])]
 
-    if touched_in_diff:
+    if is_fix_card and touched_in_diff:
         for f in touched_in_diff:
             is_test_file = bool(re.search(r'test', f, re.I))
             if is_test_file:

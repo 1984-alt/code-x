@@ -33,7 +33,7 @@ def _role_seats(profiles: dict, role: str, engine_key: str, tier: str | None) ->
 
 
 def _check_execution(data: dict, args, loc: str, findings: list) -> None:
-    """PROP-013 BUILD-ENGINE-PROFILES enforcement — card-side clauses 1-5."""
+    """PBF-PROP-008 BUILD-ENGINE-PROFILES enforcement — card-side clauses 1-5."""
     exec_block = data.get("execution")
     if not exec_block or not isinstance(exec_block, dict):
         findings.append(("P0", loc,
@@ -118,7 +118,7 @@ def _check_execution(data: dict, args, loc: str, findings: list) -> None:
                     f"execution.limits.{limit_key}={card_val} exceeds BUILD-ENGINE-PROFILES cap {cap}"))
 
 
-# --- PROP-019: UI-contract carry-forward (the Sample W4 scar) ---------------
+# --- B-PROP-003: UI-contract carry-forward (the Sample W4 scar) -----------------
 # A card that touches templates/static/HTML-rendering files, or purges Mode A
 # fixtures, must carry the locked visual artifacts — never infer the visual contract.
 UI_PATH_RE = re.compile(r"(^|/)(templates|static)(/|$)|\.html?$", re.I)
@@ -141,7 +141,7 @@ def _purges_fixtures(data: dict) -> bool:
 
 
 def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
-    """[G3/G6, PROP-019] ui_contract required on UI-touching/fixture-purging cards;
+    """[G3/G6, B-PROP-003] ui_contract required on UI-touching/fixture-purging cards;
     purge additionally requires a complete fixture_replacement_map (no map, no G3 pass).
     DESIGN_FIXTURE_PURGE != DESIGN_DELETE: replace fixture data, preserve the
     CEO-accepted shell and controls."""
@@ -155,7 +155,7 @@ def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
         findings.append(("P1", loc,
             "card touches UI files (templates/static/HTML) or purges Mode A fixtures "
             "WITHOUT ui_contract — STOP, the card is wrong; never infer the visual "
-            "contract (PROP-019, the Sample W4 scar)"))
+            "contract (B-PROP-003, the Sample W4 scar)"))
     else:
         read_required = [str(x) for x in (nested_get(data, "read", "required") or [])]
         for key in UI_CONTRACT_ARTIFACT_KEYS:
@@ -190,14 +190,14 @@ def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
                             "screen carries the full 8-field row"))
 
     # UI review dispatches add the additive visual_contract_context block
-    # (PROP-015 stanza itself stays verbatim).
+    # (PBF-PROP-009 stanza itself stays verbatim).
     rd = data.get("review_dispatch")
     if isinstance(rd, dict) and str(rd.get("required", "no")).lower() in ("yes", "true"):
         vcc = data.get("visual_contract_context")
         if not isinstance(vcc, dict):
             findings.append(("P1", loc,
                 "UI review dispatch without visual_contract_context — the reviewer must "
-                "answer: does this preserve the CEO-accepted visual contract? (PROP-019)"))
+                "answer: does this preserve the CEO-accepted visual contract? (B-PROP-003)"))
         else:
             for key in VISUAL_CONTEXT_KEYS:
                 if not field_present(vcc, key):
@@ -205,7 +205,7 @@ def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
 
 
 def _check_incident_gate(data: dict, args, loc: str, findings: list) -> None:
-    """[PROP-020] While a PROTOCOL_INCIDENT is open, new build cards are BLOCKED and
+    """[BF-PROP-002] While a PROTOCOL_INCIDENT is open, new build cards are BLOCKED and
     cross-family/final-ready requests are forbidden; only repair of the incident's
     own card proceeds. Scope: protocol corrections only."""
     state_path = getattr(args, "state", None)
@@ -228,10 +228,10 @@ def _check_incident_gate(data: dict, args, loc: str, findings: list) -> None:
     if mode == "FINAL_READY" or rd_kind in ("CROSS_FAMILY", "FINAL_READY"):
         findings.append(("P1", loc,
             "PROTOCOL_INCIDENT open in state — requesting cross-family review or "
-            "final-ready is forbidden while the incident is open (PROP-020)"))
+            "final-ready is forbidden while the incident is open (BF-PROP-002)"))
 
 
-# PROP-015 (review-three-leg-ask): values that prove nothing — green-but-not-enforcing.
+# PBF-PROP-009 (review-three-leg-ask): values that prove nothing — green-but-not-enforcing.
 TLA_PLACEHOLDERS = {"asked", "yes", "included", "n/a", "na", "blank", "done", "ok", "true"}
 REVIEW_MODES = {"REVIEW", "FINAL_READY"}
 VALID_REVIEW_KINDS = {"SELF_REVIEW", "CROSS_FAMILY", "CARD_AUDIT", "FINAL_READY", "PROTOCOL_CHANGE"}
@@ -240,7 +240,7 @@ TLA_LEGS = {"continuity": "CONTINUITY", "problems": "PROBLEMS", "approach_improv
 
 
 def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
-    """[RULE:review-three-leg-ask] PROP-015: a review-dispatch card must prove all three
+    """[RULE:review-three-leg-ask] PBF-PROP-009: a review-dispatch card must prove all three
     legs (CONTINUITY + PROBLEMS + APPROACH/IMPROVEMENT) were actually asked. Ordinary
     build cards (review_dispatch.required: no, or no block) are exempt — but a card in
     mode REVIEW/FINAL_READY may not dodge by omitting the block."""
@@ -255,7 +255,7 @@ def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
         findings.append(("P1", loc,
             f"mode {mode} card without review_dispatch.required: yes — every review/audit "
             "card must carry the three-leg ask; omitting the block is not an exemption "
-            "(PROP-015) [RULE:review-three-leg-ask]"))
+            "(PBF-PROP-009) [RULE:review-three-leg-ask]"))
         return
     if not required_yes:
         return  # ordinary card — exempt
@@ -269,7 +269,7 @@ def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
     if not isinstance(tla, dict):
         findings.append(("P1", loc,
             "review_dispatch.required: yes but three_leg_ask missing — all three legs "
-            "(continuity/problems/approach_improvement) must quote how they were asked (PROP-015)"))
+            "(continuity/problems/approach_improvement) must quote how they were asked (PBF-PROP-009)"))
         return
 
     prompt_ref = str(rd.get("prompt_ref", "") or "").strip()
@@ -286,8 +286,66 @@ def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
                 "prompt_ref — quote the stanza leg verbatim or point prompt_ref at the dispatch prompt"))
 
 
+def _check_coderabbit_required_for_code_diff(data: dict, loc: str, findings: list) -> None:
+    """PROP-042 / v1.21: CodeRabbit is a planned rail on code-diff build cards, not an
+    optional note the builder may forget. The receipt itself is produced after a
+    diff exists and is validated by build-turn."""
+    mode = str(data.get("mode", "") or "").strip()
+    if mode not in ("MODULE_BUILD", "MODE_A_UI"):
+        return
+    cr = data.get("coderabbit")
+    required = ""
+    if isinstance(cr, dict):
+        required = str(cr.get("required", "") or "").strip().lower()
+    if required not in ("yes", "true"):
+        findings.append(("P1", loc,
+            "CodeRabbit rail missing — MODULE_BUILD / MODE_A_UI code-diff cards must declare "
+            "coderabbit.required: yes so every build module/final code-diff review has a typed "
+            "CodeRabbit receipt before self/cross review (PROP-042 / v1.21)"))
+
+
+def _check_prevention_preamble(data: dict, loc: str, findings: list) -> None:
+    """[RULE:builder-prevention-preamble] PBF-PROP-012 Part C: the orchestrator MUST inject the
+    canonical do-less prevention preamble (B-PROP-005) into the builder subagent's prompt on EVERY
+    engine. The Card Compiler records that injection in execution.prevention_preamble. Engine-
+    agnostic: keys on the injection MARKER, not a vendor agent file. Missing/forged = P1 (the
+    slice was built with no prevention reaching the builder — the exact real-project gap)."""
+    mode = str(data.get("mode", "") or "").strip()
+    if mode not in ("MODULE_BUILD", "MODE_A_UI"):
+        return
+    pp = nested_get(data, "execution", "prevention_preamble")
+    if not isinstance(pp, dict):
+        findings.append(("P1", loc,
+            "execution.prevention_preamble missing — the orchestrator must inject the canonical "
+            "builder prevention preamble (B-PROP-005 do-less ladder) into the builder prompt on every "
+            "engine; the Card Compiler records the injection marker [RULE:builder-prevention-preamble]"))
+        return
+    if str(pp.get("rule", "")).strip() != "builder-prevention-preamble":
+        findings.append(("P1", loc,
+            "execution.prevention_preamble.rule must be 'builder-prevention-preamble' — the canon token"))
+    if str(pp.get("injected", "")).strip().lower() not in ("yes", "true"):
+        findings.append(("P1", loc,
+            "execution.prevention_preamble.injected must be yes — proof the preamble reached the builder"))
+    sha12_val = str(pp.get("preamble_sha12", "")).strip()
+    if not sha12_val:
+        findings.append(("P1", loc,
+            "execution.prevention_preamble.preamble_sha12 missing — a real injected preamble must be hashed (no stub)"))
+    elif not re.fullmatch(r"[0-9a-f]{12}", sha12_val):
+        findings.append(("P1", loc,
+            f"execution.prevention_preamble.preamble_sha12 {sha12_val!r} must be exactly 12 lowercase hex "
+            "digits — a stub or shortened hash is not a real preamble hash (P2-005)"))
+    ref = str(pp.get("standard_ref", "")).strip()
+    if ref and (Path(ref).is_absolute() or ".." in Path(ref).parts):
+        findings.append(("P1", loc,
+            "execution.prevention_preamble.standard_ref must be a relative in-repo path"))
+    elif ref and ref != "BUILDER-STANDARD.md":
+        findings.append(("P1", loc,
+            f"execution.prevention_preamble.standard_ref must be 'BUILDER-STANDARD.md', got {ref!r} — "
+            "the canon preamble standard is fixed (P2-005)"))
+
+
 def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
-    """[PROP-034 Lever A] A FIX/correction card must RE-ANCHOR to the frozen lock before it fixes.
+    """[BF-PROP-007 Lever A] A FIX/correction card must RE-ANCHOR to the frozen lock before it fixes.
 
     Required on mode: FIX cards (the cards whose purpose is to repair, not build new locked scope):
       - lock_anchor_ref {card_id, requirement_id} — the requirement_id MUST resolve to a real
@@ -321,12 +379,12 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
         findings.append(("P1", loc,
             "mode: FIX card without deviation_class — a fix must declare RESTORE | "
             "AMBIGUITY_RESOLVED | SCOPE_CHANGE so a departure from the lock is never silent "
-            "(PROP-034 Lever A / LOCK-FIDELITY-DEVIATION-CLASS-MISSING) "
+            "(BF-PROP-007 Lever A / LOCK-FIDELITY-DEVIATION-CLASS-MISSING) "
             "[RULE:lock-fidelity-fail-closed]"))
     elif dev_class not in VALID_DEVIATION_CLASSES:
         findings.append(("P1", loc,
             f"deviation_class '{dev_class}' not in {sorted(VALID_DEVIATION_CLASSES)} — "
-            "RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE (PROP-034 Lever A)"))
+            "RESTORE | AMBIGUITY_RESOLVED | SCOPE_CHANGE (BF-PROP-007 Lever A)"))
 
     # SCOPE_CHANGE authorization (independent of the packet — both refs must be present)
     if dev_class == "SCOPE_CHANGE":
@@ -337,7 +395,7 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
             findings.append((sev, loc,
                 "deviation_class: SCOPE_CHANGE without BOTH ceo_decision_ref AND "
                 "packet_amendment_ref — anything not already in the lock CANNOT be built as a fix; "
-                "it needs a CEO decision + a packet amendment/re-freeze (or a new PROP) (PROP-034 "
+                "it needs a CEO decision + a packet amendment/re-freeze (or a new PROP) (BF-PROP-007 "
                 "Lever A / LOCK-FIDELITY-SCOPE-CHANGE-UNAUTHORIZED)"))
 
     # lock_anchor_ref presence + shape — BOTH halves required (F2). A fix that omits/forges card_id
@@ -349,7 +407,7 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
         findings.append(("P1", loc,
             "mode: FIX card without a resolving lock_anchor_ref {card_id, requirement_id} — a fix "
             "that cannot name BOTH the frozen card AND the requirement it restores is freelancing "
-            "(PROP-034 Lever A / LOCK-FIDELITY-FIX-ANCHOR-MISSING)"))
+            "(BF-PROP-007 Lever A / LOCK-FIDELITY-FIX-ANCHOR-MISSING)"))
         return
     req_id = anchor_req_id
 
@@ -358,20 +416,20 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
     if not state_path:
         findings.append(("P1", loc,
             "mode: FIX card carries lock_anchor_ref but --state was not supplied — cannot resolve "
-            "the anchor against the frozen packet (state.packet_dir); fail closed (PROP-034 Lever A)"))
+            "the anchor against the frozen packet (state.packet_dir); fail closed (BF-PROP-007 Lever A)"))
         return
     state_data, _serr = load_yaml(state_path)
     if not isinstance(state_data, dict):
         findings.append(("P1", loc,
             f"mode: FIX card: state file '{state_path}' unreadable — cannot resolve the lock anchor "
-            "(PROP-034 Lever A)"))
+            "(BF-PROP-007 Lever A)"))
         return
     packet_dir_rel = str(state_data.get("packet_dir", "") or "").strip()
     repo_root = str(Path(state_path).resolve().parent)
     if path_is_unsafe(packet_dir_rel):
         findings.append(("P1", loc,
             f"state.packet_dir '{packet_dir_rel}' is unsafe (absolute / '..') — the frozen packet "
-            "must be an in-tree path; fail closed (PROP-034 Lever A)"))
+            "must be an in-tree path; fail closed (BF-PROP-007 Lever A)"))
         return
 
     # F2: the packet the card anchors to is BOUND to the card by hash. RECOMPUTE the state.packet_dir
@@ -381,33 +439,33 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
     if not declared_pkt_hash:
         findings.append(("P1", loc,
             "mode: FIX card without source_map.locked_packet_hash — a fix must bind to the packet it "
-            "restores by hash so its anchor cannot point at an attacker-chosen packet (PROP-034 Lever A / F2)"))
+            "restores by hash so its anchor cannot point at an attacker-chosen packet (BF-PROP-007 Lever A / F2)"))
         return
     real_pkt_hash, herr = recompute_frozen_packet_hash(repo_root, packet_dir_rel)
     if herr or real_pkt_hash is None:
         findings.append(("P1", loc,
             f"mode: FIX card: cannot recompute the frozen packet hash to bind the anchor — {herr} "
-            "(PROP-034 Lever A / F2)"))
+            "(BF-PROP-007 Lever A / F2)"))
         return
     if declared_pkt_hash != real_pkt_hash:
         findings.append(("P1", loc,
             f"source_map.locked_packet_hash '{declared_pkt_hash}' != the RECOMPUTED hash of "
             f"state.packet_dir '{packet_dir_rel}' ('{real_pkt_hash}') — the fix anchors to a DIFFERENT "
             "packet than the live frozen one; a self-declared anchor packet is never trusted "
-            "(PROP-034 Lever A / F2)"))
+            "(BF-PROP-007 Lever A / F2)"))
         return
 
     req_ids, rerr = frozen_requirement_ids(repo_root, packet_dir_rel)
     if rerr or req_ids is None:
         findings.append(("P1", loc,
             f"mode: FIX card: cannot read the frozen packet to resolve lock_anchor_ref — {rerr} "
-            "(PROP-034 Lever A)"))
+            "(BF-PROP-007 Lever A)"))
         return
     if req_id not in req_ids:
         findings.append(("P1", loc,
             f"lock_anchor_ref.requirement_id '{req_id}' does not resolve to a requirement inside the "
             f"frozen packet '{packet_dir_rel}' (requirements-manifest) — a fix must anchor to a real "
-            "locked line (PROP-034 Lever A)"))
+            "locked line (BF-PROP-007 Lever A)"))
 
     # F2: card_id MUST resolve to a card in the frozen MODULE-REGISTRY (the same source the order wall
     # + open-card derivation trust). An anchor naming a card not in the frozen deck cannot be the card
@@ -418,14 +476,14 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
         if regerr:
             findings.append(("P1", loc,
                 f"mode: FIX card: cannot read the frozen MODULE-REGISTRY to resolve "
-                f"lock_anchor_ref.card_id — {regerr} (PROP-034 Lever A / F2)"))
+                f"lock_anchor_ref.card_id — {regerr} (BF-PROP-007 Lever A / F2)"))
         else:
             known_cards = {c for cards in by_module.values() for c in cards}
             if anchor_card_id not in known_cards:
                 findings.append(("P1", loc,
                     f"lock_anchor_ref.card_id '{anchor_card_id}' does not resolve to a card in the "
                     f"frozen MODULE-REGISTRY of '{packet_dir_rel}' (known: {sorted(known_cards)}) — a "
-                    "fix must anchor to a real frozen card (PROP-034 Lever A / F2)"))
+                    "fix must anchor to a real frozen card (BF-PROP-007 Lever A / F2)"))
 
     # F3: a SCOPE_CHANGE's authorizing refs must RESOLVE, not merely be present. The ceo_decision_ref
     # must resolve to a real row in the packet's CEO-DECISION-LEDGER.md (reusing the SAME resolver the
@@ -441,7 +499,7 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
             if resolved_pkt is None:
                 findings.append((sev, loc,
                     "deviation_class: SCOPE_CHANGE ceo_decision_ref cannot be resolved — the frozen "
-                    "packet is unreadable, so the authorizing decision cannot be verified (PROP-034 "
+                    "packet is unreadable, so the authorizing decision cannot be verified (BF-PROP-007 "
                     "Lever A / F3)"))
             else:
                 ledger_path = resolved_pkt / LEDGER_FILE
@@ -449,7 +507,7 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
                     findings.append((sev, loc,
                         f"deviation_class: SCOPE_CHANGE names ceo_decision_ref '{ceo_ref}' but the "
                         f"packet has no {LEDGER_FILE} — the authorizing decision cannot resolve "
-                        "(PROP-034 Lever A / F3)"))
+                        "(BF-PROP-007 Lever A / F3)"))
                 else:
                     ledger_ids = set(LEDGER_ROW_ID_RE.findall(
                         ledger_path.read_text(encoding="utf-8", errors="replace")))
@@ -457,17 +515,17 @@ def _check_lock_fidelity(data: dict, args, loc: str, findings: list) -> None:
                         findings.append((sev, loc,
                             f"deviation_class: SCOPE_CHANGE ceo_decision_ref '{ceo_ref}' does not "
                             f"resolve to a row in the packet {LEDGER_FILE} — a self-declared decision "
-                            "id is not authorization (PROP-034 Lever A / F3)"))
+                            "id is not authorization (BF-PROP-007 Lever A / F3)"))
         if amend_ref:
             _resolved_amend, amend_err = resolve_in_repo(repo_root, amend_ref)
             if amend_err is not None:
                 findings.append((sev, loc,
                     f"deviation_class: SCOPE_CHANGE packet_amendment_ref {amend_err} — the amendment "
-                    "must be a real in-tree file (PROP-034 Lever A / F3)"))
+                    "must be a real in-tree file (BF-PROP-007 Lever A / F3)"))
             elif _resolved_amend is None or not _resolved_amend.is_file():
                 findings.append((sev, loc,
                     f"deviation_class: SCOPE_CHANGE packet_amendment_ref '{amend_ref}' does not point "
-                    "at a real in-repo file — a missing amendment is not authorization (PROP-034 "
+                    "at a real in-repo file — a missing amendment is not authorization (BF-PROP-007 "
                     "Lever A / F3)"))
 
 
@@ -498,7 +556,7 @@ def _packet_ledger_ids(args) -> tuple[set | None, str | None, str | None]:
 
 
 def load_fix_questions_log(repo_root: str, ref: str) -> tuple[set | None, str | None]:
-    """[PROP-035 Lever B] Load + parse a typed FIX-QUESTIONS-LOG, returning (row_ids, error). The log is a
+    """[F-PROP-001 Lever B] Load + parse a typed FIX-QUESTIONS-LOG, returning (row_ids, error). The log is a
     YAML mapping carrying a fix_questions list of typed rows:
         fix_questions:
           - id: Q1
@@ -527,7 +585,7 @@ def load_fix_questions_log(repo_root: str, ref: str) -> tuple[set | None, str | 
 
 
 def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
-    """[PROP-035 Lever B] Anti-amnesia: every FIX-stage CEO question must be FILE-BACKED and reconcile.
+    """[F-PROP-001 Lever B] Anti-amnesia: every FIX-stage CEO question must be FILE-BACKED and reconcile.
     A mode: FIX card MAY carry a clarification_provenance block (a fix that asked no CEO questions has
     none — close-turn catches an asked-but-unlogged one). When present, EVERY question row must carry
     exactly one resolved path: (a) ledger_searched + related_ceo_d_refs that RESOLVE to real ledger rows,
@@ -544,20 +602,20 @@ def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
     if not isinstance(cp, dict):
         findings.append(("P1", loc,
             "clarification_provenance must be a mapping {fix_questions_log, questions: [...]} "
-            "(PROP-035 Lever B)"))
+            "(F-PROP-001 Lever B)"))
         return
     questions = cp.get("questions")
     if not isinstance(questions, list) or not questions:
         findings.append(("P1", loc,
             "clarification_provenance.questions must be a non-empty list — a clarification_provenance "
-            "block with no questions is meaningless (PROP-035 Lever B)"))
+            "block with no questions is meaningless (F-PROP-001 Lever B)"))
         return
 
     ledger_ids, repo_root, lerr = _packet_ledger_ids(args)
     if lerr:
         findings.append(("P1", loc,
             f"mode: FIX card carries clarification_provenance but {lerr} — cannot verify the "
-            "anti-amnesia refs (PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+            "anti-amnesia refs (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
         return
 
     # FIX-STAGE-AMNESIA-LOG-BACKED (built-code review #5): a card receipt is not file-backing. Require a
@@ -568,14 +626,14 @@ def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
     if not log_ref:
         findings.append(("P1", loc,
             "clarification_provenance carries questions but no fix_questions_log — every FIX-stage question "
-            "must be FILE-BACKED in a typed FIX-QUESTIONS-LOG, not a card-only receipt (PROP-035 Lever B / "
+            "must be FILE-BACKED in a typed FIX-QUESTIONS-LOG, not a card-only receipt (F-PROP-001 Lever B / "
             "FIX-STAGE-AMNESIA-LOG-BACKED)"))
         return
     log_ids, logerr = load_fix_questions_log(repo_root, log_ref)
     if logerr is not None or log_ids is None:
         findings.append(("P1", loc,
             f"clarification_provenance.fix_questions_log {logerr} — the file-backed log must exist and be "
-            "typed to anchor the questions (PROP-035 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
+            "typed to anchor the questions (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
         return
 
     high = card_high_risk(data)
@@ -588,7 +646,7 @@ def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
             findings.append(("P1", loc,
                 f"clarification_provenance question '{qid}' has no matching row in the FIX-QUESTIONS-LOG "
                 f"'{log_ref}' — a question put to the CEO must be a typed row in the file-backed log, not "
-                "declared only on the card (PROP-035 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
+                "declared only on the card (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-LOG-BACKED)"))
             continue
         searched = str(q.get("ledger_searched", "")).strip().lower() in ("true", "yes", "1")
         related = q.get("related_ceo_d_refs") or []
@@ -604,48 +662,48 @@ def _check_fix_amnesia(data: dict, args, loc: str, findings: list) -> None:
                 findings.append((contra_sev, loc,
                     f"clarification_provenance question '{qid}' contradicts {contra} with no "
                     "ceo_override_ref — changing a locked decision needs a resolved override, never a "
-                    "silent second decision (PROP-035 Lever B / FIX-STAGE-AMNESIA-CONTRADICTION)"))
+                    "silent second decision (F-PROP-001 Lever B / FIX-STAGE-AMNESIA-CONTRADICTION)"))
             else:
                 _res, oerr = resolve_in_repo(repo_root, override)
                 if oerr is not None:
                     findings.append(("P1", loc,
-                        f"clarification_provenance question '{qid}' ceo_override_ref {oerr} (PROP-035 "
+                        f"clarification_provenance question '{qid}' ceo_override_ref {oerr} (F-PROP-001 "
                         "Lever B / FIX-STAGE-AMNESIA-OVERRIDE-SAFE)"))
                 elif _res is None or not _res.is_file():
                     findings.append((contra_sev, loc,
                         f"clarification_provenance question '{qid}' ceo_override_ref '{override}' does not "
-                        "resolve to a real in-repo file — a missing override is not authorization (PROP-035 "
+                        "resolve to a real in-repo file — a missing override is not authorization (F-PROP-001 "
                         "Lever B / FIX-STAGE-AMNESIA-CONTRADICTION)"))
             if ledger_ids is not None and contra not in ledger_ids:
                 findings.append((contra_sev, loc,
                     f"clarification_provenance question '{qid}' contradicts_ceo_d '{contra}' resolves to "
                     "no real ledger row — a self-declared decision id is not a real prior decision "
-                    "(PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+                    "(F-PROP-001 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
         elif new_ref:
             # (b) a genuinely new decision — the row must actually exist in the ledger.
             if ledger_ids is not None and new_ref not in ledger_ids:
                 findings.append(("P1", loc,
                     f"clarification_provenance question '{qid}' new_ledger_row_ref '{new_ref}' is dangling "
                     "— a new decision must be appended to the CEO-DECISION-LEDGER, not merely named "
-                    "(PROP-035 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
+                    "(F-PROP-001 Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
         elif searched and related:
             # (a) an already-decided answer — every related ref must resolve to a real ledger row.
             for r in related:
                 if ledger_ids is not None and r not in ledger_ids:
                     findings.append(("P1", loc,
                         f"clarification_provenance question '{qid}' related_ceo_d_ref '{r}' resolves to no "
-                        "real ledger row (ghost) — the search must point at a real prior decision (PROP-035 "
+                        "real ledger row (ghost) — the search must point at a real prior decision (F-PROP-001 "
                         "Lever B / FIX-STAGE-AMNESIA-GHOST-REF)"))
         else:
             findings.append(("P1", loc,
                 f"clarification_provenance question '{qid}' carries no resolution — a FIX-stage question "
                 "must reconcile via ledger_searched+related_ceo_d_refs, a new_ledger_row_ref, or "
                 "contradicts_ceo_d+ceo_override_ref; an unreconciled question is an off-the-books re-ask "
-                "(PROP-035 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
+                "(F-PROP-001 Lever B / FIX-STAGE-AMNESIA-QLOG-RECONCILE)"))
 
 
 def _check_fix_revert(data: dict, loc: str, findings: list) -> None:
-    """[PROP-035 Lever E] Revert-on-drift honesty. No checker runs git reset — but a mode: FIX card that
+    """[F-PROP-001 Lever E] Revert-on-drift honesty. No checker runs git reset — but a mode: FIX card that
     recovered from a Layer-1 lock drift must carry a typed revert_receipt {bad_head, restored_head,
     post_revert_clean, wip_handling}, NOT fix the drift forward. A card that marks
     drift_recovery_required but ships no (or a partial) revert_receipt is fixing forward in disguise."""
@@ -658,13 +716,13 @@ def _check_fix_revert(data: dict, loc: str, findings: list) -> None:
     if rr is None:
         findings.append(("P1", loc,
             "mode: FIX card marks drift_recovery_required but carries no revert_receipt — a Layer-1 lock "
-            "drift must be REVERTED then re-approached tighter, never fixed forward (PROP-035 Lever E / "
+            "drift must be REVERTED then re-approached tighter, never fixed forward (F-PROP-001 Lever E / "
             "FIX-STAGE-REVERT-RECEIPT)"))
         return
     if not isinstance(rr, dict):
         findings.append(("P1", loc,
             "revert_receipt must be a typed mapping {bad_head, restored_head, post_revert_clean, "
-            "wip_handling} (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+            "wip_handling} (F-PROP-001 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
         return
     missing = [k for k in ("bad_head", "restored_head", "post_revert_clean", "wip_handling")
                if not str(rr.get(k, "") or "").strip()]
@@ -672,27 +730,27 @@ def _check_fix_revert(data: dict, loc: str, findings: list) -> None:
         findings.append(("P1", loc,
             f"revert_receipt missing {missing} — a real revert names the bad head, the restored head, the "
             "clean post-revert state, and how WIP was handled; a partial receipt is a fix-forward in "
-            "disguise (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+            "disguise (F-PROP-001 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
         return
     for hk in ("bad_head", "restored_head"):
         h = str(rr.get(hk)).strip().lower()
         if len(h) < 7 or not all(c in "0123456789abcdef" for c in h):
             findings.append(("P1", loc,
                 f"revert_receipt.{hk} '{rr.get(hk)}' is not a commit sha — the revert must name real "
-                "commits (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+                "commits (F-PROP-001 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
     if str(rr.get("post_revert_clean")).strip().lower() not in ("true", "yes", "clean", "1"):
         findings.append(("P1", loc,
             "revert_receipt.post_revert_clean must assert the locked surfaces are CLEAN after the revert — "
-            "a non-clean revert did not restore the architecture (PROP-035 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
+            "a non-clean revert did not restore the architecture (F-PROP-001 Lever E / FIX-STAGE-REVERT-RECEIPT)"))
 
 
-# PROP-035 Lever C — the per-target cross-lock taxonomy (closed set; two targets were too coarse, xfam P1-4).
+# F-PROP-001 Lever C — the per-target cross-lock taxonomy (closed set; two targets were too coarse, xfam P1-4).
 VALID_FIX_TARGETS = {"frontend", "business_rule", "data_schema_migration", "api_contract",
                      "auth_security", "infra_config", "content_copy"}
 
 
 def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
-    """[PROP-035 Lever C] The cross-lock: a mode: FIX card names ONE fix_target (or explicitly declares
+    """[F-PROP-001 Lever C] The cross-lock: a mode: FIX card names ONE fix_target (or explicitly declares
     crossing layers); everything outside the declared targets' surfaces is a frozen assertion.
       - FIX-STAGE-POSTURE-DECL: fix_targets missing/empty, or a target outside the closed taxonomy.
       - FIX-STAGE-XLOCK-MULTI-ANCHOR: a MULTI-target fix must carry one lock_anchor_ref {card_id,
@@ -710,7 +768,7 @@ def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
     if not isinstance(targets, list) or not targets:
         findings.append(("P1", loc,
             "mode: FIX card missing fix_targets — a fix must name ONE target from the cross-lock "
-            "taxonomy (or explicitly declare crossing layers); everything else freezes (PROP-035 "
+            "taxonomy (or explicitly declare crossing layers); everything else freezes (F-PROP-001 "
             "Lever C / FIX-STAGE-POSTURE-DECL)"))
         return
 
@@ -720,13 +778,13 @@ def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
         if not isinstance(t, dict):
             findings.append(("P1", loc,
                 f"fix_targets[{i}] is not a mapping {{target, lock_anchor_ref, reason, surfaces}} "
-                "(PROP-035 Lever C / FIX-STAGE-POSTURE-DECL)"))
+                "(F-PROP-001 Lever C / FIX-STAGE-POSTURE-DECL)"))
             continue
         name = str(t.get("target", "") or "").strip()
         if name not in VALID_FIX_TARGETS:
             findings.append(("P1", loc,
                 f"fix_targets[{i}].target '{name}' not in {sorted(VALID_FIX_TARGETS)} — the cross-lock "
-                "taxonomy is a closed set (PROP-035 Lever C / FIX-STAGE-POSTURE-DECL)"))
+                "taxonomy is a closed set (F-PROP-001 Lever C / FIX-STAGE-POSTURE-DECL)"))
             continue
         if multi:
             anchor = t.get("lock_anchor_ref")
@@ -737,7 +795,7 @@ def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
                 findings.append(("P1", loc,
                     f"fix_targets[{i}] ('{name}') in a multi-target fix lacks its own lock_anchor_ref "
                     "{card_id, requirement_id} + reason — a cross-layer fix declares each target out "
-                    "loud, no blanket open-everything (PROP-035 Lever C / FIX-STAGE-XLOCK-MULTI-ANCHOR)"))
+                    "loud, no blanket open-everything (F-PROP-001 Lever C / FIX-STAGE-XLOCK-MULTI-ANCHOR)"))
         # FIX-STAGE-XLOCK-SURFACE (surfaces REQUIRED — built-code review #4): every target must name the
         # surfaces it opens, else a fix bypasses the cross-lock by omitting surfaces entirely.
         surf = t.get("surfaces")
@@ -746,7 +804,7 @@ def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
             findings.append(("P1", loc,
                 f"fix_targets[{i}] ('{name}') declares no surfaces — every target must name the allowed "
                 "surfaces it opens; an omitted surfaces list lets a fix touch files its declared targets "
-                "do not open, bypassing the cross-lock (PROP-035 Lever C / FIX-STAGE-XLOCK-SURFACE)"))
+                "do not open, bypassing the cross-lock (F-PROP-001 Lever C / FIX-STAGE-XLOCK-SURFACE)"))
         declared_surfaces.extend(clean)
 
     if declared_surfaces:
@@ -759,7 +817,7 @@ def _check_fix_targets(data: dict, loc: str, findings: list) -> None:
                 findings.append((sev, loc,
                     f"allowed_files entry '{f}' is OUTSIDE every declared fix_targets surface "
                     f"{declared_surfaces} — a fix that edits a surface its declared targets do not open "
-                    "is silently crossing layers; declare the target or split the fix (PROP-035 Lever C / "
+                    "is silently crossing layers; declare the target or split the fix (F-PROP-001 Lever C / "
                     "FIX-STAGE-XLOCK-SURFACE)"))
 
 
@@ -867,19 +925,13 @@ def cmd_card(args) -> int:
         if not fcp_reason or str(fcp_reason).strip() == "":
             findings.append(("P1", loc,
                 "foundation_checkpoint_required: yes but foundation_checkpoint_reason is empty — must explain why"))
-        # Check state if provided: dependent cards blocked until checkpoint passes
-        state_data = None
-        state_path_arg = getattr(args, 'state', None)
-        if state_path_arg:
-            state_data, _ = load_yaml(state_path_arg)
-        card_id = data.get("id", "")
-        if state_data and card_id:
-            # Look for checkpoint passage evidence in state — if not present, emit blocking finding
-            checkpoints = state_data.get("foundation_checkpoints_passed") or []
-            if card_id not in checkpoints:
-                findings.append(("P1", loc,
-                    f"foundation_checkpoint for card '{card_id}' not recorded as PASSED in state — "
-                    "dependent cards are BLOCKED until this checkpoint is recorded"))
+        # PB-PROP-002(b): the foundation card itself does NOT self-block on its own
+        # checkpoint. Recording the checkpoint as PASSED can only happen AFTER the
+        # card is built + xfam-reviewed, so self-blocking is a chicken-and-egg that
+        # the foundation card can never escape. Per GATES.md:48 the checkpoint blocks
+        # every DEPENDENT card until it passes, NOT the foundation card itself — and
+        # that dependent-blocking is enforced just below via
+        # source_map.dependency_capsules. (Implementation had drifted from canon.)
 
     # --- dependency_capsules: block dependent card if foundation checkpoint unmet (P1-01) ---
     # A1: FAIL CLOSED if any capsule requires checkpoint verification but --state not supplied.
@@ -920,26 +972,30 @@ def cmd_card(args) -> int:
         if not field_present(fn, "leash"):
             findings.append(("P1", loc, "family_note.leash missing"))
 
-    # --- execution block: BUILD-ENGINE-PROFILES enforcement (PROP-013, clauses 1-5) ---
+    # --- execution block: BUILD-ENGINE-PROFILES enforcement (PBF-PROP-008, clauses 1-5) ---
     _check_execution(data, args, loc, findings)
 
-    # --- review_dispatch: three-leg ask on review/audit cards (PROP-015) ---
+    # --- review_dispatch: three-leg ask on review/audit cards (PBF-PROP-009) ---
     _check_review_dispatch(data, loc, findings)
 
-    # --- ui_contract + fixture_replacement_map + visual_contract_context (PROP-019) ---
+    # --- CodeRabbit rail on every code-diff build card (PROP-042 / v1.21) ---
+    _check_coderabbit_required_for_code_diff(data, loc, findings)
+    _check_prevention_preamble(data, loc, findings)
+
+    # --- ui_contract + fixture_replacement_map + visual_contract_context (B-PROP-003) ---
     _check_ui_contract(data, loc, findings)
 
-    # --- PROTOCOL_INCIDENT gate: blocks new build/cross-family while open (PROP-020) ---
+    # --- PROTOCOL_INCIDENT gate: blocks new build/cross-family while open (BF-PROP-002) ---
     _check_incident_gate(data, args, loc, findings)
 
-    # --- PROP-034 Lever A: re-anchor-before-fix on mode: FIX cards ---
+    # --- BF-PROP-007 Lever A: re-anchor-before-fix on mode: FIX cards ---
     _check_lock_fidelity(data, args, loc, findings)
 
-    # --- PROP-035 Lever B/E: anti-amnesia file-backed questions + revert-on-drift honesty (mode: FIX) ---
+    # --- F-PROP-001 Lever B/E: anti-amnesia file-backed questions + revert-on-drift honesty (mode: FIX) ---
     _check_fix_amnesia(data, args, loc, findings)
     _check_fix_revert(data, loc, findings)
 
-    # --- PROP-035 Lever C: per-target cross-lock taxonomy (mode: FIX) ---
+    # --- F-PROP-001 Lever C: per-target cross-lock taxonomy (mode: FIX) ---
     _check_fix_targets(data, loc, findings)
 
     # --- actor_record: present + cross-family check ---

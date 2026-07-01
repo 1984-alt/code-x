@@ -1,0 +1,8 @@
+# R2.1/R2.8 bad fixture: blueprint verdict green but dir_refs is missing the 'review' anchor —
+# the packet/approval/state/review anchors the reader needs must ALL be present.
+verdict: green
+unbudgeted_additions: []
+dir_refs:
+  packet: graduation_receipts/clean/dir-anchor-packet.yaml
+  approval: graduation_receipts/clean/dir-anchor-approval.yaml
+  state: graduation_receipts/clean/dir-anchor-state.yaml

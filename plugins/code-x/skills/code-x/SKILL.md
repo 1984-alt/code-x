@@ -48,7 +48,7 @@ All docs are flat siblings of this SKILL.md file:
 The checker lives in `checkers/`. Two commands you will use:
 
 ```bash
-# Run the full test suite (201 tests — all must be green before any build):
+# Run the full test suite (303 tests — all must be green before any build):
 python3 checkers/tests/run.py
 
 # Run a specific check subcommand:

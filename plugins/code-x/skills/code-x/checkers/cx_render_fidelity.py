@@ -1,4 +1,4 @@
-# cmd_render_fidelity: the in-loop RENDERED-FIDELITY gate (PROP-033, fold v1.14).
+# cmd_render_fidelity: the in-loop RENDERED-FIDELITY gate (B-PROP-009, fold v1.14).
 #
 #   cx check render-fidelity <bundle.yaml>
 #

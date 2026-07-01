@@ -1,7 +1,7 @@
 # Code-X V1 — PACKET-CONTENTS (the packet floor) ✅ CANON
 
-> Folded 2026-06-10 (PROP-014). Cross-family review: GPT 5.5 Pro cloud FIX-FIRST →
-> PROP-006 synthesis (adopt 4/5, reject 1 stale) → CEO approved → folded WITH enforcement
+> Folded 2026-06-10 (P-PROP-001). Cross-family review: GPT 5.5 Pro cloud FIX-FIRST →
+> PBF-PROP-005 synthesis (adopt 4/5, reject 1 stale) → CEO approved → folded WITH enforcement
 > built same session (`cx check packet` + 10 biting clauses). Source: v0.13 gold pieces
 > (tag `code-x-v0.13-final`), re-based onto V1's packet → card-deck architecture.
 > [RULE:packet-contents-floor]
@@ -43,7 +43,7 @@ and findable (PRD and TRD stay separate).
 | 13 | retention / deletion / audit logs / admin access | SECURITY-BASELINE | always |
 | 14 | UI / workflow locked designs | locked-designs + PRODUCT-TASTE-LOCK / DESIGN-GOLDEN-MASTER | UI/workflow |
 | 15 | CEO decision ledger (asks + decisions) | CEO-DECISION-LEDGER.md (Piece 3) | always |
-| 16 | requirements manifest + dispositions | requirements-manifest.yaml (PROP-007) | always |
+| 16 | requirements manifest + dispositions | requirements-manifest.yaml (PB-PROP-001) | always |
 | 17 | business-logic validation worked examples | BUSINESS-LOGIC-VALIDATION (G7 line) | money/business rule |
 | 18 | CEO provisioning manifest | CEO-PROVISIONING-MANIFEST (G7 line) | external provisioning |
 | 19 | production-readiness triggers answered (Piece 4) | production-readiness section/file | always |
@@ -57,11 +57,11 @@ build-runbook half of v0.13 cat-23 is V1-owned by KERNEL/GATES/ROUTING and is NO
 content. Net: **20 categories.** The number is not sacred; the AUDIT is: every category
 accounted for.
 
-**Category 14 — visual provenance + external references (PROP-031, 2026-06-20).** When category 14
-is DONE (user-facing app), beyond the PRODUCT-TASTE-LOCK `locked_style_direction` (PROP-016) the
+**Category 14 — visual provenance + external references (P-PROP-004, 2026-06-20).** When category 14
+is DONE (user-facing app), beyond the PRODUCT-TASTE-LOCK `locked_style_direction` (P-PROP-002) the
 packet carries `screens-manifest.yaml` — every user-facing screen with a `visual_provenance`
 (`original | external_reference | derived_from_locked_style`); a screen with its look-source unstated
-FAILS `cx check packet` ("like a reference app" can no longer be a silent prose aside). Any `external_reference`
+FAILS `cx check packet` ("like MM" can no longer be a silent prose aside). Any `external_reference`
 screen additionally requires `external-visual-references.yaml` INSIDE the frozen packet hash: the
 named app's real screens CAPTURED + pinned read-only (per-capture `file_hash` + a set `manifest_hash`
 + repo-relative path-safe `file_path`), bound to the screen by `ref_id` with `{target_viewports,
@@ -72,7 +72,7 @@ never a capture. (The lock-side binding + the side-by-side CEO ACCEPT receipt li
 ## Piece 2 — Completeness-audit gate (fresh cold reader)
 
 **When:** after all packet docs are drafted, **BEFORE** CEO business-logic validation and
-BEFORE the packet freezes / the Card Compiler cuts the deck. Origin scar: a prior project —
+BEFORE the packet freezes / the Card Compiler cuts the deck. Origin scar: a live-production build —
 completeness gaps surfaced only during CEO validation; "looks done but isn't" wasted the
 CEO's time.
 
@@ -92,6 +92,9 @@ CEO's time.
 1. all packet docs written → 2. completeness audit clean → 3. CEO business-logic
 validation signed (or N/A) → 4. self review (full audit + security) → 5. cross-family
 review LAST → packet freezes → deck compiles (G1). No build talk before G7.
+When the deck compiles, every code-diff `MODULE_BUILD`/`MODE_A_UI` card must include the
+CodeRabbit rail (`coderabbit.required: yes`) and route module self-review at the module
+boundary; the final whole-app self-audit lives later as `built_app_audit`, before final xfam.
 
 **Review-backflow rule (GPT P2-02, adopted at fold):** if self review or cross-family
 review changes product intent, money/business logic, a security/privacy tradeoff, packet
@@ -99,7 +102,7 @@ requirements, or CEO decisions, the packet must **return to the affected CEO val
 / decision step before freeze. Not a new review loop — a correctness backflow. (Semantic
 rule — enforced by process + review methodology, not by a checker; honest scope.)
 
-**WRITING-stage front-end hardening (PROP-023, 2026-06-20 — part of v1.13).** Two HARD
+**WRITING-stage front-end hardening (P-PROP-003, 2026-06-20 — part of v1.13).** Two HARD
 mechanical clauses ride the mechanical half, both firing at the WRITING→freeze boundary
 (GitHub Spec Kit's two enforcement-neutral front-end ideas rendered as Code-X clauses that
 actually bite — never the prose, self-exemptible gates Code-X exists to kill):
@@ -125,7 +128,7 @@ actually bite — never the prose, self-exemptible gates Code-X exists to kill):
   English-quality gate** — the cold-reader completeness audit (the semantic half above)
   judges whether the criterion is actually *testable*; a literal "is this measurable" checker
   would over-claim, the cardinal sin. A requirement with no testable acceptance criterion is
-  exactly what drifts undetected to acceptance (the live-production drift class). GREEN = the
+  exactly what drifts undetected to acceptance (the a live-production build drift class). GREEN = the
   structured fields are present + filled, NOT that the requirement is unambiguous.
 
 ## Piece 3 — CEO-DECISION-LEDGER (asks + decisions, one home)
@@ -139,7 +142,7 @@ sections** (GPT P1-01, adopted as Option B — one file, two registers):
    `status: DONE | PARTIAL | MISSING | SUPERSEDED | NOT_APPLICABLE`. The completeness
    audit traces FROM this register; `cx check packet` fails any ledger still carrying
    MISSING/PARTIAL. Origin scar: a CEO directive said many times was lost from docs
-   (a copy-verbatim requirement, 2026-06-09).
+   (a live-production build copy-V1-verbatim, 2026-06-09).
 2. **`## Decisions`** — chosen decisions, rows `CEO-D-NNN`:
    `id | date | decision (CEO's words) | scope | supersedes`. Legacy/pre-V1 decisions
    migrate as `CEO-D-LEGACY-NNN` rows (source: v0.13 / chat / old handoff) — "decision
@@ -163,7 +166,7 @@ cost guardrails · many concurrent users? → R5 load sanity · sensitive/biomet
   ship (crash + uptime + usage; first-hour watch) · R4 recovery runbook (plain "if X
   breaks do Y" + 1-command rollback a non-coder can run).
 - **Risk-gated:** R5 load (k6/Artillery) · R6 cost caps (budget caps + rate limit).
-- **S1 dependency / supply-chain scan — HARD pre-build GATE (PROP-027, amends this piece):**
+- **S1 dependency / supply-chain scan — HARD pre-build GATE (B-PROP-006, amends this piece):**
   `cx check dep-scan` requires a typed `dependency_scan` receipt — 0 high/critical (or a typed
   CEO waiver → CEO-DECISION-LEDGER) · every manifest/lockfile pair scanned · each lockfile
   hash-bound (stale/forged or post-gate drift = fail) · re-scan pre-ship (G8). The receipt
@@ -193,7 +196,7 @@ was internalized. Packet coverage-map row 20 names the standard + any project de
 ## Enforcement (BUILT 2026-06-10 — binds BY CHECKER)
 
 `cx check packet <packet-dir>` + 10 contract clauses, each with a pinned biting bad
-fixture (PROP-004 discipline): PACKET-COVERAGE-MAP-REQUIRED · PACKET-COVERAGE-ALL-CATEGORIES ·
+fixture (PBF-PROP-003 discipline): PACKET-COVERAGE-MAP-REQUIRED · PACKET-COVERAGE-ALL-CATEGORIES ·
 PACKET-COVERAGE-FILE-EXISTS · PACKET-ALWAYS-CATEGORY-NA · PACKET-LEDGER-ASKS-REGISTER ·
 PACKET-OPEN-ASKS-BLOCK-FREEZE · PACKET-COMPLETENESS-AUDIT-REQUIRED (all P1) ·
 DECK-CEO-REF-RESOLVES (P1, deck-side) · STATE-BUILDER-STANDARD-ACK (P2, state-side) ·
@@ -202,8 +205,8 @@ production reads live canon, fail-loud, GPT P1-02). G7 carries the packet-floor 
 G8 carries the R1–R4 always-on lines.
 
 Later v1.13 folds added more `cx check packet` clauses, each with a pinned biting fixture:
-PROP-031 (external-visual-reference) the `PACKET-PROP031-*` provenance/capture clauses;
-**PROP-023 (WRITING-stage front-end hardening) five clauses — PACKET-CLARIFY-SWEEP-REQUIRED ·
+P-PROP-004 (external-visual-reference) the `PACKET-PROP031-*` provenance/capture clauses;
+**P-PROP-003 (WRITING-stage front-end hardening) five clauses — PACKET-CLARIFY-SWEEP-REQUIRED ·
 PACKET-CLARIFY-NO-OPEN-MARKERS · PACKET-CLARIFY-RESOLUTION-LEDGER-BOUND ·
 PACKET-ACCEPTANCE-CRITERION-REQUIRED · PACKET-ACCEPTANCE-CRITERION-FILLED** (all P1, see EVAL-027).
 

@@ -10,6 +10,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.21.0]
+
+Syncs the public release up to protocol **v1.21** (and its v1.21.1–v1.21.4 patch line). It folds in a review-routing + see-and-test upgrade (PROP-042), a no-ambiguity rule (PROP-044), a protocol-wide rename of the improvement proposals (PROP-043), and four follow-up patches. Each change was cross-family reviewed — several as both proposal and built code — and fixed-first before landing.
+
+### Added
+- **See-and-test gate (PROP-042) — every user-facing module gets demoed on its real screen before it's accepted.** A module could be built, all-green, and even live-driven while the *show* step — actually running it on its own screen and confirming the behaviour — was quietly skipped. This forces that show-step: a user-facing module can't pass acceptance without a recorded demo of the real screen. It closes the exact gap a real project slipped through — everything green, yet a step never actually shown.
+- **Review-routing + orchestration mandate (PROP-042).** Makes sure the *right* review actually fires and can't be skipped: a build that changes code can't quietly bypass its independent-review step, and the rules for which review is required at which point are made explicit rather than left to habit.
+- **Model-agnostic anti-slop preamble (PROP-042).** Every build work-order now carries a short, model-independent instruction block steering the builder away from bloat and corner-cutting — injected mechanically and checked for presence, so it can't be dropped.
+- **No-Ambiguity rule (PROP-044).** A conflict-scan that catches two protocol rules contradicting each other *before* they cause a silent wrong call, rather than after.
+- **Long-autonomous milestone — defined, and shipped OFF.** Fully hands-off autonomous building is named as a future milestone with a reliability bar it must clear first. No autonomy switch ships in this release; it stays a goal the protocol gates toward, not a mode you can flip on.
+- **Proposal rename + crosswalk (PROP-043).** The improvement proposals were renamed into stage-categorized ids, with a crosswalk mapping every old id to its new one. Purely organizational — no behaviour change.
+- **Kaizen checker (`cx_kaizen.py`) + fixtures.** A new deterministic checker (with its own test fixtures) for continuous-improvement proposal handling ships in this release.
+
+### Patches (v1.21.1–v1.21.4)
+- **v1.21.1** — hardens the no-ambiguity conflict-scan's freshness basis, pinning it to an immutable commit instead of a self-referential recompute that could never settle.
+- **v1.21.2** — module acceptance now *proves* the build actually passed by re-reading each build log (a claimed pass contradicted by a real failure marker is rejected), and confirms an anti-slop cleanup pass genuinely ran.
+- **v1.21.3** — adds an auditable, fail-closed reliability bar for the long-autonomous milestone: a graduation ledger recomputes each finished project's "clean" verdict from hash-locked receipts (never a self-declared flag) and blocks the milestone until a streak of clean ships. It builds *no* autonomy switch — that stays a future proposal the bar unlocks.
+- **v1.21.4** — housekeeping only: a Python 3.10+ guard on the checker entrypoints (a clear message instead of a crash on older Python) plus documentation reconciliation. No gate-logic change.
+
+375 tests · 366 gate clauses enforced · consistency strict-clean.
+
+---
+
+## [1.20.0]
+
+Syncs the public release up to protocol **v1.20**, folding in PROP-041 and its follow-up fixes.
+
+### Fixed
+- **Registry build-shape is checked before build authorization.** Frozen module registries now fail early when they are not hash-marked, contain dependency cycles, point at unknown or later modules, name missing cards, or include blank card ids.
+- **Foundation cards no longer block themselves.** Dependent cards still wait for the required checkpoint, but the foundation work-order itself can now run.
+- **Whole-packet review receipts carry across build-metadata-only registry edits.** The review stays current when only registry build metadata changes, while substantive packet edits still invalidate it.
+- **Evidence test-output handling is scoped correctly.** Module-build cards may create declared test outputs; the stricter test-edit guard remains for fix cards.
+
+303 tests · 291 gate clauses enforced · consistency strict-clean.
+
+---
+
 ## [1.19.0]
 
 Syncs the public release up to protocol **v1.19**, folding in one upgrade (PROP-040, the whole-packet integration review). It was cross-family reviewed twice — once as a proposal, once as built code — and fixed-first before landing.

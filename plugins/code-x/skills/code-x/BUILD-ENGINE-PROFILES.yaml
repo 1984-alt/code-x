@@ -3,9 +3,9 @@
 # blocks) + the session orchestrator (once, at session start). Builders never open this file.
 # Model updates touch ONLY this file; cx check then flags already-compiled cards for re-injection.
 #
-# Provenance (PROP-013): proposed by GPT 5.5 Pro -> amended by Anthropic (Claude Fable 5; dual-branch
+# Provenance (PBF-PROP-008): proposed by GPT 5.5 Pro -> amended by Anthropic (Claude Fable 5; dual-branch
 #   injection for mid-project engine switching) -> GPT branch filled by GPT 5.5 Pro (own family) +
-#   cross-family PASS 2026-06-10 -> CEO seat ladders
+#   cross-family PASS 2026-06-10 (design-history/prop-013-gpt-reply-2026-06-10.md) -> CEO seat ladders
 #   + CodeRabbit rulings -> CEO fold approval 2026-06-10. Full trail: MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md.
 #
 # ✅ ENFORCEMENT STATUS — BUILT 2026-06-10: all 9 cx_check_clauses below are ENFORCED by `cx check
@@ -13,7 +13,7 @@
 #   CARD-EXEC-PROFILES-HASH · CARD-EXEC-SEAT-IN-PROFILES · CARD-EXEC-CODE-WRITING-FLOOR ·
 #   CARD-EXEC-LIMITS-CAPPED · CARD-TOP-TIER-NEEDS-REASON · CARD-CODERABBIT-NEVER-SATISFIES ·
 #   STATE-ACTIVE-ENGINE-ENUM · STATE-ORCHESTRATOR-SEAT-CAP), each with a bad fixture that BITES
-#   (PROP-004 discipline). Test suites pin a stable mirror via CX_PROFILES env (tests/fixtures/
+#   (PBF-PROP-003 discipline). Test suites pin a stable mirror via CX_PROFILES env (tests/fixtures/
 #   profiles_test.yaml) so tuning THIS file never breaks the suites; production cx reads THIS file.
 
 version: 1.0
@@ -113,7 +113,7 @@ fable_window:
 # gpt-5.5-pro (cloud) is treated like Fable 5: the family's best, reserved for critical
 # junctions. The scarce resource differs (cloud = CEO's paste attention, not tokens) but
 # the discipline is the same. "Planning has to be done by the best of the best."
-# CLARITY (PROP-014 fold, GPT rider d): gpt-5.5-pro is a REVIEW/critical-junction CHANNEL
+# CLARITY (P-PROP-001 fold, GPT rider d): gpt-5.5-pro is a REVIEW/critical-junction CHANNEL
 # (CEO paste), never a normal orchestrator seat — cx check state fail-closes a launched
 # orchestrator that outranks the seat below unless an explicit top_allowed_reason is recorded.
 gpt_seat_ladder:
@@ -129,7 +129,7 @@ orchestrator:
   build_factory:
     claude_code: { model: fable, effort: medium }      # CEO 2026-06-11: orchestrator = fable med (window). From 2026-06-23 -> opus xhigh (fable_window)
     codex_app:   { model: gpt-5.5, effort: medium }    # GPT: reliable conductor; high only when a card marks high-risk/ambiguous
-  fixing_stage:                                        # PROP-035: the Fixing-stage conductor (preserve-posture). Same conductor tier as build_factory; a fix that touches a danger class escalates the per-card builder seat (high_risk row), not the orchestrator, and needs top_allowed_reason.
+  fixing_stage:                                        # F-PROP-001: the Fixing-stage conductor (preserve-posture). Same conductor tier as build_factory; a fix that touches a danger class escalates the per-card builder seat (high_risk row), not the orchestrator, and needs top_allowed_reason.
     claude_code: { model: fable, effort: medium }      # mirrors build_factory (window). From 2026-06-23 -> opus xhigh (fable_window)
     codex_app:   { model: gpt-5.5, effort: medium }    # reliable conductor; high only when a fix card marks high-risk/ambiguous
 
@@ -184,10 +184,10 @@ cross_family:
     normal_module_review: { channel: codex_cli_or_mcp, model: gpt-5.5, effort: xhigh, note: "module-boundary cross-reviews + routine cross checks during build, directly from the CLI; agents codex-cross-review / codex-cross-verify. Within weekly limits only." }
     critical_junction:    { channel: gpt_cloud, model: gpt-5.5-pro, note: "planning/architecture + full-construction-docs reviews · card-deck audit · final-ready / full-product review · big reviews · council seat. UNLIMITED + strongest (CEO: much smarter than 5.5 xhigh). Manual: CEO pastes packet (Desktop packet rule)." }
     at_weekly_limit:      { channel: gpt_cloud, model: gpt-5.5-pro, note: "Codex limit hit -> ALL GPT review seats swap to cloud until reset. NEVER silently skipped, never downgraded." }
-    last_resort:          { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "gpt_cloud also impractical (CEO away) -> CodeRabbit keeps the build moving; standing auth PROP-013-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
+    last_resort:          { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "gpt_cloud also impractical (CEO away) -> CodeRabbit keeps the build moving; standing auth PBF-PROP-008-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
   builder_codex__reviewer_claude:
     1: { channel: claude_code,     per: claude_seat_ladder, note: "window: review = fable high (xhigh extraordinary-only, max never); post-sunset = opus xhigh; unsolvable/super-important = council (fable xhigh + gpt-5.5-pro cloud). Agents anthropic-cross-review / anthropic-cross-verify." }
-    at_weekly_limit: { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "Claude family limited (NO unlimited Anthropic cloud exists) -> CodeRabbit keeps the build moving; standing auth PROP-013-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
+    at_weekly_limit: { channel: coderabbit_cli, qualifies: FAMILY_AT_LIMIT_FALLBACK, note: "Claude family limited (NO unlimited Anthropic cloud exists) -> CodeRabbit keeps the build moving; standing auth PBF-PROP-008-standing-2026-06-10; opens CROSS_FAMILY_RECHECK_PENDING (P2, blocks ship not build)" }
 
 coderabbit:
   what: AI code-review product, CLI available to BOTH engines; free tier acceptable.
@@ -210,7 +210,7 @@ coderabbit:
     side, the gpt_cloud paste channel is impractical too (CEO away); note the Anthropic
     family has NO unlimited cloud equivalent — CodeRabbit reviews the module so THE BUILD
     KEEPS PROGRESSING instead of stalling. STANDING CEO authorization: cite
-    ceo_authorization_ref: PROP-013-standing-2026-06-10 (no fresh CEO ping needed). Still an
+    ceo_authorization_ref: PBF-PROP-008-standing-2026-06-10 (no fresh CEO ping needed). Still an
     IOU like any substitution: opens CROSS_FAMILY_RECHECK_PENDING (P2) which blocks
     FINAL-READY (ship) — never the build — until the real opposite family re-reviews after
     the limit resets.
@@ -256,9 +256,9 @@ cx_check_clauses:
 # KERNEL.md + START-HERE.md (rule-bearing canon). CHARTER.md history left as written (append-only).
 # Registry single-source entry: APPLIED 2026-06-10 (rule-registry.yaml id cost-effective-by-default).
 
-# ── Fix-escalation ladder (PROP-021, folded 2026-06-12) ─────────────────────────
+# ── Fix-escalation ladder (BF-PROP-003, folded 2026-06-12) ─────────────────────────
 # GATES carries the rule [RULE:fix-escalation-ladder]; THIS file owns the exact seats
-# (single-source per PROP-013). Attempt history lives in CODE-X-STATE.fix_cycles (state-owned,
+# (single-source per PBF-PROP-008). Attempt history lives in CODE-X-STATE.fix_cycles (state-owned,
 # never card-owned); cards may carry only fix_policy_ref. Escalation never resets
 # loop_budget.review_fix_cycles. Fable-window substitutions + sunset (CEO-D-009/010) apply.
 fix_escalation:

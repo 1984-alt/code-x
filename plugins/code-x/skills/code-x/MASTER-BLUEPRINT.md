@@ -1,6 +1,6 @@
 # Code-X V1 — MASTER-BLUEPRINT.md (the planning-stage artefact)
 
-> Added by PROP-039 (fold v1.18). Code-X's PLANNING stage produced ~10 scattered yaml/md/html files a
+> Added by P-PROP-005 (fold v1.18). Code-X's PLANNING stage produced ~10 scattered yaml/md/html files a
 > non-coder cannot review as ONE thing — so the plan the CEO *thought* he approved drifted from the plan
 > that was *written*, invisibly, until build/demo. The **Master Blueprint** is the fix: ONE auto-generated
 > page that is the CEO's single surface to review and drive the whole plan — every screen, what each
@@ -30,7 +30,7 @@ artifact** — so:
 | `blueprint-manifest.yaml` | **immutable** | **inside the frozen packet** (packet-hash-bound) | the plan: modules · anchors · controls→`contract_id` · nav · journeys · risk callouts. **No approval/review fields. No self-referential packet-hash.** |
 | `BLUEPRINT-APPROVAL.yaml` | **mutable** | **outside the packet**, state-referenced | per-module **approval receipts** + **review receipts**, each hash-bound to `{module_id, packet_hash, manifest_hash, approved_source_hash}` |
 
-This is the `verify_app` / `live_slice_accept` receipt pattern (PROP-032/036): writing an approval can
+This is the `verify_app` / `live_slice_accept` receipt pattern (B-PROP-008 · B-PROP-010): writing an approval can
 never mutate the packet hash and break G1. **The HTML is decorative; the two artifacts are what the gate
 reads; the packet source is the ground truth — `cx check blueprint` recomputes every claim.**
 
@@ -54,12 +54,12 @@ moves earlier; the freeze→compile contract does not.
 Every module's blueprint shows these with ✅/⚠️/❌, and `cx check blueprint` recomputes each:
 
 1. **Every screen has a locked design, embedded live** — a hash-bound `ui_lock_manifest` (style locked
-   PROP-016 · provenance satisfied PROP-031); the blueprint EMBEDS the rendered locked design so the CEO
+   P-PROP-002 · provenance satisfied P-PROP-004); the blueprint EMBEDS the rendered locked design so the CEO
    sees the finished look (the visual lock above). N/A for `shared_logic`.
 2. **Screen-to-screen nav map is complete** — every nav `to_screen` resolves to a registered screen (no
    dangling). N/A for `shared_logic`.
 3. **What each control does** — a **behaviour contract** per control (NOT just a label).
-4. **Every feature has a written "done" test** — a PROP-023 `acceptance_criterion {pass_condition,
+4. **Every feature has a written "done" test** — a P-PROP-003 `acceptance_criterion {pass_condition,
    evidence_type, verification_ref}` (reused, not reinvented).
 
 The gaps view (⚠️/❌ items) is **vital and must never be hidden** (CEO).
@@ -97,7 +97,7 @@ flag, an HTML badge, or a manifest boolean. A module is **BLUEPRINT-READY** only
 - nav map complete (screen kind);
 - every control resolves to a behaviour contract in the packet source;
 - every BUILDING requirement in the module has a done-test;
-- no open `[NEEDS-CLARIFICATION]` marker (PROP-023) in the module's scope;
+- no open `[NEEDS-CLARIFICATION]` marker (P-PROP-003) in the module's scope;
 - CEO approval receipt present AND `approved_source_hash` == the recomputed current source-hash (stale approval = not ready);
 - opposite-family review RECEIPT present where required — review-required DERIVED from the frozen registry `risk_flags` (the four G5 classes: money/auth/shared-data-shape/secrets), NOT a manifest boolean; receipt typed + path-safe + hash-bound;
 - no open P0–P3 mapped to the module (read from `--state`; fail-closed to global findings when attribution is absent).
@@ -138,7 +138,7 @@ technical detail is collapsed at the bottom. Dependencies are blockers-only cont
   registry-covers-requirements clauses bound this.
 - `source_hash` proves the plan **didn't change** since approval, not that it is **correct** (the CEO +
   review own correctness). Mirrors `live_slice_accept` / `verify_app` honest scope.
-- Plain-language / glossary is **presence + generation, not an English-quality gate** (PROP-023 pattern).
+- Plain-language / glossary is **presence + generation, not an English-quality gate** (P-PROP-003 pattern).
 - Legacy build-wave-first packets keep heuristic screen↔module matching until re-planned screen-first.
 - Portable `cx check` (no Claude-only hook dependency).
 
@@ -150,5 +150,5 @@ fixture that fails-closed at the stated severity, proved by `tests/run_contracts
 `cx_blueprint.py` (the `blueprint` subcommand); the BLUEPRINT-READY precondition rail-wired into `cx check
 module-start` + `cx check build-turn`; packet-floor registry coverage in `cx check packet`. See `GATES.md`
 (the order-wall wiring + G6/G7 lines), `PACKET-CONTENTS.md` (the screen-first planning ladder),
-`MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` (PROP-039), and
+`MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` (P-PROP-005), and
 `design-history/prop-039-gpt-review-synthesis-2026-06-25.md` (the review synthesis).

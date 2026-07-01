@@ -1,4 +1,4 @@
-# DEPENDENCY-SCAN-RECEIPT (PROP-027) — the pre-build supply-chain gate artifact.
+# DEPENDENCY-SCAN-RECEIPT (B-PROP-006) — the pre-build supply-chain gate artifact.
 #
 # Validated by:  cx check dep-scan <this-file> --repo-root <repo>
 # Lives OUTSIDE the frozen packet (it is regenerated when lockfiles change) but each scan

@@ -14,6 +14,8 @@ module_registry:
       title:                   # one plain-English line: what the CEO will see and judge
       requirement_ids: []      # the manifest requirement IDs this module satisfies (reverse-coverage: every BUILDING req maps to a module)
       risk_flags: []           # subset of [money, login, data, ui] — drives quality-card depth + the fresh-checker / conformance-to-lock requirement
+      live_slice:              # B-PROP-008: true = a user-facing PAGE slice (one page = one slice) the CEO must DRIVE live (real running build) before the next slice unlocks; its acceptance receipt MUST carry a live_slice_accept block. The FROZEN registry is the trusted source for this flag — never the receipt's self-declaration.
+      walking_skeleton:        # B-PROP-008: true for slice 0 = the shell + navigation with all pages present but empty/placeholder (tappable from day one) — EXEMPT from the real-engine / no-DESIGN_FIXTURE bar (it is meant to be empty), but STILL needs the live-drive accept (the CEO taps through the running skeleton). Set only with live_slice: true.
       dependency_modules: []   # module_ids that MUST be `accepted` before this one may start (the order wall reads this)
       card_ids: []             # the work-order card(s) that build this module
-      expected_acceptance_artifacts: []   # what the Andon receipt must reference: live_url, screenshots, quality_card, conformance diff (money/login/data)
+      expected_acceptance_artifacts: []   # what the Andon receipt must reference: live_url, screenshots, quality_card, conformance diff (money/login/data), live_slice_accept (live_slice modules)

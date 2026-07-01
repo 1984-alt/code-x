@@ -1,0 +1,9 @@
+# c4_matched_blueprint evidence: blueprint verdict green, no unbudgeted additions, + the
+# packet/approval/state/review anchor refs the reader needs (R1.2/R2.1), manifest-hash-bound.
+verdict: green
+unbudgeted_additions: []
+dir_refs:
+  packet: graduation_receipts/clean/dir-anchor-packet.yaml
+  approval: graduation_receipts/clean/dir-anchor-approval.yaml
+  state: graduation_receipts/clean/dir-anchor-state.yaml
+  review: graduation_receipts/clean/dir-anchor-review.yaml

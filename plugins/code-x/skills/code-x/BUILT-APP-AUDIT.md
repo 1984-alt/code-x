@@ -93,9 +93,9 @@ Use `templates/BUILT-APP-AUDIT.template.md` for `AUDIT-SUMMARY.md`.
 
 ---
 
-## The gate (pre-G8)
+## The gate (pre-final-xfam and pre-G8)
 
-An app **cannot** be certified final-ready until:
+An app **cannot** be routed to final xfam or certified final-ready until:
 1. The Built-App Audit has run (state carries `built_app_audit.status: run`)
 2. Every finding is **dispositioned** — one of exactly two ways:
    - **Fixed** — via a normal Code-X card (see the fix path below), never a hot patch; OR
@@ -110,14 +110,17 @@ An app **cannot** be certified final-ready until:
 4. `built_app_audit.report_ref` points to the audit report directory — repo-relative, non-symlink,
    inside repo, **existing**, and containing `AUDIT-SUMMARY.md`
 
-`cx check final-ready` enforces this mechanically (P0 block when missing or incomplete).
+`cx check state` rejects a BUILD_FACTORY state that routes accepted modules straight to final
+xfam without this milestone. `cx check final-ready` enforces this mechanically at ship (P0
+block when missing or incomplete).
 This gate **complements** — does not replace — the existing G8 / `FINAL-READY-CERTIFICATE`.
 
 **Fix path for real build holes (one-shot — no re-review loop, GATES.md):** an audit finding that is a
 real build hole becomes a **normal Code-X card** that runs the **standard single build + review cycle**
 (self-review + the one cross-family pass + deterministic verification / class-sweep) — *not* a fresh
 model re-review of the already-audited module. The audit is a finder, not a review loop; the only later
-model review is the normal ship gate (the final cross-family review).
+model review is the normal ship gate (the final cross-family review), which comes after this audit
+for a `CODEX_APP` build.
 
 ---
 

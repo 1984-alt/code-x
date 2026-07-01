@@ -1,0 +1,13 @@
+# Fixture: registry pointing to a rule-bearing file with correct middot separators
+# Used by: CONSISTENCY-SLASH-SHORTHAND-PROP contract test (good path)
+# Expected: PASS — no slash-shorthand PROP ids in the scoped canon file
+scan_scope:
+  rule_bearing:
+    - checkers/tests/fixtures/consistency_slash_good_canon.md
+
+rules:
+  - id: test-rule-slash-good
+    canonical: "one-shot review pattern"
+    key_phrases: ["one-shot review", "ENFORCES"]
+    appears_in:
+      - checkers/tests/fixtures/consistency_slash_good_canon.md

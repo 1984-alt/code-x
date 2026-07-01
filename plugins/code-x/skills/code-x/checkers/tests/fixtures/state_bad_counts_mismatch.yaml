@@ -1,7 +1,7 @@
 # BAD: open_findings.counts declares p1:0 but items list has a P1 finding
 # Expected: FIX-FIRST — counts mismatch must be caught.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

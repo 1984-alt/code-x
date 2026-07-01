@@ -33,8 +33,8 @@ from cx_module_acceptance import has_blocking, validate_accepted_module, registr
 
 BUILD_MODES = {"MODULE_BUILD", "MODE_A_UI"}
 
-# PROP-039 (v1.18): the per-module BLUEPRINT-READY precondition. The order wall gains the precondition
-# "target module is BLUEPRINT-READY" — same chokepoint pattern PROP-032/036 used; NO new gate family.
+# P-PROP-005 (v1.18): the per-module BLUEPRINT-READY precondition. The order wall gains the precondition
+# "target module is BLUEPRINT-READY" — same chokepoint pattern B-PROP-008 · B-PROP-010 used; NO new gate family.
 # It fires ONLY for screen/module-first projects (a blueprint-manifest.yaml present inside the frozen
 # packet) so legacy build-wave-first packets are untouched. A non-ready module is hard-blocked here, so
 # build-turn (which calls module-start) proves the rider fires on the normal build path.
@@ -205,6 +205,15 @@ def cmd_module_start(args) -> int:
         return findings_report(findings)
     registry_arg = getattr(args, "registry", None)
     if registry_arg is not None:
+        # B-PROP-012 item 2: reject a symlink-ALIAS to the canonical registry — consistency with the
+        # safe_repo_ref helper used on all build-turn root/ref reads; no external-byte hole exists
+        # (the downstream path resolves the alias and reads the canonical file), but a symlink ref
+        # for the registry is inconsistent with the helper pattern and is rejected for hygiene.
+        if Path(registry_arg).is_symlink():
+            findings.append(("P1", str(registry_arg),
+                f"--registry '{registry_arg}' is a symlink — module_registry_ref must be a real "
+                "in-repo path, not a symlink-alias to the canonical registry (B-PROP-012 hygiene)"))
+            return findings_report(findings)
         try:
             arg_resolved = Path(registry_arg).resolve()
         except OSError as e:
@@ -246,54 +255,18 @@ def cmd_module_start(args) -> int:
             "registry must declare its packet (V1.10)"))
         return findings_report(findings)
 
-    # Build the ordered id list — FAIL-CLOSED on any malformed row. Silently skipping a bad row would
-    # drop a real prior module from the order (a row with no module_id BEFORE m2 would make m2 look
-    # prior-less) — GPT R8 P0. Every registry row must be a mapping with a non-blank string module_id
-    # and a list dependency_modules.
-    ordered_ids = []
-    deps = {}
-    live_slice = {}   # PROP-032: module_id -> is this a user-facing live page slice (frozen registry)
-    for i, m in enumerate(modules):
-        if not isinstance(m, dict):
-            findings.append(("P0", registry_path,
-                f"module_registry.modules[{i}] is not a mapping — a malformed registry row would be "
-                "silently dropped, vanishing a prior module from the order (V1.10 R4)"))
-            return findings_report(findings)
-        raw_mid = m.get("module_id", None)
-        if not isinstance(raw_mid, str) or not raw_mid.strip():
-            findings.append(("P0", registry_path,
-                f"module_registry.modules[{i}] has a missing/blank/non-string module_id — every "
-                "registry row must name its module so the order wall can gate it (a dropped row "
-                "vanishes a prior) (V1.10 R4)"))
-            return findings_report(findings)
-        raw_deps = m.get("dependency_modules", []) or []
-        if not isinstance(raw_deps, list):
-            findings.append(("P0", registry_path,
-                f"module_registry.modules[{i}] ('{raw_mid.strip()}') dependency_modules is not a list "
-                "— malformed dependencies cannot be gated (V1.10 R4)"))
-            return findings_report(findings)
-        ordered_ids.append(raw_mid.strip())
-        deps[raw_mid.strip()] = [str(d).strip() for d in raw_deps]
-        live_slice[raw_mid.strip()] = registry_flag_true(m.get("live_slice"))
+    # Build the ordered id list, deps, live_slice — FAIL-CLOSED on malformed rows.
+    # Shared validator catches duplicates, unknown deps, and dep cycles (PB-PROP-002).
+    from cx_module_acceptance import validate_registry_build_shape
+    parsed, shape_findings = validate_registry_build_shape(modules, registry_path)
+    if shape_findings:
+        findings.extend(shape_findings)
+    if parsed is None or shape_findings:
+        return findings_report(findings)
 
-    # A DUPLICATE module_id lets `ordered_ids.index()` pick the FIRST occurrence and silently drop the
-    # priors before a later occurrence — m2,m1,m2 makes a card for m2 see no priors (GPT R7 P0).
-    # Module order must be unambiguous: fail-closed on duplicates.
-    dupes = sorted({x for x in ordered_ids if ordered_ids.count(x) > 1})
-    if dupes:
-        findings.append(("P0", registry_path,
-            f"duplicate module_id(s) in the registry: {dupes} — a duplicate lets the order wall pick "
-            "the first occurrence and skip a real prior module; module order must be unambiguous "
-            "(V1.10 R4)"))
-        return findings_report(findings)
-    # A dependency_modules entry that names a module not in the registry cannot be gated — reject it
-    # (registry integrity; fail-closed rather than silently treating it as an always-unmet prior).
-    unknown_deps = sorted({d for ds in deps.values() for d in ds if d and d not in ordered_ids})
-    if unknown_deps:
-        findings.append(("P0", registry_path,
-            f"dependency_modules reference module_id(s) not in the registry: {unknown_deps} — every "
-            "dependency must be a registered module the order wall can gate (V1.10 R4)"))
-        return findings_report(findings)
+    ordered_ids = parsed["ordered_ids"]
+    deps = parsed["deps"]
+    live_slice = parsed["live_slice"]
 
     if module_id not in ordered_ids:
         findings.append(("P0", loc,
@@ -331,7 +304,7 @@ def cmd_module_start(args) -> int:
                 f"prior required module '{mid}' is not validly accepted — module '{module_id}' "
                 f"cannot start (order wall, V1.10). Acceptance check: {reasons}"))
 
-    # ── MODULE-START-BLUEPRINT-READY (PROP-039 v1.18) ───────────────────────────────────────────
+    # ── MODULE-START-BLUEPRINT-READY (P-PROP-005 v1.18) ───────────────────────────────────────────
     # For a screen/module-first project (a blueprint-manifest INSIDE the frozen packet), the target
     # module must be BLUEPRINT-READY before its build can start — the build-blocker rides the order
     # wall (no new gate family). Calls cx check blueprint, recomputing readiness from source. Legacy
@@ -344,17 +317,17 @@ def cmd_module_start(args) -> int:
                 f"module '{module_id}' is a screen/module-first build (the packet carries "
                 f"{BLUEPRINT_MANIFEST_NAME}) but state has no blueprint_approval_ref — the BLUEPRINT-READY "
                 "precondition reads the out-of-packet approval/review receipts and cannot run without it "
-                "(fail-closed, MODULE-START-BLUEPRINT-READY, PROP-039)"))
+                "(fail-closed, MODULE-START-BLUEPRINT-READY, P-PROP-005)"))
         else:
             # CXBP-005: route blueprint_approval_ref through the SHARED safe_repo_ref guard — the full
-            # PROP-037 class (absolute / '..' / symlink / resolved-escape), not just absolute/'..'. A
+            # B-PROP-011 class (absolute / '..' / symlink / resolved-escape), not just absolute/'..'. A
             # symlinked or escaping approval ref must not let the rider read arbitrary external bytes
             # as an in-repo approval receipt (mirrors every other build-turn root/ref read).
             safe_approval, ref_err = safe_repo_ref(bp_ref, repo_root)
             if ref_err:
                 findings.append(("P0", loc,
                     f"state.blueprint_approval_ref '{bp_ref}' {ref_err} "
-                    "(MODULE-START-BLUEPRINT-READY, PROP-039)"))
+                    "(MODULE-START-BLUEPRINT-READY, P-PROP-005)"))
                 safe_approval = None
             if safe_approval is not None:
                 bp_args += ["--approval", str(safe_approval)]
@@ -364,7 +337,7 @@ def cmd_module_start(args) -> int:
                     findings.append(("P0", loc,
                         f"module '{module_id}' is NOT BLUEPRINT-READY — it cannot start until its plan is "
                         f"complete + CEO-approved + source-current + reviewed-where-required "
-                        f"(MODULE-START-BLUEPRINT-READY, PROP-039). cx check blueprint: {tail}"))
+                        f"(MODULE-START-BLUEPRINT-READY, P-PROP-005). cx check blueprint: {tail}"))
 
     if not findings:
         print("PASS")

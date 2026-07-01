@@ -1,6 +1,6 @@
 # BUSINESS-LOGIC VALIDATION — <project>  (ported from v0.13)
 
-> The CEO signs every **money / business rule** with a WORKED EXAMPLE before build — because a rule can be internally consistent, pass every code gate, and still encode the WRONG intent (the absensi payroll "clamp-both" scar, LESSON-MONEY-001). VALIDATION = does the rule match the CEO's intent (this file). VERIFICATION = does the build match the spec (later). Required for money/business waves (G7). Load-on-demand.
+> The CEO signs every **money / business rule** with a WORKED EXAMPLE before build — because a rule can be internally consistent, pass every code gate, and still encode the WRONG intent (the payroll "clamp-both" scar, LESSON-MONEY-001). VALIDATION = does the rule match the CEO's intent (this file). VERIFICATION = does the build match the spec (later). Required for money/business waves (G7). Load-on-demand.
 
 **applicable:** yes | NOT_APPLICABLE (why: no money/business rule in this project)
 

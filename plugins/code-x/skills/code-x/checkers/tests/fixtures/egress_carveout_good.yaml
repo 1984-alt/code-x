@@ -1,4 +1,4 @@
 # GOOD — local-only review, never uploaded (money-app internals stay on the machine).
 sensitive_code_carveout:
-  ceo_decision_ref: CEO-D-SAMPLE-099
+  ceo_decision_ref: CEO-D-SAMPLE2-099
   reason: "money parser internals reviewed locally only; diff never leaves the machine"

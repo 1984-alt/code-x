@@ -1,7 +1,7 @@
 # RENDER-FIT-RECEIPT-FORGED (P0): the evidence row's viewport_id is the pinned 390px phone, but
 # its measured viewport_width claims 1440. Content (1200) fits 1440 so the overflow math would NOT
 # fire — the receipt lies about the viewport it rendered at to game the overflow check (the literal
-# a live-production module "617px-on-390px" defect class, hidden by a lied-about width). Rated P0 forgery (lying about
+# live-production m6 "617px-on-390px" defect class, hidden by a lied-about width). Rated P0 forgery (lying about
 # a pinned render parameter is the same class as a forged hash). Profile validly pinned, coverage
 # non-UI, so ONLY the forgery clause fires. Run with: --repo-head aaaaaaaaaaaa.
 current_repo_head: aaaaaaaaaaaa

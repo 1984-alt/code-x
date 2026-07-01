@@ -2,7 +2,7 @@
 # switch (CODEX -> ANTHROPIC) without a typed cross_epoch_deviation. The fix level must
 # be preserved across a switch, never silently reset to dodge escalation.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

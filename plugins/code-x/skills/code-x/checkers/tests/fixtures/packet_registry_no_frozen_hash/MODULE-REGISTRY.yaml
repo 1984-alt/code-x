@@ -1,0 +1,8 @@
+module_registry:
+  modules:
+  - module_id: home
+    requirement_ids:
+    - REQ-001
+    dependency_modules: []
+    card_ids:
+    - BUILD-W1-001

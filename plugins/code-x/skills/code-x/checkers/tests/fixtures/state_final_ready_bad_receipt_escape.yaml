@@ -1,7 +1,7 @@
 # BAD: the receipt path is ABSOLUTE (escapes the repo/state dir) — the ship gate reads only an
 # in-tree receipt; an absolute / traversal path is rejected (P0) [V1.10].
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

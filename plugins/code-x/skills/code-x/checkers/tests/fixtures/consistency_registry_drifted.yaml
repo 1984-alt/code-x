@@ -1,17 +1,10 @@
-# Fixture: a fix card's anti-tamper rule, reworded so the consistency gate must fire.
-# Used by: test_drifted_fixture_fires_fix_first
-# What it tests: the per-rule `banned_negations` tripwire (cx_consistency.py:178-182).
-#   The shipping canon file checkers/CX-CHECK-SPEC.md (line 44) states fix cards may
-#   never "weaken/delete/score-game tests." We register the verbatim substring
-#   "delete/score-game tests" as a banned negation: its presence in the appears_in
-#   file is a meaning-flip tripwire, so the gate FIRES FIX-FIRST (exit 1) naming rule
-#   'fix-card-test-edit' + the file. This proves the consistency gate bites on a
-#   shipping canon file via the cheap reversal tripwire (the [RULE:id] pointer does
-#   NOT suppress banned_negations — substring match, no whitespace normalisation).
+# Fixture: drifted rule — canonical text has been reworded so it no longer matches MEMORY/LESSONS.yaml
+# Used by: test_consistency_drifted_fires_fix_first
+# Expected: FIX-FIRST naming rule 'fix-card-test-edit' and file MEMORY/LESSONS.yaml
 rules:
   - id: fix-card-test-edit
-    canonical: "fix cards may never weaken/delete/score-game tests"
+    canonical: "THIS CANONICAL TEXT WAS REWORDED AND DOES NOT APPEAR IN ANY FILE"
     key_phrases: ["regression test", "weaken"]
-    banned_negations: ["delete/score-game tests"]
     appears_in:
       - checkers/CX-CHECK-SPEC.md
+      - MEMORY/LESSONS.yaml

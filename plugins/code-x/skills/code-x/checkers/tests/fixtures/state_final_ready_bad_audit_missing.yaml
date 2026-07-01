@@ -1,7 +1,7 @@
 # BAD: built_app_audit block absent from state => P0 block (v1.12)
 # All other final-ready conditions pass; the audit block alone is missing.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

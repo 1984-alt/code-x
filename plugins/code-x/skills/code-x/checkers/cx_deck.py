@@ -23,10 +23,68 @@ from cx_common import findings_report, load_yaml, field_present
 # Valid disposition values
 VALID_DISPOSITIONS = {"BUILDING", "NOT_BUILDING", "NOT_APPLICABLE", "CEO_DEFERRED"}
 
-# PROP-014: every ceo_decision_ref must resolve to a CEO-DECISION-LEDGER.md row id.
+# P-PROP-001: every ceo_decision_ref must resolve to a CEO-DECISION-LEDGER.md row id.
 # Row ids look like CEO-D-001 / CEO-D-LEGACY-001 ("decision lives in chat" is the hole).
 LEDGER_FILE = "CEO-DECISION-LEDGER.md"
 LEDGER_ROW_ID_RE = re.compile(r"\bCEO-D-[A-Z0-9][A-Z0-9-]*\b")
+
+_REG_FILE = "MODULE-REGISTRY.yaml"
+
+
+def _substantive_registry_bytes(raw: bytes) -> bytes:
+    """Strip build-metadata-only fields from MODULE-REGISTRY.yaml bytes for substantive hashing.
+    Strips: module_registry.frozen_packet_hash, protocol_version, per-module card_ids, dependency_modules.
+    Fail-closed: any parse error returns raw bytes (a malformed registry edit IS substantive)."""
+    import json
+    import yaml as _yaml
+    try:
+        doc = _yaml.safe_load(raw)
+    except Exception:
+        return raw
+    mr = doc.get("module_registry") if isinstance(doc, dict) else None
+    if not isinstance(mr, dict):
+        return raw
+    for k in ("frozen_packet_hash", "protocol_version"):
+        mr.pop(k, None)
+    mods = mr.get("modules")
+    if isinstance(mods, list):
+        for m in mods:
+            if isinstance(m, dict):
+                for k in ("card_ids", "dependency_modules"):
+                    m.pop(k, None)
+    try:
+        # No default= coercion (GPT xfam P2): a non-JSON-native scalar (e.g. a YAML date
+        # `2026-06-28` vs the string `"2026-06-28"`) must NOT collapse to the same canonical form —
+        # that would let a substantive registry edit launder past the carry. json.dumps raises on a
+        # non-native type, and we fail closed to raw bytes so ANY such change invalidates the review.
+        return json.dumps(doc, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True).encode("utf-8")
+    except Exception:
+        return raw
+
+
+def _walk_packet_files(base: Path) -> list:
+    """Returns sorted list of Paths for all regular files under base.
+    Fails closed on any symlink (same rules as _compute_packet_hash)."""
+    if base.is_symlink():
+        raise ValueError(f"packet dir is itself a symlink: {base}")
+    result = []
+    for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        d = Path(dirpath)
+        for name in dirnames:
+            sub = d / name
+            if sub.is_symlink():
+                raise ValueError(
+                    f"packet contains a symlinked directory: "
+                    f"{sub.relative_to(base).as_posix()}")
+        for name in filenames:
+            p = d / name
+            if p.is_symlink():
+                raise ValueError(
+                    f"packet contains a symlink: {p.relative_to(base).as_posix()}")
+            if p.is_file():
+                result.append(p)
+    return sorted(result, key=lambda p: p.relative_to(base).as_posix())
 
 
 def _compute_packet_hash(packet_dir: Path) -> str:
@@ -44,37 +102,28 @@ def _compute_packet_hash(packet_dir: Path) -> str:
     files committed inside the packet.
     """
     base = Path(packet_dir)
-    if base.is_symlink():
-        raise ValueError(
-            f"packet dir is itself a symlink: {base} — a frozen packet must be a real, "
-            "self-contained directory; a symlinked packet root resolves to bytes OUTSIDE the "
-            "intended packet (GPT R6)")
-    files = []
-    for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
-        d = Path(dirpath)
-        for name in dirnames:
-            sub = d / name
-            if sub.is_symlink():
-                raise ValueError(
-                    f"packet contains a symlinked directory: "
-                    f"{sub.relative_to(base).as_posix()} — a frozen packet must be "
-                    "self-contained (no symlinks); hashing outside bytes would break the "
-                    "content binding")
-        for name in filenames:
-            p = d / name
-            if p.is_symlink():
-                raise ValueError(
-                    f"packet contains a symlink: {p.relative_to(base).as_posix()} — a "
-                    "frozen packet must be self-contained (no symlinks); hashing the "
-                    "symlink target's bytes would let content resolve outside the packet")
-            if p.is_file():
-                files.append(p)
-    files.sort(key=lambda p: p.relative_to(base).as_posix())
     h = hashlib.sha256()
-    for p in files:
+    for p in _walk_packet_files(base):
         h.update(p.relative_to(base).as_posix().encode("utf-8"))
         h.update(b"\x00")
         h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+def _compute_substantive_source_hash(packet_dir: Path) -> str:
+    """sha256 over packet files, with MODULE-REGISTRY.yaml build-metadata stripped.
+    Build-metadata fields (frozen_packet_hash, protocol_version, card_ids, dependency_modules)
+    are stripped before hashing so a registry-only build-metadata edit does not invalidate
+    the whole-packet review receipt (PB-PROP-002). If MODULE-REGISTRY.yaml is absent, equals
+    _compute_packet_hash (legacy packets untouched). Fail-closed: symlinks raise ValueError."""
+    base = Path(packet_dir)
+    h = hashlib.sha256()
+    for p in _walk_packet_files(base):
+        rel = p.relative_to(base).as_posix()
+        h.update(rel.encode("utf-8"))
+        h.update(b"\x00")
+        raw = p.read_bytes()
+        h.update(_substantive_registry_bytes(raw) if rel == _REG_FILE else raw)
     return h.hexdigest()
 
 
@@ -260,7 +309,7 @@ def cmd_deck(args) -> int:
     if findings:
         return findings_report(findings)
 
-    # ── GATE 7 (PROP-014): every ceo_decision_ref resolves to a ledger row (P1) ──
+    # ── GATE 7 (P-PROP-001): every ceo_decision_ref resolves to a ledger row (P1) ──
     if ceo_refs:
         ledger_path = packet_dir / LEDGER_FILE
         if not ledger_path.is_file():
@@ -325,6 +374,47 @@ def cmd_deck(args) -> int:
                     f"frozen-hash mismatch: card has '{card_hash}', packet hashes to '{real_hash}' "
                     f"— packet edited after deck cut, or manifest outside frozen hash"
                 ))
+
+    # ── PB-PROP-002: MODULE-REGISTRY.yaml card_ids must match compiled deck ──────────────────────────
+    # Legacy-silent if registry absent (only screen/module-first packets carry a registry).
+    _reg_path = packet_dir / _REG_FILE
+    if _reg_path.is_file():
+        _rdata, _ = load_yaml(str(_reg_path))
+        _mr = _rdata.get("module_registry") if isinstance(_rdata, dict) else None
+        _mod_rows = (_mr.get("modules") if isinstance(_mr, dict) else None) or []
+        # compiled card ids from the id: field of each compiled card YAML
+        compiled_ids: set = set()
+        for _f in sorted(cards_dir.glob("*.yaml")):
+            _cdata, _ = load_yaml(str(_f))
+            if isinstance(_cdata, dict) and _cdata.get("id"):
+                compiled_ids.add(str(_cdata["id"]).strip())
+        for _m in _mod_rows:
+            if not isinstance(_m, dict):
+                continue
+            _mid = str(_m.get("module_id", "") or "").strip()
+            if not _mid:
+                continue
+            _cids = _m.get("card_ids")
+            if not isinstance(_cids, list) or not _cids:
+                findings.append(("P0", str(_reg_path),
+                    f"module '{_mid}' has no card_ids — every registry module must name "
+                    "the compiled cards that build it (DECK-MODULE-REGISTRY-CARD-IDS-MATCH, PB-PROP-002)"))
+                continue
+            for _cid in _cids:
+                _cid = str(_cid).strip()
+                if not _cid:
+                    # GPT xfam P0: a blank/empty card_ids entry (card_ids: [""]) would otherwise be
+                    # silently skipped, letting a module bind to NO real card past the deck floor.
+                    findings.append(("P0", str(_reg_path),
+                        f"registry module '{_mid}' has a blank/empty card_ids entry — every card_id must "
+                        "name a real compiled card, not an empty placeholder "
+                        "(DECK-MODULE-REGISTRY-CARD-IDS-MATCH, PB-PROP-002)"))
+                    continue
+                if _cid not in compiled_ids:
+                    findings.append(("P0", str(_reg_path),
+                        f"registry module '{_mid}' names card_id '{_cid}' that is in NO compiled card "
+                        "— every card_id in the registry must match a compiled card "
+                        "(DECK-MODULE-REGISTRY-CARD-IDS-MATCH, PB-PROP-002)"))
 
     # ── Emit result ────────────────────────────────────────────────────────
     if findings:

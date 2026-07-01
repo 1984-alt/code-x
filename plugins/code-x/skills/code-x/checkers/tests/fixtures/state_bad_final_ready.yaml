@@ -1,6 +1,6 @@
 # BAD state for final-ready — open P0 findings + card still in flight
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

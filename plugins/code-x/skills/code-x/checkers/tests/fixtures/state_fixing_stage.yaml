@@ -1,7 +1,7 @@
 # FIXING_STAGE state — PASSES cx check state vs the canonical profiles (which has a fixing_stage seat);
 # BITES FIX-STAGE-SEAT-PROFILE when --profiles points at profiles_test.yaml (no fixing_stage seat).
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: FIXING_STAGE

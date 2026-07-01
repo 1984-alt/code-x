@@ -1,0 +1,12 @@
+# c2 variant: attempt #1 is needs_fix, attempt #2 is accepted — the CEO did NOT accept on the
+# FIRST demo. A current-state receipt would read as clean; only this append-only history proves
+# the needs_fix happened first (R1.0's core correction).
+modules:
+  - module_id: m_live
+    attempts:
+      - attempt: 1
+        ceo_verdict: needs_fix
+        turn_ref: handoffs/2026-06-20-slice-home-accept.md
+      - attempt: 2
+        ceo_verdict: accepted
+        turn_ref: handoffs/2026-06-20-slice-home-accept.md

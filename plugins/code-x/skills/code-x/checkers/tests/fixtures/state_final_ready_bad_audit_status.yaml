@@ -1,6 +1,6 @@
 # BAD: built_app_audit.status != "run" => P0 block (v1.12)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

@@ -1,7 +1,7 @@
 # BAD: final cross-family receipt names a real file but the recorded receipt_hash is fabricated/stale →
 # the recorded review is not bound to THIS artifact, must not ship (P0) [V1.10]. Else final-ready-clean.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

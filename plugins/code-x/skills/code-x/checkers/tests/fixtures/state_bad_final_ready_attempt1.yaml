@@ -1,0 +1,45 @@
+# BAD state for final-ready — open P0 findings + card still in flight
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card: BUILD-003   # still in flight — blocks final-ready
+current_actor: codex
+next_actor: claude
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 1
+    p1: 0
+    p2: 0
+    p3: 0
+  items:
+    - id: F-010
+      severity: P0
+      source_card: BUILD-003
+      finding: auth bypass in session handler
+      owner_card: FIX-003
+      status: OPEN
+      evidence_ref:
+      ceo_acceptance_ref:
+
+last_commit: deadbeef1234
+next_action: fix auth bypass first
+stop_status: NONE
+
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
+
+# c6 sidecar (graduation-owned copy): attempt_n:1 added so this fixture exercises the
+# "does NOT re-derive READY" path (R1.0/R1.2), not the R2.7 attempt-1-marker gate.
+attempt_n: 1

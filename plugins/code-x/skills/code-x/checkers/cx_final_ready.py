@@ -38,7 +38,7 @@ def cmd_final_ready(args) -> int:
     if str(stamp).strip() != "Code-X V1":
         findings.append(("P0", loc, f"protocol_stamp must be 'Code-X V1', got '{stamp}'"))
 
-    # --- PROTOCOL_INCIDENT open forbids final-ready (PROP-020) ---
+    # --- PROTOCOL_INCIDENT open forbids final-ready (BF-PROP-002) ---
     from cx_state import incident_open
     if incident_open(state) is not None:
         findings.append(("P0", loc,
@@ -102,7 +102,7 @@ def cmd_final_ready(args) -> int:
     # --- V1.10: final cross-family ship-gate — "last" can never become "never" ---
     # The final whole-build cross-family review (opposite family of the builder) is the ship
     # gate. Shipping without its bound receipt is forbidden. If the opposite family is out of
-    # budget, that must be a typed protocol_deviation/STOP that saves state (PROP-020) — never a
+    # budget, that must be a typed protocol_deviation/STOP that saves state (BF-PROP-002) — never a
     # silently missing receipt that still ships.
     fcf = state.get("final_cross_family_receipt")
     if not isinstance(fcf, dict):
@@ -261,7 +261,7 @@ def cmd_final_ready(args) -> int:
                     f"built_app_audit.report_ref '{audit_ref}' has no AUDIT-SUMMARY.md — the audit "
                     "report directory must contain the bottom-line summary file (v1.12)"))
 
-    # --- G8: dependency scan re-runs pre-ship (PROP-027 / GPT review F5) ---
+    # --- G8: dependency scan re-runs pre-ship (B-PROP-006 / GPT review F5) ---
     # READ/ASSEMBLE ONLY: final-ready requires the dependency-scan receipt to be PRESENT at ship when
     # the repo has package-manager manifests (the scan itself runs per-card at build-turn); a code
     # project may not ship without a current supply-chain scan receipt.
@@ -274,7 +274,7 @@ def cmd_final_ready(args) -> int:
             findings.append(("P1", loc,
                 f"dependency manifests exist under the repo ({manifests[:3]}) but state declares no "
                 "dependency_scan_receipt_ref — G8 re-scans dependencies pre-ship; a code project may not "
-                "ship without a current supply-chain scan receipt (PROP-027 / GPT review F5)"))
+                "ship without a current supply-chain scan receipt (B-PROP-006 / GPT review F5)"))
         elif dep_ref:
             if Path(dep_ref).is_absolute() or ".." in Path(dep_ref).parts:
                 findings.append(("P1", loc,
@@ -282,7 +282,7 @@ def cmd_final_ready(args) -> int:
             elif not (Path(repo_root) / dep_ref).is_file():
                 findings.append(("P1", loc,
                     f"dependency_scan_receipt_ref '{dep_ref}' does not exist under the repo — the pre-ship "
-                    "dependency scan receipt must be present (PROP-027 / GPT review F5)"))
+                    "dependency scan receipt must be present (B-PROP-006 / GPT review F5)"))
 
     # --- Assemble certificate summary (if PASS) ---
     if not findings:

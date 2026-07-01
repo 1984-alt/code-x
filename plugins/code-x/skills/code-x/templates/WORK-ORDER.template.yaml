@@ -11,7 +11,7 @@ model_tier:           # cheap | standard | top   (REQUIRED — if blank, the def
 objective:            # ONE plain sentence: exactly what "done" looks like
 module_id:            # (V1.10) the frozen module_registry id this card builds (module-start gates module order)
 
-# ── PROP-034 Lever A: RE-ANCHOR BEFORE FIX — REQUIRED on a mode: FIX card (re-anchor before you fix) ──
+# ── BF-PROP-007 Lever A: RE-ANCHOR BEFORE FIX — REQUIRED on a mode: FIX card (re-anchor before you fix) ──
 # A fix that cannot name the frozen requirement it restores is freelancing. `cx check card --state`
 # resolves lock_anchor_ref.requirement_id INSIDE the frozen packet named by CODE-X-STATE.packet_dir.
 lock_anchor_ref:      # REQUIRED on mode: FIX — {card_id, requirement_id}; requirement_id MUST resolve in the frozen packet
@@ -60,7 +60,7 @@ actor_record:
   # cx check card REJECTS same-family cross_review UNLESS family_substituted: yes + ceo_authorization_ref.
   # family_substituted: yes ALSO opens a CROSS_FAMILY_RECHECK_PENDING finding (P2) that BLOCKS final-ready until the recheck is done.
 
-# ── REVIEW DISPATCH (PROP-015) — required: yes when this card IS a review/audit dispatch ── [RULE:review-three-leg-ask]
+# ── REVIEW DISPATCH (PBF-PROP-009) — required: yes when this card IS a review/audit dispatch ── [RULE:review-three-leg-ask]
 review_dispatch:
   required: no          # yes for review/audit cards; mode REVIEW / FINAL_READY cards MUST set yes (cx check card enforces)
   review_kind:          # SELF_REVIEW | CROSS_FAMILY | CARD_AUDIT | FINAL_READY | PROTOCOL_CHANGE
@@ -69,6 +69,16 @@ review_dispatch:
     continuity:         # must contain "CONTINUITY" (or rely on prompt_ref) — prior review arc carried, or "first review" + architecture fit
     problems:           # must contain "PROBLEMS" — new findings by severity (P0–P3)
     approach_improvement:   # must contain "APPROACH/IMPROVEMENT" — how would YOU do this; what are we not seeing
+
+# -- CODERABBIT RAIL (PBF-PROP-012 / v1.21) -- mandatory for every code-diff build card --
+# MODULE_BUILD / MODE_A_UI cards that can change code MUST set required: yes.
+# `cx check card` rejects a code-diff build card with this block missing/disabled; `cx check build-turn`
+# rejects a missing/stale/path-unsafe receipt. CodeRabbit is external_independent_review only: it never
+# satisfies cross-family review.
+coderabbit:
+  required: yes
+  egress_receipt_ref:   # cx check egress --target coderabbit receipt (or typed carve-out where allowed)
+  receipt:              # typed CodeRabbit receipt path: commit, diff_hash, tool_version, findings_hash, egress_receipt_ref, produced_at
 
 family_note:          # the executor's one-line quirk + leash, INJECTED here by the compiler (so no one opens ROUTING.md)
   known_quirk:
@@ -81,17 +91,23 @@ execution:            # INJECTED by the compiler from BUILD-ENGINE-PROFILES.yaml
   codex_app:   { agent: , model: , effort: }
   limits: { max_parallel_subagents: 4, max_depth: 1 }
   # the active_build_engine branch is followed verbatim; the other stays dormant, never deleted.
+  # REQUIRED on MODULE_BUILD / MODE_A_UI cards (PBF-PROP-012 Part C — cx check card bites if absent):
+  prevention_preamble:
+    rule: builder-prevention-preamble          # the canon [RULE:] token (exact string)
+    injected: yes                              # proof the preamble reached the builder
+    standard_ref: BUILDER-STANDARD.md          # relative in-repo path the preamble was lifted from
+    preamble_sha12: <sha12-of-injected-block>  # sha12 of the injected preamble text block
 
 read:
   required: []        # the ONLY files this card may read (kernel + state are implicit). Keep tiny.
   forbidden: []       # files explicitly off-limits to read
   estimate_tokens:    # OPTIONAL — if set, `cx check card` enforces it <= the kernel read ceiling; else falls back to the file-count cap
 allowed_files: []     # the ONLY files this card may EDIT
-forbidden_files: []   # never touch (e.g. live production data, secrets, test files during a fix UNLESS the card authorises a new regression test)
+forbidden_files: []   # never touch (e.g. live-production live data, secrets, test files during a fix UNLESS the card authorises a new regression test)
 allowed_operations: []    # e.g. add-component, write-test, run-test
 forbidden_operations: []  # e.g. edit-scoring-config, broad-refactor, add-dependency
 
-relevant_invariants: []   # global rules the compiler injects (real-data-only, secrets-by-name, no-live-writes, ...)
+relevant_invariants: []   # global rules the compiler injects (real-data-only, secrets-by-name, no-live-production-writes, ...)
 
 acceptance: []        # checkable criteria. For UI cards: the golden screenshot + click-path items.
 evidence_required: [] # exact paths/outputs that PROVE acceptance (no "should work")

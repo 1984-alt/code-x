@@ -4,6 +4,8 @@
 # quality bar the Andon receipt asserts — depth by the module's risk:
 #   - QUALITY CARD (always): the receipt carries a quality_card answering the core four
 #     (security · efficient · regression · tests) + a conformance answer — else P1.
+#   - MODULE SELF-REVIEW (always): the receipt carries the same-family self_review evidence
+#     for the completed module — build-card intent alone is not proof the review ran.
 #   - CONFORMANCE-TO-LOCK: a money/login/data module REQUIRES extracted-actuals conformance
 #     evidence (conformance_evidence_refs non-empty) vs the locked IMPLEMENTATION-CONTRACT
 #     manifest — a free-text answer alone is not proof (P1; the non-visual anti-drift, GAP-1).
@@ -13,11 +15,34 @@
 #   cx check module-quality --acceptance <MODULE-ACCEPTANCE.yaml> --registry <MODULE-REGISTRY.yaml> --module-id <id>
 #
 # READ-ONLY. (design-fidelity BLOCKS the VISUAL half; this blocks the architecture/logic/data half.)
+from pathlib import Path
+
 from cx_common import findings_report, load_yaml, nested_get, field_present
+from cx_evidence import _read_log
 from cx_module_acceptance import validate_live_slice_accept, registry_flag_true
 
 CONFORMANCE_RISK = {"money", "login", "data"}
 CORE_FOUR = ("security", "efficient", "regression", "tests")
+SELF_REVIEW_PASS = {"PASS", "PASS_AFTER_FIX"}
+# EVAL-040: the build_validation N/A escape is for these artifact kinds ONLY (docs/config/protocol).
+BUILD_VALIDATION_NA_ARTIFACT_TYPES = {"docs", "config", "protocol"}
+SELF_REVIEW_EVIDENCE_KEYS = (
+    "review_ref",
+    "receipt_ref",
+    "report_ref",
+    "findings_ref",
+    "review_agent",
+    "first_review_agent",
+    "review_id",
+)
+
+
+def _str_field(d: dict, key: str) -> str:
+    """EVAL-040: field_present (cx_common.py:144) accepts [], [None], and maps as "present" — a
+    scalar machine field (status/reviewer/builder/...) needs a strict string read instead, mirroring
+    the R12 non-string-as-absent hardening (cx_module_acceptance.py:592-596). Non-string -> ABSENT."""
+    v = d.get(key) if isinstance(d, dict) else None
+    return v.strip() if isinstance(v, str) else ""
 
 
 def cmd_module_quality(args) -> int:
@@ -41,7 +66,7 @@ def cmd_module_quality(args) -> int:
         return 1
     # A `module_acceptance:` block, when present, MUST be a mapping. Falling back to the bare receipt on a
     # non-mapping block (e.g. `module_acceptance: []`) let a list/scalar block + top-level fields slip the
-    # typed quality / live_slice_accept / verify_app checks on the LAST-slice path (PROP-036 xfam, GPT-5.5;
+    # typed quality / live_slice_accept / verify_app checks on the LAST-slice path (B-PROP-010 xfam, GPT-5.5;
     # mirrors the cx_module_acceptance R12 fix). Only a receipt with NO module_acceptance key uses the bare
     # mapping. Fail closed here so the verify_app precondition can't be bypassed via a non-mapping block.
     if "module_acceptance" in receipt:
@@ -49,7 +74,7 @@ def cmd_module_quality(args) -> int:
         if not isinstance(ma, dict):
             print(f"FIX-FIRST\n  [P1] {acceptance_path} — acceptance receipt 'module_acceptance' is not a "
                   "mapping; a list/scalar block cannot carry the typed quality / live_slice_accept / "
-                  "verify_app fields (fail-closed) [PROP-036 xfam]")
+                  "verify_app fields (fail-closed) [B-PROP-010 xfam]")
             return 1
     else:
         ma = receipt
@@ -69,7 +94,7 @@ def cmd_module_quality(args) -> int:
         findings.append(("P1", loc,
             f"acceptance receipt module_id '{receipt_mid}' != requested '{module_id}' — the quality "
             "bar must read the receipt FOR the module it checks (a wrong-module receipt cannot satisfy "
-            "another module's bar, e.g. skip a live_slice's live-drive check) [PROP-032 built-code review]"))
+            "another module's bar, e.g. skip a live_slice's live-drive check) [B-PROP-008 built-code review]"))
 
     # Risk context: the frozen registry is the SOURCE OF TRUTH for risk; the receipt's own
     # declaration may only ADD risk (raise the bar), never lower it (fail-closed against under-declaring).
@@ -93,12 +118,16 @@ def cmd_module_quality(args) -> int:
     risk_flags |= {str(r).strip().lower() for r in (ma.get("risk_flags") or [])}
     touches_shared = touches_shared or str(ma.get("touches_shared_shell", "")).strip().lower() in ("yes", "true")
 
-    # --- PROP-032: live-slice CEO live-drive accept (P0) ---
+    # --- B-PROP-008: live-slice CEO live-drive accept (P0) ---
     # The frozen registry (not the receipt's self-declaration) decides which modules are live_slices.
     # The order wall (module-start) gates a slice that has a NEXT; this covers the LAST slice too —
     # so every live_slice's acceptance proves the CEO DROVE the running build, never a Mode A shell.
     if mod is not None and registry_flag_true(mod.get("live_slice")):
-        findings.extend(validate_live_slice_accept(ma, loc))
+        # PBF-PROP-012 Part E: pass the receipt's parent directory as base so validate_module_demo
+        # can resolve shown_screenshot_path and ceo_turn_ref (screenshot + turn artifact must
+        # be in-repo relative to the receipt's location when no explicit repo-root is given).
+        from pathlib import Path as _Path
+        findings.extend(validate_live_slice_accept(ma, loc, base=str(_Path(loc).parent)))
 
     # --- QUALITY CARD: core four + conformance answer present ---
     qc = ma.get("quality_card")
@@ -118,6 +147,170 @@ def cmd_module_quality(args) -> int:
             findings.append(("P1", loc,
                 "quality_card.conformance missing — every module answers conformance-to-lock "
                 "(does the built code implement the locked implementation-contract?) [V1.10]"))
+
+    # --- MODULE SELF-REVIEW: actual evidence, not just card intent ---
+    # Build cards already declare actor_record.self_review, but a real project (v1.20) showed that declaration
+    # alone can drift: two accepted modules had deterministic evidence while the same-family
+    # self-review receipt never appeared. The module acceptance rail now requires the review receipt.
+    sr = ma.get("self_review")
+    if not isinstance(sr, dict) and isinstance(qc, dict):
+        sr = qc.get("self_review")
+    if not isinstance(sr, dict):
+        findings.append(("P1", loc,
+            "same-family self_review missing — module acceptance must carry the actual self-review "
+            "receipt/evidence; build-card intent is not enough [PROP-042 / v1.21]"))
+    else:
+        relation = str(sr.get("family_relation", "") or "").strip().lower()
+        if relation != "same_family":
+            findings.append(("P1", loc,
+                "same-family self_review.family_relation must be 'same_family' — a module self-review "
+                "cannot be replaced by cross-family/final review debt [PROP-042 / v1.21]"))
+        status = str(sr.get("status", "") or "").strip().upper()
+        if status not in SELF_REVIEW_PASS:
+            findings.append(("P1", loc,
+                f"same-family self_review.status is '{status or 'UNSET'}', not PASS/PASS_AFTER_FIX — "
+                "module acceptance needs a completed self-review [PROP-042 / v1.21]"))
+        if not any(field_present(sr, k) for k in SELF_REVIEW_EVIDENCE_KEYS):
+            findings.append(("P1", loc,
+                "same-family self_review has no evidence anchor (review_ref/receipt_ref/report_ref/"
+                "findings_ref/review_agent/first_review_agent/review_id) — the review must be "
+                "re-readable, not only asserted [PROP-042 / v1.21]"))
+
+    # --- BUILD-VALIDATION leg: the build actually passed, PROVEN by re-read logs (EVAL-040) ---
+    bv = ma.get("build_validation")
+    if not isinstance(bv, dict):
+        findings.append(("P1", loc,
+            "build_validation leg missing — module acceptance must carry machine-checkable proof "
+            "the build actually validated (typecheck/lint/tests/build were run and PASSED), or a "
+            "declared applicability: not_applicable for a module with no build [EVAL-040]"))
+    elif _str_field(bv, "applicability") == "not_applicable":
+        art = _str_field(bv, "acceptance_artifact_type")
+        if not _str_field(bv, "na_reason") or not art:
+            findings.append(("P1", loc,
+                "build_validation applicability: not_applicable requires na_reason + "
+                "acceptance_artifact_type — a declared N/A must be reasoned, not protocol "
+                "noise [EVAL-040]"))
+        elif art not in BUILD_VALIDATION_NA_ARTIFACT_TYPES:
+            findings.append(("P1", loc,
+                f"build_validation.acceptance_artifact_type '{art}' is not one of "
+                f"{sorted(BUILD_VALIDATION_NA_ARTIFACT_TYPES)} — an N/A escape is only for "
+                "docs/config/protocol modules [EVAL-040]"))
+        # A risk-flagged (money/login/data) module HAS a build and cannot skip build_validation via
+        # the N/A escape — the escape is for docs/config/protocol modules only (xfam P0). Registry is
+        # the risk source of truth (already merged into risk_flags above; receipt can only ADD risk).
+        # (Residual: a genuinely code module with NO risk flags could still declare N/A — a future
+        # authoritative registry `module_kind` field would fully close it; the risk-flag cross-check
+        # closes the dangerous money/login/data case.)
+        if risk_flags & CONFORMANCE_RISK:
+            findings.append(("P0", loc,
+                f"module '{module_id}' is risk {sorted(risk_flags & CONFORMANCE_RISK)} but declares "
+                "build_validation applicability: not_applicable — a money/login/data module has a "
+                "build and cannot skip build_validation via the N/A escape [EVAL-040]"))
+    else:
+        status = _str_field(bv, "status").upper()
+        if status not in SELF_REVIEW_PASS:
+            findings.append(("P1", loc,
+                f"build_validation.status is '{status or 'UNSET'}', not PASS/PASS_AFTER_FIX — an "
+                "honest FAIL or missing status means the module is not accepted [EVAL-040]"))
+        ran_raw = bv.get("ran")
+        ran = ([str(r).strip() for r in ran_raw if isinstance(r, str) and r.strip()]
+               if isinstance(ran_raw, list) else [])
+        if not ran:
+            findings.append(("P1", loc,
+                "build_validation.ran is empty/not-a-list — every check the module claims to have "
+                "run must be named [EVAL-040]"))
+        claims = bv.get("claims") if isinstance(bv.get("claims"), list) else []
+        claimed = set()
+        for i, row in enumerate(claims):
+            if not isinstance(row, dict):
+                continue
+            tag = f"build_validation.claims[{i}]"
+            chk = _str_field(row, "check")
+            if _str_field(row, "claimed_verdict").upper() != "PASS":
+                continue
+            if chk:
+                claimed.add(chk)   # a check WITH a PASS claim row (verified or contradicted) is covered
+            log_path = row.get("log_path")
+            log = _read_log(Path(loc).parent, log_path) if log_path else None
+            if log is None:
+                findings.append(("P0", loc,
+                    f"{tag} claims PASS but its log_path '{log_path}' does not resolve — a claim "
+                    "without its log is unverifiable (fabricated PASS) [EVAL-040]"))
+                continue
+            try:
+                exit_code = int(row.get("exit_code"))
+            except (TypeError, ValueError):
+                exit_code = None
+            nonzero_ok = str(row.get("nonzero_pass_semantics", "")).lower() in ("yes", "true")
+            fail_hit = next((str(fm) for fm in (row.get("fail_markers") or []) if str(fm) in log), None)
+            missing_marker = next((str(m) for m in (row.get("expect_contains") or []) if str(m) not in log), None)
+            if (exit_code != 0 and not nonzero_ok) or fail_hit or missing_marker is not None:
+                if fail_hit:
+                    reason = f"fail_marker '{fail_hit}' present in the log"
+                elif missing_marker is not None:
+                    reason = f"expect_contains marker '{missing_marker}' absent from the log"
+                else:
+                    reason = f"exit_code {row.get('exit_code')} with no declared nonzero_pass_semantics"
+                findings.append(("P0", loc,
+                    f"{tag} claims PASS but the re-read log contradicts it ({reason}) — fabricated "
+                    "PASS [EVAL-040]"))
+        # Coverage (xfam #7 isolation): a `ran` check with NO PASS claim row at all is the only
+        # -MALFORMED here; a check whose claim row is contradicted already fired its own P0 above.
+        for chk in ran:
+            if chk not in claimed:
+                findings.append(("P1", loc,
+                    f"build_validation.ran names '{chk}' but no re-readable PASS claims row covers "
+                    "it — command coverage requires a matching claim for every named check [EVAL-040]"))
+        rv, bd = _str_field(bv, "reviewer"), _str_field(bv, "builder")
+        if not rv or not bd:
+            findings.append(("P1", loc,
+                "build_validation.reviewer/builder identity missing — both must be present as "
+                "scalar ids [EVAL-040]"))
+        elif rv.casefold() == bd.casefold():
+            findings.append(("P1", loc,
+                "build_validation.reviewer == builder — the builder cannot grade its own same-wave "
+                "build (same-wave self-grading) [EVAL-040]"))
+
+    # --- ANTI-SLOP leg: same-family, fresh non-builder, slop_removal role (EVAL-040) ---
+    aslop = ma.get("anti_slop")
+    if not isinstance(aslop, dict):
+        findings.append(("P1", loc,
+            "anti_slop leg missing — module acceptance must carry a same-family slop_removal review "
+            "receipt (dead code / over-abstraction / defensive theater / narrative comments / "
+            "premature frameworks stripped); always-on, no N/A path [EVAL-040]"))
+    else:
+        aslop_status = _str_field(aslop, "status").upper()
+        role = _str_field(aslop, "role")
+        relation = _str_field(aslop, "family_relation")
+        rf, bf = _str_field(aslop, "reviewer_family"), _str_field(aslop, "builder_family")
+        if aslop_status not in SELF_REVIEW_PASS:
+            findings.append(("P1", loc,
+                f"anti_slop.status is '{aslop_status or 'UNSET'}', not PASS/PASS_AFTER_FIX [EVAL-040]"))
+        if role != "slop_removal":
+            findings.append(("P1", loc,
+                f"anti_slop.role is '{role or 'UNSET'}', not 'slop_removal' — the review's ROLE, not "
+                "just its family, must be proven [EVAL-040]"))
+        if relation != "same_family":
+            findings.append(("P1", loc,
+                "anti_slop.family_relation must be 'same_family' — a module anti-slop pass cannot be "
+                "deferred to cross-family/final review debt [EVAL-040]"))
+        if not rf or not bf:
+            findings.append(("P1", loc,
+                "anti_slop.reviewer_family/builder_family missing [EVAL-040]"))
+        if not any(_str_field(aslop, k) for k in SELF_REVIEW_EVIDENCE_KEYS):
+            findings.append(("P1", loc,
+                "anti_slop has no evidence anchor (review_ref/receipt_ref/report_ref/findings_ref/"
+                "review_agent/first_review_agent/review_id) — the review must be a NON-EMPTY scalar "
+                "ref, re-readable, not only asserted [EVAL-040]"))
+        rv, bd = _str_field(aslop, "reviewer"), _str_field(aslop, "builder")
+        if not rv or not bd:
+            findings.append(("P1", loc,
+                "anti_slop.reviewer/builder identity missing — both must be present as scalar ids "
+                "[EVAL-040]"))
+        elif rv.casefold() == bd.casefold():
+            findings.append(("P1", loc,
+                "anti_slop.reviewer == builder — same-wave self-grading of the anti-slop pass "
+                "[EVAL-040]"))
 
     # --- CONFORMANCE-TO-LOCK: money/login/data modules need EXTRACTED-actuals proof ---
     if risk_flags & CONFORMANCE_RISK:

@@ -1,6 +1,6 @@
 # Incident open, repair_card BUILD-001 -> the repair card itself may proceed
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: REVIEW

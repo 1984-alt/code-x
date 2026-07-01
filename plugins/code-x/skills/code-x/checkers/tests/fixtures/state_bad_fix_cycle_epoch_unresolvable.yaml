@@ -2,7 +2,7 @@
 # anchor (no engine_epoch_id / effective_at / engine_family) and cannot be placed by
 # the switch log. The ladder must fail closed — never assume the current engine.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

@@ -1,0 +1,32 @@
+# BAD: code-diff build state defers self-review to final. Module acceptance
+# requires same-family self-review at the module gate; final self-audit is an
+# additional whole-app milestone, not a substitute for module self-review.
+project: cx-test
+protocol_stamp: Code-X V1
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: codex
+next_actor: codex builder
+next_action: continue build card
+stop_status: NONE
+build_authorized: yes
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+last_commit: abc123def456
+open_findings:
+  counts: {p0: 0, p1: 0, p2: 0, p3: 0}
+  items: []
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+review_boundary:
+  deterministic_checks_each_card: yes
+  coderabbit_before_self_review: 'yes'
+  self_review_boundary: final
+  cross_family_boundary: module
+  xfam_capability: stage_1

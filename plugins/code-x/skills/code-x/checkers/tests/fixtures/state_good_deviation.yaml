@@ -1,6 +1,6 @@
 # GOOD: fully typed protocol_deviation row (PROP-020)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

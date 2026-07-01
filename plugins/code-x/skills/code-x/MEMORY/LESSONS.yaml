@@ -44,8 +44,8 @@
 #       mandatory; see GATES / ROUTING for the canonical text).
 #   [RULE:source-map-required]  every build card carries a source_map bound to
 #       the frozen packet hash; this field is mandatory (see GATES).
-#   [RULE:fix-card-test-edit]  a fix card may add a NEW regression test only
-#       with explicit card authorisation, and a fix must never weaken a test
-#       (see the cx check spec).
+#   fix-card-test-edit: a NEW regression test is allowed only with explicit
+#       card authorisation, and a fix must never weaken a test (see the cx
+#       check spec).
 
 lessons: []

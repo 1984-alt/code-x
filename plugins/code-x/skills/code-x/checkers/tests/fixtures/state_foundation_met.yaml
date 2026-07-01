@@ -1,7 +1,7 @@
 # State with FOUND-001 in foundation_checkpoints_passed
 # Used for F1 P1-01 test — met checkpoint case
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

@@ -1,0 +1,13 @@
+# Fixture: registry pointing to a rule-bearing file with a stale bare PROP-NNN id
+# Used by: CONSISTENCY-STALE-BARE-PROP contract test
+# Expected: FIX-FIRST — PROP-001 bare old-format id detected
+scan_scope:
+  rule_bearing:
+    - checkers/tests/fixtures/consistency_stale_prop_bad_canon.md
+
+rules:
+  - id: test-rule-stale-prop
+    canonical: "stage-prefix migration"
+    key_phrases: ["stage-prefix", "stage-prefixed"]
+    appears_in:
+      - checkers/tests/fixtures/consistency_stale_prop_bad_canon.md

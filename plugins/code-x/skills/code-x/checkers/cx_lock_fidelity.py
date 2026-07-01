@@ -1,4 +1,4 @@
-# cx_lock_fidelity.py — shared lock-fidelity-continuity helpers (PROP-034, fold v1.15).
+# cx_lock_fidelity.py — shared lock-fidelity-continuity helpers (BF-PROP-007, fold v1.15).
 #
 # This module is the single source of truth for the RECOMPUTE-from-files primitives Levers
 # A/B/C all share. NOTHING here trusts a model-authored copy — every value is recomputed
@@ -153,7 +153,7 @@ def verified_accepted_module_ids(state: dict, state_loc: str, repo_root: str) ->
     """The set of module_ids that are VALIDLY accepted — i.e. validate_accepted_module() returns NO
     findings for them (a bound, sha-verified, in-repo acceptance receipt). A hand-authored
     accepted_modules row with no real receipt is therefore NOT treated as closed: its cards stay OPEN.
-    This closes the F4 bypass where any row with a module_id made open_cards: [] verify (PROP-034 xfam).
+    This closes the F4 bypass where any row with a module_id made open_cards: [] verify (BF-PROP-007 xfam).
     Imported lazily to avoid a module-import cycle (cx_module_acceptance imports cx_drift→cx_lock_fidelity)."""
     from cx_module_acceptance import validate_accepted_module
     out = set()
@@ -169,7 +169,7 @@ def recompute_open_cards(repo_root: str, packet_dir_rel: str, state: dict,
     open_cards = sorted set of card_ids from frozen-registry modules whose acceptance is NOT
     receipt-VERIFIED (a module counts as closed ONLY when validate_accepted_module() passes for it —
     a bound, sha-verified, in-repo receipt). A hand-authored accepted_modules row with no real receipt
-    leaves its cards OPEN (PROP-034 xfam F4). Returns (sorted_list, error). An EMPTY list is legal only
+    leaves its cards OPEN (BF-PROP-007 xfam F4). Returns (sorted_list, error). An EMPTY list is legal only
     when every registry module is genuinely receipt-verified-accepted."""
     if not packet_dir_rel:
         return None, "state.packet_dir is absent — cannot derive the open-card set (fail closed)"

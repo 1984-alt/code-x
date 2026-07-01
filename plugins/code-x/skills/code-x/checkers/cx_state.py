@@ -27,20 +27,20 @@ from cx_common import (
 )
 
 # Build modes whose sessions must acknowledge BUILDER-STANDARD.md at session start
-# (PROP-014: session-level read law — ack proves WHICH version, not internalization).
+# (P-PROP-001: session-level read law — ack proves WHICH version, not internalization).
 BUILD_MODES = {"MODE_A_UI", "MODULE_BUILD", "FIX"}
 
-# PROP-018: the canonical files cx check boot hashes into the boot receipt.
+# B-PROP-002: the canonical files cx check boot hashes into the boot receipt.
 # Resolved relative to the Code-X-V1 root (one level up from checkers/), like
 # DEFAULT_PROFILES_PATH — the canon travels with the cx binary, not the project repo.
 CANON_ROOT = Path(__file__).resolve().parent.parent
 BOOT_CANON_FILES = ["START-HERE.md", "KERNEL.md", "GATES.md", "BUILDER-STANDARD.md"]
 
-# PROP-020: review_boundary enums (partial prose rejected — required enums only).
+# BF-PROP-002: review_boundary enums (partial prose rejected — required enums only).
 VALID_CODERABBIT_BOUNDARY = {"yes", "no", "not_applicable"}
 VALID_SELF_REVIEW_BOUNDARY = {"card", "module", "foundation_checkpoint", "final"}
 VALID_CROSS_FAMILY_BOUNDARY = {"module", "foundation_checkpoint", "final", "ceo_deferred"}
-# PROP-026: the 3-stage cross-family review ladder a project/CEO declares (the protocol
+# BF-PROP-005: the 3-stage cross-family review ladder a project/CEO declares (the protocol
 # cannot auto-detect how many model families a user has). stage_1 = 1 CLI (CodeRabbit
 # unblocks the build, a true opposite-family pass is required before ship); stage_3 = 2 CLIs.
 VALID_XFAM_CAPABILITY = {"stage_1", "stage_2", "stage_3"}
@@ -48,13 +48,13 @@ VALID_DEVIATION_BLOCKS = {"next_card", "ship", "final_ready", "none"}
 VALID_INCIDENT_STATUS = {"OPEN", "REPAIRED"}
 
 # Stage whose sessions must acknowledge the lessons preload at session start
-# (PROP-017: planning-sessions-only — the build read path is untouched).
+# (PBF-PROP-010: planning-sessions-only — the build read path is untouched).
 PLANNING_STAGE = "PLANNING_STUDIO"
 
 
 def _check_session_ack(data: dict, repo_root: str, loc: str, findings: list,
                        ack_key: str, what: str, requirement: str) -> None:
-    """Shared session_start ack check (PROP-014/017): status PASS + file + hash,
+    """Shared session_start ack check (P-PROP-001 · PBF-PROP-010): status PASS + file + hash,
     plus best-effort drift detection against the live file under repo_root."""
     ack = nested_get(data, "session_start", ack_key)
     if (not isinstance(ack, dict) or str(ack.get("status", "")) != "PASS"
@@ -70,6 +70,70 @@ def _check_session_ack(data: dict, repo_root: str, loc: str, findings: list,
                 f"{what} drifted since acknowledgment — recorded hash "
                 f"'{ack.get('hash')}' != live '{live}' for {ack.get('file')}; "
                 "re-read and re-acknowledge"))
+
+
+def _check_orchestration_mode(data: dict, loc: str, findings: list) -> None:
+    """PBF-PROP-012 Part B (R-ORCH): a BUILD/FIXING session must declare it runs as an
+    ORCHESTRATOR that dispatches a fresh, specialized subagent per build/review task —
+    the lead never builds or self-reviews inline. This is the model-agnostic delivery
+    rail for the fresh-subagent review pipeline (the orchestrator is what injects the
+    builder prevention preamble + the post-build review legs). A trivial single-card
+    project may instead carry a typed inline_waiver + ceo_decision_ref. P2 (mirrors the
+    builder-standard / lessons-preload acks). [RULE:orchestration-mode-ack]"""
+    om = nested_get(data, "session_start", "orchestration_mode")
+    if not isinstance(om, dict):
+        findings.append(("P2", loc,
+            "session_start.orchestration_mode missing — a BUILD/FIXING session must declare "
+            "dispatch_subagents: yes + lead_role: orchestrator (or a typed inline_waiver + ceo_decision_ref)"))
+        return
+    if om.get("inline_waiver"):
+        # P1-003→P2: inline_waiver requires ceo_decision_ref + scope: single_card + card_ref
+        # so a multi-card build cannot blanket-waive orchestration dispatch.
+        if not om.get("ceo_decision_ref"):
+            findings.append(("P2", loc,
+                "orchestration_mode.inline_waiver set without ceo_decision_ref — an inline "
+                "(no-dispatch) build needs a typed CEO waiver"))
+        if str(om.get("scope", "")).strip().lower() != "single_card":
+            findings.append(("P2", loc,
+                "orchestration_mode.inline_waiver requires scope: single_card — "
+                "only a single-card build may waive orchestration dispatch (P1-003)"))
+        if not str(om.get("card_ref", "")).strip():
+            findings.append(("P2", loc,
+                "orchestration_mode.inline_waiver requires card_ref — "
+                "name the single card being built inline (P1-003)"))
+        return
+    if (str(om.get("dispatch_subagents", "")).lower() != "yes"
+            or str(om.get("lead_role", "")).lower() != "orchestrator"):
+        findings.append(("P2", loc,
+            "orchestration_mode must declare dispatch_subagents: yes + lead_role: orchestrator "
+            "(or a typed inline_waiver + ceo_decision_ref)"))
+
+
+def _check_module_demo_mode(data: dict, loc: str, findings: list) -> None:
+    """PBF-PROP-012 Part E (SEE-AND-TEST): a BUILD/FIXING session must declare it will DEMO every
+    user-facing module on its real surface (web→Chrome, mobile→iPhone 13 Pro sim) and capture a
+    real shown-screenshot before offering the CEO live-drive accept. The model-agnostic rail that
+    forces the show-step a real project skipped. A project with NO user-facing modules may carry a typed
+    no_user_facing_modules waiver + ceo_decision_ref. P2 (mirrors the orchestration-mode ack).
+    [RULE:module-demo-mode-ack]"""
+    md = nested_get(data, "session_start", "module_demo_mode")
+    if not isinstance(md, dict):
+        findings.append(("P2", loc,
+            "session_start.module_demo_mode missing — a BUILD/FIXING session must declare "
+            "demo_every_user_facing_module: yes + surfaces: [web|mobile] (or a typed "
+            "no_user_facing_modules waiver + ceo_decision_ref) (PBF-PROP-012 Part E)"))
+        return
+    if md.get("no_user_facing_modules"):
+        if not md.get("ceo_decision_ref"):
+            findings.append(("P2", loc,
+                "module_demo_mode.no_user_facing_modules set without ceo_decision_ref — a "
+                "backend-only build needs a typed CEO waiver (PBF-PROP-012 Part E)"))
+        return
+    if str(md.get("demo_every_user_facing_module", "")).lower() != "yes":
+        findings.append(("P2", loc,
+            "module_demo_mode must declare demo_every_user_facing_module: yes "
+            "(or a typed no_user_facing_modules waiver + ceo_decision_ref) (PBF-PROP-012 Part E)"))
+
 
 def state_sha12_without_boot_ack(path: str) -> str | None:
     """Canonical sha12 of the state file with session_start.protocol_boot_ack removed —
@@ -88,7 +152,7 @@ def state_sha12_without_boot_ack(path: str) -> str | None:
 
 
 def _check_boot_ack(data: dict, repo_root: str, loc: str, findings: list) -> None:
-    """PROP-018: a BUILD-mode session references the MACHINE-GENERATED boot receipt
+    """B-PROP-002: a BUILD-mode session references the MACHINE-GENERATED boot receipt
     (cx check boot) in session_start.protocol_boot_ack — the model never authors
     hashes. Stale receipt (canon drifted, tampered file, failed state check) = P1."""
     ack = nested_get(data, "session_start", "protocol_boot_ack")
@@ -162,14 +226,14 @@ def _check_boot_ack(data: dict, repo_root: str, loc: str, findings: list) -> Non
 
 def _check_review_boundary(data: dict, loc: str, findings: list,
                            require_block: bool = False) -> None:
-    """PROP-020: reviewer taxonomy/timing is STATE, not prose — required enums,
+    """BF-PROP-002: reviewer taxonomy/timing is STATE, not prose — required enums,
     partial prose rejected. Block presence enforced at session-start in BUILD modes."""
     rb = data.get("review_boundary")
     if not isinstance(rb, dict):
         if require_block:
             findings.append(("P1", loc,
                 "review_boundary block missing — a build session must declare reviewer "
-                "taxonomy/timing as typed state (PROP-020), never as prose"))
+                "taxonomy/timing as typed state (BF-PROP-002), never as prose"))
         return
     det = str(rb.get("deterministic_checks_each_card", "")).lower()
     if det not in ("yes", "true"):
@@ -181,10 +245,26 @@ def _check_review_boundary(data: dict, loc: str, findings: list,
         findings.append(("P1", loc,
             f"review_boundary.coderabbit_before_self_review '{rb.get('coderabbit_before_self_review')}' "
             f"not in {sorted(VALID_CODERABBIT_BOUNDARY)}"))
+    code_diff_build_state = (
+        str(data.get("current_stage", "")) == "BUILD_FACTORY"
+        and str(data.get("current_mode", "")) in ("MODULE_BUILD", "MODE_A_UI")
+    )
+    if code_diff_build_state and cr != "yes":
+        findings.append(("P1", loc,
+            "review_boundary.coderabbit_before_self_review must be yes for BUILD_FACTORY "
+            f"{data.get('current_mode')} code-diff work — CodeRabbit is mandatory before "
+            "self-review/cross-family on build modules; not_applicable/no is a planning-stage "
+            "skip (PROP-042 / v1.21)"))
     srb = str(rb.get("self_review_boundary", ""))
     if srb not in VALID_SELF_REVIEW_BOUNDARY:
         findings.append(("P1", loc,
             f"review_boundary.self_review_boundary '{srb}' not in {sorted(VALID_SELF_REVIEW_BOUNDARY)}"))
+    elif code_diff_build_state and srb != "module":
+        findings.append(("P1", loc,
+            "review_boundary.self_review_boundary must be module for BUILD_FACTORY "
+            f"{data.get('current_mode')} code-diff work — same-family self-review is mandatory "
+            "at the module acceptance gate; the final Built-App Audit / whole-app self-audit is "
+            "additional, not a replacement (PROP-042 / v1.21)"))
     cfb = str(rb.get("cross_family_boundary", ""))
     if cfb not in VALID_CROSS_FAMILY_BOUNDARY:
         findings.append(("P1", loc,
@@ -193,7 +273,7 @@ def _check_review_boundary(data: dict, loc: str, findings: list,
         if not field_present(rb, "ceo_decision_ref") or not rb.get("deferred_review_blocks"):
             findings.append(("P1", loc,
                 "cross_family_boundary: ceo_deferred REQUIRES ceo_decision_ref + "
-                "deferred_review_blocks — an unrecorded deferral is protocol drift (PROP-020)"))
+                "deferred_review_blocks — an unrecorded deferral is protocol drift (BF-PROP-002)"))
         else:
             # V1.10: cross-family is the LAST review = the ship gate; a deferral may NOT permit
             # ship/advance ("last" can never become "never"). The deferral must block ship/final_ready.
@@ -203,37 +283,87 @@ def _check_review_boundary(data: dict, loc: str, findings: list,
                     "cross_family_boundary: ceo_deferred but deferred_review_blocks does not include "
                     "'ship' or 'final_ready' — a cross-family deferral may not permit ship (the final "
                     "cross-family pass is the ship gate; 'last' can never become 'never') [V1.10]"))
+    if (code_diff_build_state
+            and str(data.get("active_build_engine", "")) == "CODEX_APP"
+            and cfb in ("module", "foundation_checkpoint")):
+        findings.append(("P1", loc,
+            "CODEX_APP build state may not route cross-family review at "
+            f"'{cfb}' — Codex-built projects route xfam to the whole-app final pass after the "
+            "Built-App Audit / whole-app self-audit; Claude Code may use per-module xfam after "
+            "module self-review (PROP-042 / v1.21)"))
 
-    # PROP-026: the 3-stage cross-family review ladder (xfam_capability). Append-only +
+    # BF-PROP-005: the 3-stage cross-family review ladder (xfam_capability). Append-only +
     # evidence-backed (GPT #4): stage_3 must be backed by REAL opposite-family evidence
     # (auto-promotion), never self-asserted; a DOWNGRADE to a weaker tier needs a CEO ref.
     cap = rb.get("xfam_capability")
+    if code_diff_build_state and cap is None:
+        findings.append(("P1", loc,
+            "review_boundary.xfam_capability missing for BUILD_FACTORY MODULE_BUILD/MODE_A_UI — "
+            "the review tier must be explicit before build cards route to self/cross review "
+            "(PROP-042 / v1.21)"))
     if cap is not None:
         if str(cap) not in VALID_XFAM_CAPABILITY:
             findings.append(("P1", loc,
                 f"review_boundary.xfam_capability '{cap}' not in {sorted(VALID_XFAM_CAPABILITY)} — "
-                "the cross-family capability is a fixed ladder (PROP-026)"))
+                "the cross-family capability is a fixed ladder (BF-PROP-005)"))
         elif str(cap) == "stage_3" and not field_present(rb, "xfam_capability_evidence"):
             findings.append(("P1", loc,
                 "review_boundary.xfam_capability stage_3 without xfam_capability_evidence (a ref to real "
                 "opposite-family review evidence) — capability is evidence-backed / auto-promoted, never "
-                "self-asserted to dodge the second family (PROP-026 / GPT #4)"))
+                "self-asserted to dodge the second family (BF-PROP-005 / GPT #4)"))
         ev = str(rb.get("xfam_capability_evidence", "") or "").strip()
         if ev and (Path(ev).is_absolute() or ".." in Path(ev).parts):
             findings.append(("P1", loc,
                 f"review_boundary.xfam_capability_evidence '{ev}' must be a repo-relative path (no "
                 "absolute path / .. escape) — the evidence is an in-tree opposite-family review artifact, "
-                "not an arbitrary external file (PROP-026 / GPT review F6)"))
+                "not an arbitrary external file (BF-PROP-005 / GPT review F6)"))
         if (field_present(rb, "xfam_capability_downgraded_from")
                 and not field_present(rb, "xfam_capability_downgrade_ref")):
             findings.append(("P1", loc,
                 "review_boundary.xfam_capability_downgraded_from without xfam_capability_downgrade_ref — a "
                 "capability DOWNGRADE to a weaker review tier needs a CEO decision ref (append-only; you "
-                "cannot quietly drop the second family) (PROP-026 / GPT #4)"))
+                "cannot quietly drop the second family) (BF-PROP-005 / GPT #4)"))
+
+
+def _boolish_true(value) -> bool:
+    return value is True or str(value).strip().lower() in ("true", "yes")
+
+
+def _check_built_app_audit_before_final_xfam(data: dict, loc: str, findings: list) -> None:
+    """PROP-042 / v1.21: state may not route from accepted modules straight to final xfam.
+    The Built-App Audit / whole-app self-audit is the explicit post-build milestone
+    before the final opposite-family review. This is a route guard; final-ready
+    still owns the heavier path/existence checks."""
+    if str(data.get("current_stage", "")) != "BUILD_FACTORY":
+        return
+    if data.get("current_card") not in (None, ""):
+        return
+    accepted = data.get("accepted_modules")
+    if not isinstance(accepted, list) or not accepted:
+        return
+    route = " ".join(str(data.get(k, "") or "") for k in ("next_actor", "next_action", "stop_status")).lower()
+    if "final" not in route:
+        return
+    if not any(marker in route for marker in ("xfam", "cross-family", "opposite-family")):
+        return
+
+    audit = data.get("built_app_audit")
+    if not isinstance(audit, dict):
+        findings.append(("P1", loc,
+            "state routes accepted modules to final xfam before the Built-App Audit / whole-app "
+            "self-audit milestone is recorded — run BUILT-APP-AUDIT.md and disposition findings "
+            "before final xfam (PROP-042 / v1.21)"))
+        return
+    status = str(audit.get("status", "") or "").strip().lower()
+    if status != "run" or not _boolish_true(audit.get("findings_dispositioned")) or not field_present(audit, "report_ref"):
+        findings.append(("P1", loc,
+            "state routes accepted modules to final xfam but built_app_audit is incomplete — "
+            "requires status: run, findings_dispositioned: true, and report_ref before final xfam "
+            "(PROP-042 / v1.21)"))
 
 
 def _check_protocol_deviations(data: dict, loc: str, findings: list) -> None:
-    """PROP-020: a CEO-authorized departure from canonical timing is a TYPED block —
+    """BF-PROP-002: a CEO-authorized departure from canonical timing is a TYPED block —
     never blended into state as if normal; review debt stays visible until repaid."""
     devs = data.get("protocol_deviations")
     if devs is None:
@@ -277,7 +407,7 @@ def incident_open(data: dict) -> dict | None:
 
 
 def _check_protocol_incident(data: dict, loc: str, findings: list) -> None:
-    """PROP-020: a missed gate / skipped check / false state sets PROTOCOL_INCIDENT —
+    """BF-PROP-002: a missed gate / skipped check / false state sets PROTOCOL_INCIDENT —
     the incident row must record cause + repair before new build cards run.
     Scope: PROTOCOL corrections only (a CEO product rejection is a product finding)."""
     inc = data.get("protocol_incident")
@@ -287,7 +417,7 @@ def _check_protocol_incident(data: dict, loc: str, findings: list) -> None:
     if not isinstance(inc, dict):
         findings.append(("P1", loc,
             "stop_status PROTOCOL_INCIDENT without a protocol_incident block — the "
-            "incident row must record id + cause + repair (PROP-020)"))
+            "incident row must record id + cause + repair (BF-PROP-002)"))
         return
     for key in ("id", "cause", "repair"):
         if not field_present(inc, key):
@@ -300,15 +430,15 @@ def _check_protocol_incident(data: dict, loc: str, findings: list) -> None:
             f"protocol_incident.status '{inc.get('status')}' not in {sorted(VALID_INCIDENT_STATUS)}"))
 
 
-# PROP-021: fix-escalation ladder. fix_cycles rows are STATE-owned; required keys
+# BF-PROP-003: fix-escalation ladder. fix_cycles rows are STATE-owned; required keys
 # per GATES G5 [RULE:fix-escalation-ladder].
 FIX_CYCLE_REQUIRED_KEYS = ("finding_id", "source_review_ref", "attempt_n",
                            "seat_ref", "result", "review_ref")
 MAX_FIX_ATTEMPTS = 3  # fix-3 failure feeds the 4-failure cross-family debug rule
 
-# PROP-025: a fix_cycles row is validated against the engine epoch ACTIVE AT ITS
+# BF-PROP-004: a fix_cycles row is validated against the engine epoch ACTIVE AT ITS
 # ATTEMPT (not the current engine). engine_switch_log reconstructs the epochs so a
-# legitimate prior-epoch seat does not false-fire the PROP-021 seat-family check.
+# legitimate prior-epoch seat does not false-fire the BF-PROP-003 seat-family check.
 ENGINE_TO_FAMILY = {"CLAUDE_CODE": "ANTHROPIC", "CODEX_APP": "CODEX"}
 ENGINE_SWITCH_REQUIRED_KEYS = ("engine_epoch_id", "from_engine", "to_engine", "effective_at")
 
@@ -324,7 +454,7 @@ def _seat_rank(seat_ref: str) -> tuple[int, int, str] | None:
 
 
 def _build_engine_epochs(data: dict, loc: str, findings: list):
-    """PROP-025: reconstruct engine epochs from engine_switch_log so a fix_cycles row
+    """BF-PROP-004: reconstruct engine epochs from engine_switch_log so a fix_cycles row
     is validated against the engine active AT ITS ATTEMPT, not the current engine.
 
     Returns (epochs, by_id, switched, ok):
@@ -340,7 +470,7 @@ def _build_engine_epochs(data: dict, loc: str, findings: list):
     if not isinstance(log, list) or not log:
         findings.append(("P1", loc,
             "engine_switch_log must be a non-empty list of typed switch rows "
-            "{engine_epoch_id, from_engine, to_engine, effective_at} (PROP-025)"))
+            "{engine_epoch_id, from_engine, to_engine, effective_at} (BF-PROP-004)"))
         return [], {}, True, False
     rows, ok = [], True
     for i, sw in enumerate(log):
@@ -352,7 +482,7 @@ def _build_engine_epochs(data: dict, loc: str, findings: list):
         if missing:
             findings.append(("P1", loc,
                 f"engine_switch_log[{i}] missing {missing} — a switch row must record the "
-                "epoch id, both engines, and when it took effect (fail closed, PROP-025)"))
+                "epoch id, both engines, and when it took effect (fail closed, BF-PROP-004)"))
             ok = False
             continue
         if (str(sw.get("from_engine")) not in VALID_BUILD_ENGINES
@@ -375,7 +505,7 @@ def _build_engine_epochs(data: dict, loc: str, findings: list):
             findings.append(("P1", loc,
                 f"engine_switch_log: a switch to '{sw.get('to_engine')}' records from_engine "
                 f"'{sw.get('from_engine')}' but the prior epoch ran '{prev_to}' — the chain "
-                "must be continuous (fail closed, PROP-025)"))
+                "must be continuous (fail closed, BF-PROP-004)"))
             ok = False
         end = str(rows[j + 1].get("effective_at")) if j + 1 < len(rows) else None
         epochs.append({"epoch_id": str(sw.get("engine_epoch_id")),
@@ -386,13 +516,13 @@ def _build_engine_epochs(data: dict, loc: str, findings: list):
     if prev_to != cur:
         findings.append(("P1", loc,
             f"engine_switch_log ends at '{prev_to}' but active_build_engine is '{cur}' — the "
-            "switch chain must end at the current engine (fail closed, PROP-025)"))
+            "switch chain must end at the current engine (fail closed, BF-PROP-004)"))
         ok = False
     return epochs, {e["epoch_id"]: e["family"] for e in epochs}, True, ok
 
 
 def _row_epoch_family(row: dict, epochs, by_id, switched, current_family):
-    """PROP-025 (+ GPT #16): the engine family for a fix_cycles row's OWN epoch.
+    """BF-PROP-004 (+ GPT #16): the engine family for a fix_cycles row's OWN epoch.
     Returns (family|None, resolvable, cache_mismatch). The recomputed epoch
     (engine_epoch_id / effective_at) is authoritative; an explicit engine_family is a
     CACHE that must agree (GPT #16: never trust a self-declared epoch over the log). A
@@ -426,7 +556,7 @@ def _row_epoch_family(row: dict, epochs, by_id, switched, current_family):
 
 
 def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
-    """PROP-021 (epoch-aware PROP-025): a failed fix on the same finding_id MUST
+    """BF-PROP-003 (epoch-aware BF-PROP-004): a failed fix on the same finding_id MUST
     escalate the seat per BUILD-ENGINE-PROFILES.fix_escalation — re-dispatching the
     same (or lower) seat tier = protocol drift; escalation never resets loop_budget.
     The seat-family + ladder validation keys off the engine epoch ACTIVE AT EACH
@@ -439,7 +569,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
     if not isinstance(rows, list):
         findings.append(("P1", loc,
             "fix_cycles must be a list of typed rows "
-            "{finding_id, source_review_ref, attempt_n, seat_ref, result, review_ref} (PROP-021)"))
+            "{finding_id, source_review_ref, attempt_n, seat_ref, result, review_ref} (BF-PROP-003)"))
         return
 
     by_finding: dict[str, list[tuple[int, dict]]] = {}
@@ -452,12 +582,12 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
             if not field_present(row, key):
                 findings.append(("P1", loc,
                     f"fix_cycles[{i}].{key} missing — attempt history is STATE-owned and "
-                    "typed; a fix attempt without it is untracked (PROP-021)"))
+                    "typed; a fix attempt without it is untracked (BF-PROP-003)"))
         if str(row.get("loop_budget_reset", "")).lower() in ("yes", "true", "1"):
             findings.append(("P1", loc,
                 f"fix_cycles[{i}] records a loop_budget reset — escalation only changes "
                 "the seat for the next bounded fix attempt, it is NEVER permission for a "
-                "new review cycle (PROP-021)"))
+                "new review cycle (BF-PROP-003)"))
         fam, resolvable, cache_mismatch = _row_epoch_family(
             row, epochs, by_id, switched, current_family)
         row_epoch[id(row)] = (fam, resolvable)
@@ -465,7 +595,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
             findings.append(("P1", loc,
                 f"fix_cycles[{i}].engine_family '{row.get('engine_family')}' contradicts the "
                 "engine epoch recomputed from engine_switch_log — engine_family is a cache, the "
-                "epoch is authoritative (fail closed, PROP-025)"))
+                "epoch is authoritative (fail closed, BF-PROP-004)"))
         try:
             attempt_n = int(row.get("attempt_n"))
         except (TypeError, ValueError):
@@ -479,7 +609,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
         if attempt_n > MAX_FIX_ATTEMPTS:
             findings.append(("P1", loc,
                 f"fix_cycles[{i}].attempt_n={attempt_n} — fix-3 failure feeds the "
-                "4-failure cross-family debug rule, never a fix-4 row (PROP-021)"))
+                "4-failure cross-family debug rule, never a fix-4 row (BF-PROP-003)"))
             continue
         fid = str(row.get("finding_id", ""))
         if fid:
@@ -504,7 +634,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
                 findings.append(("P1", loc,
                     f"fix_cycles: attempt {attempt_n} for finding {fid} has unparseable "
                     f"seat_ref '{row.get('seat_ref')}' — an escalated attempt must name a "
-                    "model + effort verifiable against the ladder (fail closed, PROP-021)"))
+                    "model + effort verifiable against the ladder (fail closed, BF-PROP-003)"))
                 continue
             fam, resolvable = row_epoch.get(id(row), (None, False))
             if not resolvable:
@@ -513,21 +643,21 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
                     "engine epoch it belongs to (no engine_epoch_id / effective_at / engine_family, "
                     "and engine_switch_log does not place it). Record the epoch; the ladder is "
                     "validated per the engine active AT THE ATTEMPT, never the current engine "
-                    "(fail closed, PROP-025)"))
+                    "(fail closed, BF-PROP-004)"))
                 continue
             if fam and cur_rank[2] != fam:
                 findings.append(("P1", loc,
                     f"fix_cycles: attempt {attempt_n} for finding {fid} seat "
                     f"'{row.get('seat_ref')}' is {cur_rank[2]}-family but its engine epoch ran "
                     f"{fam} — the escalation ladder is per the epoch's engine "
-                    "(PROP-021, epoch-aware PROP-025)"))
+                    "(BF-PROP-003, epoch-aware BF-PROP-004)"))
                 continue
             prior_row = prev.get(attempt_n - 1)
             if prior_row is None:
                 findings.append(("P1", loc,
                     f"fix_cycles: attempt {attempt_n} for finding {fid} has no recorded "
                     f"attempt {attempt_n - 1} — the ladder is sequential, attempts are "
-                    "never skipped or untracked (PROP-021)"))
+                    "never skipped or untracked (BF-PROP-003)"))
                 continue
             prior_rank = _seat_rank(str(prior_row.get("seat_ref", "")))
             if prior_rank is None:
@@ -541,14 +671,14 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
                         f"fix_cycles: attempt {attempt_n} for finding {fid} continues the "
                         f"ladder across an engine switch ({prior_fam} -> {fam}) without a typed "
                         "cross_epoch_deviation {ceo_decision_ref, reason} — the fix level must be "
-                        "preserved across a switch, never silently reset (PROP-025)"))
+                        "preserved across a switch, never silently reset (BF-PROP-004)"))
                 continue  # cross-epoch tier is compared within family only (per epoch)
             if cur_rank[2] != prior_rank[2]:
                 findings.append(("P1", loc,
                     f"fix_cycles: attempt {attempt_n} for finding {fid} switches family "
                     f"({prior_rank[2]} -> {cur_rank[2]}) — the fix ladder stays within the "
                     "epoch's engine; family alternation belongs to the 4-failure "
-                    "cross-family debug rule (PROP-021)"))
+                    "cross-family debug rule (BF-PROP-003)"))
                 continue
             escalated = (cur_rank[0] > prior_rank[0]
                          or (cur_rank[0] == prior_rank[0] and cur_rank[1] > prior_rank[1]))
@@ -558,7 +688,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
                     f"'{row.get('seat_ref')}' is not above attempt {attempt_n - 1} seat "
                     f"'{prior_row.get('seat_ref')}' — re-dispatching the same seat tier on "
                     "the same finding = protocol drift; escalate per "
-                    "BUILD-ENGINE-PROFILES.fix_escalation (PROP-021)"))
+                    "BUILD-ENGINE-PROFILES.fix_escalation (BF-PROP-003)"))
 
 
 _STAGE_TO_PROFILES_KEY = {"PLANNING_STUDIO": "planning_studio", "BUILD_FACTORY": "build_factory",
@@ -566,7 +696,7 @@ _STAGE_TO_PROFILES_KEY = {"PLANNING_STUDIO": "planning_studio", "BUILD_FACTORY":
 
 
 def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
-    """PROP-013 BUILD-ENGINE-PROFILES enforcement — state-side clauses."""
+    """PBF-PROP-008 BUILD-ENGINE-PROFILES enforcement — state-side clauses."""
     # clause: active_build_engine present + in enum
     engine = data.get("active_build_engine")
     if not engine or str(engine) not in VALID_BUILD_ENGINES:
@@ -575,7 +705,7 @@ def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
             "the session must declare which build engine it is driving"))
         return  # cannot resolve a seat without a valid engine
 
-    # FIX-STAGE-SEAT-PROFILE (PROP-035): a FIXING_STAGE session MUST have a fixing_stage orchestrator
+    # FIX-STAGE-SEAT-PROFILE (F-PROP-001): a FIXING_STAGE session MUST have a fixing_stage orchestrator
     # seat in BUILD-ENGINE-PROFILES, else the seat cap is invisible — an over-tier orchestrator in a
     # fixing session would pass unchecked. This presence check runs INDEPENDENT of orchestrator_model
     # (which the exceeds-check below skips when absent), so a fixing session can never silently lack a
@@ -589,7 +719,7 @@ def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
         if perr or not isinstance(profiles, dict):
             findings.append(("P1", loc,
                 f"current_stage: FIXING_STAGE but BUILD-ENGINE-PROFILES is unreadable at {profiles_path} — "
-                "cannot verify the fixing_stage seat cap (fail closed) (PROP-035 / FIX-STAGE-SEAT-PROFILE)"))
+                "cannot verify the fixing_stage seat cap (fail closed) (F-PROP-001 / FIX-STAGE-SEAT-PROFILE)"))
             return
         branch_key = ENGINE_BRANCH_KEYS[str(engine)]
         fix_seat = nested_get(profiles, "orchestrator", "fixing_stage", branch_key)
@@ -597,7 +727,7 @@ def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
             findings.append(("P1", loc,
                 f"current_stage: FIXING_STAGE but BUILD-ENGINE-PROFILES has no orchestrator.fixing_stage."
                 f"{branch_key} seat — the Fixing-stage seat cap is invisible (an over-tier orchestrator "
-                "would pass unchecked); add a fixing_stage seat for this engine (PROP-035 / "
+                "would pass unchecked); add a fixing_stage seat for this engine (F-PROP-001 / "
                 "FIX-STAGE-SEAT-PROFILE)"))
             return
 
@@ -683,7 +813,7 @@ def _lock_pointer_migration_exempt(data: dict) -> bool:
 
 
 def _check_handoff_lock_pointer(data: dict, repo_root: str, loc: str, findings: list) -> None:
-    """PROP-034 Lever B (read side): when state.packet_dir is set, the latest handoff in
+    """BF-PROP-007 Lever B (read side): when state.packet_dir is set, the latest handoff in
     <repo-root>/handoffs MUST carry a typed close_turn.lock_pointer that points at the RECOMPUTED
     frozen hash + open-card set, so the next session NEVER boots on a drifted handoff.
 
@@ -705,7 +835,7 @@ def _check_handoff_lock_pointer(data: dict, repo_root: str, loc: str, findings: 
     except OSError:
         findings.append(("P1", loc,
             f"latest handoff '{handoff}' is unreadable — cannot verify the lock pointer at "
-            "session-start; fail closed (PROP-034 Lever B / F6)"))
+            "session-start; fail closed (BF-PROP-007 Lever B / F6)"))
         return
     import re as _re
     import yaml as _yaml
@@ -725,7 +855,7 @@ def _check_handoff_lock_pointer(data: dict, repo_root: str, loc: str, findings: 
             f"state.packet_dir is set but the latest handoff '{handoff}' carries NO "
             "close_turn.lock_pointer — a frozen project must POINT AT the lock every turn so the next "
             "session cannot boot on a drifted/stripped handoff; only an explicit typed migration "
-            "deviation row exempts this (PROP-034 Lever B / F6)"))
+            "deviation row exempts this (BF-PROP-007 Lever B / F6)"))
         return
     from cx_close_turn import verify_lock_pointer
     findings.extend(verify_lock_pointer(block.get("lock_pointer"), data, repo_root,
@@ -779,25 +909,31 @@ def _session_start_checks(data: dict, repo_root: str, loc: str, findings: list,
             findings.append(("P2", loc,
                 "WIP marked but unowned — add owner_card + handoff_ref"))
 
-    # P2: builder-standard session acknowledgment (PROP-014, session-level read law).
+    # P2: builder-standard session acknowledgment (P-PROP-001, session-level read law).
     # A build-mode session records WHICH BUILDER-STANDARD.md it started from (file + hash).
     if str(data.get("current_mode", "")) in BUILD_MODES:
         _check_session_ack(data, repo_root, loc, findings,
             "builder_standard_read", "builder standard",
             "a build session must acknowledge BUILDER-STANDARD.md at session start")
-        # P1: machine-generated boot receipt referenced + fresh (PROP-018 rail).
+        # P2: orchestration mode declared (PBF-PROP-012 Part B, R-ORCH) — the lead dispatches
+        # fresh subagents per task; it never builds/self-reviews inline.
+        _check_orchestration_mode(data, loc, findings)
+        # P2: SEE-AND-TEST demo mode declared (PBF-PROP-012 Part E) — the session commits to
+        # demoing every user-facing module on its real surface before accepting it.
+        _check_module_demo_mode(data, loc, findings)
+        # P1: machine-generated boot receipt referenced + fresh (B-PROP-002 rail).
         if check_boot_ack:
             _check_boot_ack(data, repo_root, loc, findings)
-        # P1: reviewer taxonomy/timing declared as typed state (PROP-020).
+        # P1: reviewer taxonomy/timing declared as typed state (BF-PROP-002).
         _check_review_boundary(data, loc, findings, require_block=True)
 
-    # P1: PROP-034 Lever B (F6) — when state.packet_dir is set, the latest handoff's lock-pointer
+    # P1: BF-PROP-007 Lever B (F6) — when state.packet_dir is set, the latest handoff's lock-pointer
     # must match the RECOMPUTED frozen hash + open-card set, so the next session cannot boot on a
     # drifted handoff. This runs across ALL handoff-bearing modes (REVIEW / FINAL_READY / build),
     # not just BUILD_MODES — a stripped or absent lock_pointer on a frozen project fails closed.
     _check_handoff_lock_pointer(data, repo_root, loc, findings)
 
-    # P2: lessons-preload acknowledgment (PROP-017, planning-session read law).
+    # P2: lessons-preload acknowledgment (PBF-PROP-010, planning-session read law).
     # A planning session records WHICH MEMORY/LESSONS.yaml it preloaded the
     # ACTIVE stage-planning lessons from (file + hash).
     if str(data.get("current_stage", "")) == PLANNING_STAGE:
@@ -840,17 +976,18 @@ def collect_state_findings(path: str, args, session_start: bool, repo_root: str 
     if "last_commit" not in data or not data.get("last_commit"):
         findings.append(("P1", loc, "last_commit missing or empty — required as anti-chat-only-drift anchor"))
 
-    # --- PROP-013: active_build_engine + orchestrator seat vs BUILD-ENGINE-PROFILES ---
+    # --- PBF-PROP-008: active_build_engine + orchestrator seat vs BUILD-ENGINE-PROFILES ---
     _engine_profile_checks(data, args, loc, findings)
 
-    # --- PROP-020: typed deviations + review_boundary enums + PROTOCOL_INCIDENT ---
+    # --- BF-PROP-002: typed deviations + review_boundary enums + PROTOCOL_INCIDENT ---
     # (review_boundary validated whenever present; presence required at session-start
     # in build modes — see _session_start_checks)
     _check_review_boundary(data, loc, findings, require_block=False)
     _check_protocol_deviations(data, loc, findings)
     _check_protocol_incident(data, loc, findings)
+    _check_built_app_audit_before_final_xfam(data, loc, findings)
 
-    # --- PROP-021: fix-escalation ladder (STATE-owned fix_cycles) ---
+    # --- BF-PROP-003: fix-escalation ladder (STATE-owned fix_cycles) ---
     _check_fix_cycles(data, loc, findings)
 
     # --- exactly one current_card (null is allowed, but must be present) ---

@@ -22,7 +22,7 @@
 #   Meaning-flip-sensitive rules STILL require a model review when changed. The lint reduces
 #   drift risk; it does not eliminate semantic review.
 #
-# SWEEP SCOPE (PROP-005/012, folded 2026-06-11):
+# SWEEP SCOPE (PBF-PROP-004 · PBF-PROP-007, folded 2026-06-11):
 #   The key-phrase sweep (unlisted-file scan + --strict) covers RULE-BEARING CANON ONLY:
 #   scan_scope.rule_bearing below ∪ every appears_in path (registering a rule auto-pulls
 #   its files into the sweep). Out-of-scope narrative/history (design-history/, handoffs/,
@@ -52,6 +52,11 @@ scan_scope:
     - VOICE.md
     - BUILT-APP-AUDIT.md
     - MASTER-BLUEPRINT.md
+  id_integrity:
+    # Files scanned for SLASH-SHORTHAND id-integrity ONLY (not STALE-BARE-PROP).
+    # Use for files that carry intentional legacy_id fields (bare PROP-NNN) but
+    # must not contain slash-shorthand compound PROP references.
+    - MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md
 
 rules:
   - id: cross-family-substitution
@@ -110,7 +115,7 @@ rules:
   - id: foundation-checkpoint
     # Assertion (GATES G5 carve-out): a HIGH-RISK foundation card (money/auth/shared-data-shape/secrets)
     # MUST get one checkpoint before dependent cards run; dependents are blocked until it passes.
-    # History note: PROP-003's original queue text said "MAY" — superseded; the queue keeps the old
+    # History note: B-PROP-001's original queue text said "MAY" — superseded; the queue keeps the old
     # wording as append-only history with a correction note (history files are NOT in appears_in).
     canonical:
       - "foundation_checkpoint_required"
@@ -123,7 +128,7 @@ rules:
       - templates/WORK-ORDER.template.yaml
 
   - id: deck-reverse-coverage
-    # Assertion (PROP-007): cx check deck proves packet→deck coverage against requirements-manifest.yaml
+    # Assertion (PB-PROP-001): cx check deck proves packet→deck coverage against requirements-manifest.yaml
     # (inside the frozen packet hash); BUILDING must land in >=1 card; NOT_BUILDING/CEO_DEFERRED need ceo_decision_ref.
     canonical:
       - "cx check deck"
@@ -135,7 +140,7 @@ rules:
       - checkers/CX-CHECK-SPEC.md
 
   - id: cost-effective-by-default
-    # Assertion (PROP-013, CEO 2026-06-10): the default for every seat is COST-EFFECTIVE —
+    # Assertion (PBF-PROP-008, CEO 2026-06-10): the default for every seat is COST-EFFECTIVE —
     # the cheapest model that reliably succeeds first pass — never cheapest-absolute;
     # mini/spark/haiku-class never writes app code. Exact seats: BUILD-ENGINE-PROFILES.yaml
     # (carries a [RULE:cost-effective-by-default] pointer; case differs there).
@@ -153,7 +158,7 @@ rules:
       - BUILD-ENGINE-PROFILES.yaml
 
   - id: packet-contents-floor
-    # Assertion (PROP-014): the frozen packet must pass `cx check packet` BEFORE CEO validation
+    # Assertion (P-PROP-001): the frozen packet must pass `cx check packet` BEFORE CEO validation
     # and freeze — coverage map (20 categories), decision ledger (asks+decisions), completeness
     # audit, readiness triggers, builder standard named. A thin packet must not pass green.
     canonical:
@@ -167,7 +172,7 @@ rules:
       - PACKET-CONTENTS.md
 
   - id: builder-standard-session-read
-    # Assertion (PROP-014 Piece 5): BUILDER-STANDARD.md is SESSION-level reading (once at session
+    # Assertion (P-PROP-001 Piece 5): BUILDER-STANDARD.md is SESSION-level reading (once at session
     # start, never per card); the session records the ack in state (file+hash) and
     # cx check state --session-start enforces it for build modes (P2).
     canonical:
@@ -182,8 +187,41 @@ rules:
       - START-HERE.md
       - templates/STATE.template.yaml
 
+  - id: orchestration-mode-ack
+    # Assertion (PBF-PROP-012 Part B, R-ORCH): during BUILD/FIXING the lead runs as an ORCHESTRATOR
+    # that dispatches a fresh subagent per build/review task (never builds/self-reviews inline) —
+    # the model-agnostic rail that injects the builder prevention preamble + the post-build review
+    # legs. The session declares session_start.orchestration_mode and cx check state --session-start
+    # enforces it for build modes (P2); a trivial 1-card project may carry a typed inline_waiver.
+    canonical:
+      - "session_start.orchestration_mode"
+    key_phrases: ["orchestration_mode", "dispatch"]
+    banned_negations: ["lead builds inline", "no subagent dispatch required", "orchestration is optional"]
+    appears_in:
+      - KERNEL.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/STATE.template.yaml
+
+  - id: module-demo-mode-ack
+    # Assertion (PBF-PROP-012 Part E, SEE-AND-TEST): during BUILD/FIXING the orchestrator declares it will
+    # DEMO every user-facing (live_slice) module on its real surface (web→Chrome via live_url,
+    # mobile→iPhone 13 Pro sim) and capture a real shown-screenshot before offering the CEO the
+    # live-drive accept. The show-step a real project skipped is now forced by both a session-start ack (P2)
+    # and a per-module P0 precondition (module_demo block) inside validate_live_slice_accept.
+    # A backend-only project with no user-facing modules may carry a typed no_user_facing_modules
+    # waiver + ceo_decision_ref instead.
+    canonical:
+      - "session_start.module_demo_mode"
+    key_phrases: ["module_demo_mode", "demo", "surface"]
+    banned_negations: ["screenshot is enough", "no live demo required", "demo is optional"]
+    appears_in:
+      - KERNEL.md
+      - checkers/CX-CHECK-SPEC.md
+      - templates/STATE.template.yaml
+      - templates/MODULE-ACCEPTANCE.template.yaml
+
   - id: review-backflow
-    # Assertion (PROP-014, GPT P2-02): a self/cross-family review fix that changes intent,
+    # Assertion (P-PROP-001, GPT P2-02): a self/cross-family review fix that changes intent,
     # money/business logic, security/privacy tradeoffs, requirements, or CEO decisions must
     # return to the affected CEO validation/decision step before freeze.
     canonical:
@@ -195,7 +233,7 @@ rules:
       - PACKET-CONTENTS.md
 
   - id: review-three-leg-ask
-    # Assertion (PROP-015, folded 2026-06-10): EVERY model review dispatch — self-review AND
+    # Assertion (PBF-PROP-009, folded 2026-06-10): EVERY model review dispatch — self-review AND
     # cross-family alike, from the first review — asks all three legs: CONTINUITY (all reviews,
     # not re-reviews only) + PROBLEMS + APPROACH/IMPROVEMENT; the paste-ready stanza is copied
     # verbatim, never re-composed from memory.
@@ -273,7 +311,7 @@ rules:
       - checkers/CX-CHECK-SPEC.md
 
   - id: locked-style-direction
-    # Assertion (PROP-016, folded 2026-06-11): the PRODUCT-TASTE-LOCK must carry a complete
+    # Assertion (P-PROP-002, folded 2026-06-11): the PRODUCT-TASTE-LOCK must carry a complete
     # locked_style_direction (the Style-Select outcome) for user-facing apps — without it the
     # taste lock is incomplete and G7 blocks. Mechanical: cx check packet fires when coverage
     # category 14 is DONE (LOCKED-STYLE-DIRECTION-REQUIRED).
@@ -289,7 +327,7 @@ rules:
       - checkers/CX-CHECK-SPEC.md
 
   - id: lessons-preload-ack
-    # Assertion (PROP-017, folded 2026-06-11): a PLANNING session reads the ACTIVE stage-planning
+    # Assertion (PBF-PROP-010, folded 2026-06-11): a PLANNING session reads the ACTIVE stage-planning
     # lessons from MEMORY/LESSONS.yaml ONCE at session start and acks session_start.lessons_preload
     # (status+file+hash) in state; cx check state --session-start enforces it (P2,
     # STATE-LESSONS-PRELOAD-ACK). Build read path untouched.
@@ -304,7 +342,7 @@ rules:
       - checkers/CX-CHECK-SPEC.md
 
   - id: review-per-module
-    # Assertion (PROP-003): the costly MODEL review (self + cross-family) fires ONCE per MODULE, not per card.
+    # Assertion (B-PROP-001): the costly MODEL review (self + cross-family) fires ONCE per MODULE, not per card.
     # Anti-flip: deterministic checks STILL run on every card (free) so catch-rate holds between reviews.
     canonical:
       - "review per MODULE, not per card"
@@ -331,7 +369,7 @@ rules:
       - KERNEL.md
 
   - id: prevention-first-ladder
-    # Assertion (v1.13, PROP-024, BUILDER-STANDARD.md): the ordered pre-write do-less ladder is a
+    # Assertion (v1.13, B-PROP-005, BUILDER-STANDARD.md): the ordered pre-write do-less ladder is a
     # PREVENTION gate walked before the first code edit — its presence in the builder standard must
     # not silently vanish or drift. NOTE: BUILDER-STANDARD.md deliberately carries NO [RULE:prevention-
     # first-ladder] pointer — the pointer is a full-pass shortcut (cx_consistency.py), and this rule's
@@ -350,16 +388,16 @@ rules:
       - BUILDER-STANDARD.md
 
   - id: render-fidelity-gate
-    # Assertion (PROP-033, fold v1.14): cx check render-fidelity is an in-loop RENDERED-fidelity
+    # Assertion (B-PROP-009, fold v1.14): cx check render-fidelity is an in-loop RENDERED-fidelity
     # gate run after a UI build card renders and BEFORE self-review. Layer 1 is deterministic +
     # BLOCKING — it VALIDATES a render bundle (it never drives a browser): a pinned render_profile,
     # fresh machine-generated commit-bound evidence (collect != check), a frozen coverage matrix,
     # and measured overflow/offscreen/blank checks markers cannot see. Layer 2 (golden-drift) is
     # ADVISORY WARN only until same-commit repeatability is proven (a perceptual diff as a hard gate
     # today = the flaky-gate scar). The eight Layer-1 clauses (RENDER-FIT-*) each FAIL on their bad
-    # fixture and PASS on render_good.yaml; the gate adds NO new gate family (it rides PROP-019/022/
-    # 031/032 + module_acceptance receipts) and an additive render_fidelity_receipt_ref links it to
-    # PROP-031 without editing the locked external-capture check.
+    # fixture and PASS on render_good.yaml; the gate adds NO new gate family (it rides B-PROP-003 · B-PROP-004 ·
+    # P-PROP-004 · B-PROP-008 + module_acceptance receipts) and an additive render_fidelity_receipt_ref links it to
+    # P-PROP-004 without editing the locked external-capture check.
     canonical:
       - "render-fidelity"
       - "Layer 1"
@@ -371,7 +409,7 @@ rules:
       - checkers/CX-CHECK-SPEC.md
 
   - id: lock-fidelity-fail-closed
-    # Assertion (PROP-034, fold v1.15, GATES.md): lock-fidelity continuity keeps the build TRUE to the
+    # Assertion (BF-PROP-007, fold v1.15, GATES.md): lock-fidelity continuity keeps the build TRUE to the
     # frozen lock during corrections + handoffs. The FAIL-CLOSED CLASSIFIER is the teeth: a change not
     # OBVIOUSLY a pure restore of an explicit locked line is NOT RESTORE — default to the stricter
     # class; the "when unsure, RESTORE" negation is banned. HONEST LIMIT (stated, not hidden): the
@@ -390,7 +428,7 @@ rules:
       - GATES.md
 
   - id: fixing-stage-preserve-posture
-    # Assertion (PROP-035, fold v1.16, FIXING-STAGE.md): the Fixing stage flips the posture to PRESERVE
+    # Assertion (F-PROP-001, fold v1.16, FIXING-STAGE.md): the Fixing stage flips the posture to PRESERVE
     # — change only the defect. The always-read hard rule is the always-on guardrail (mirrors
     # prevention-first-ladder): its canonical phrases must stay PRESENT in the kernel + builder standard
     # + the stage doc, so cx check consistency fails the moment the guardrail is removed/reworded out (a
@@ -407,7 +445,7 @@ rules:
       - FIXING-STAGE.md
 
   - id: verify-app-gate
-    # Assertion (PROP-036, fold v1.17, GATES.md + SEVERITY.md): a live_slice's runtime behavior is
+    # Assertion (B-PROP-010, fold v1.17, GATES.md + SEVERITY.md): a live_slice's runtime behavior is
     # machine-verified ONCE per completed slice — the verify-app agent drives the running build and
     # checks its acceptance criteria at runtime — as a PRECONDITION to the CEO live-drive accept. The
     # checker proves a bound (repo_sha hex >=12), generator-stamped verify_app receipt recorded
@@ -427,7 +465,7 @@ rules:
       - SEVERITY.md
 
   - id: master-blueprint-gate
-    # Assertion (PROP-039, fold v1.18, MASTER-BLUEPRINT.md + GATES.md): the PLANNING-stage Master Blueprint
+    # Assertion (P-PROP-005, fold v1.18, MASTER-BLUEPRINT.md + GATES.md): the PLANNING-stage Master Blueprint
     # is the CEO's single review/drive surface; a module is buildable only after the CEO approves it on the
     # blueprint, and cx check blueprint RECOMPUTES readiness from source (never a written flag / HTML badge /
     # manifest boolean). The per-module build-blocker rides the v1.10 order wall (cx check module-start) — NO
@@ -444,7 +482,7 @@ rules:
       - GATES.md
 
   - id: render-never-retype
-    # Assertion (PROP-039, MASTER-BLUEPRINT.md): the Master Blueprint is a PROJECTION (render) of the locked
+    # Assertion (P-PROP-005, MASTER-BLUEPRINT.md): the Master Blueprint is a PROJECTION (render) of the locked
     # source files — never hand-typed, never hand-edited; change the plan, regenerate. A hand-written
     # blueprint is a 4th drifting truth. Presence/anti-drift bite in MASTER-BLUEPRINT.md.
     canonical:
@@ -456,7 +494,7 @@ rules:
       - MASTER-BLUEPRINT.md
 
   - id: same-as-github-three-stage
-    # Assertion (PROP-039, CEO 2026-06-25, CHARTER.md): the plain-language three-stage narrative
+    # Assertion (P-PROP-005, CEO 2026-06-25, CHARTER.md): the plain-language three-stage narrative
     # (Planning/Building/Fixing) in canon must match the public GitHub README word-for-word — copy it, never
     # paraphrase; the Fixing stage especially. Canon and the public face tell ONE story. Presence/anti-drift
     # bite in CHARTER.md.
@@ -467,3 +505,82 @@ rules:
     banned_negations: ["paraphrase the public README", "canon may diverge from github", "the public wording is just a summary"]
     appears_in:
       - CHARTER.md
+
+  - id: kaizen-behavioural-closure
+    # Assertion (PBF-PROP-012 Part F, 2026-06-30): a behavioural APPLIED PROP must carry enforcement that
+    # bites (clause or prompt_marker or judgment_limit) — presence-lint-only is BANNED. Enforced by
+    # cx check kaizen (KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT + related clauses).
+    # NOTE: deliberately NO [RULE:kaizen-behavioural-closure] pointer in KAIZEN.md — the canonical
+    # phrases must be PRESENT so consistency bites on removal (same as prevention-first-ladder).
+    canonical:
+      - "behavioural"
+      - "may NOT be marked"
+      - "Presence-lint-only"
+      - "BANNED for a behavioural"
+    key_phrases: ["behavioural", "may NOT be marked", "Presence-lint-only", "BANNED for a behavioural"]
+    banned_negations:
+      - "presence lint is enough"
+      - "behavioural PROPs may be presence-only"
+      - "enforcement is optional"
+    appears_in:
+      - KAIZEN.md
+
+  - id: builder-prevention-preamble
+    # Assertion (PBF-PROP-012 Part C, 2026-06-30): the orchestrator MUST inject the canonical B-PROP-005
+    # do-less prevention preamble into the builder subagent's prompt on EVERY engine. The Card
+    # Compiler records the injection in execution.prevention_preamble. Engine-agnostic: keys on the
+    # injection MARKER, not a vendor agent file. Enforced by cx check card
+    # (BUILD-PREVENTION-PREAMBLE-MISSING + BUILD-PREVENTION-PREAMBLE-REF-UNSAFE).
+    # NOTE: BUILDER-STANDARD.md carries [RULE:builder-prevention-preamble] — the canonical phrases
+    # must also be PRESENT so consistency bites on removal.
+    canonical:
+      - "builder prevention preamble"
+      - "prevention preamble into the builder"
+    key_phrases: ["builder prevention preamble", "prevention preamble"]
+    banned_negations:
+      - "preamble is optional"
+      - "no preamble required"
+      - "skip the prevention preamble"
+    appears_in:
+      - KERNEL.md
+      - GATES.md
+      - BUILDER-STANDARD.md
+
+  - id: no-ambiguity-rule
+    # Assertion (PBF-PROP-014, 2026-06-30): every new PROP must scan all existing PROPs + the
+    # CEO-DECISION-LEDGER for duplicates, ambiguities, and conflicts before being queued.
+    # Findings declared + resolved in conflict_scan; never silently dropped.
+    # Enforced by cx check kaizen --conflict-scan (KAIZEN-CONFLICT-SCAN-RESOLVED P0,
+    # KAIZEN-CONFLICT-SCAN-PRESENT P1, KAIZEN-CONFLICT-SCAN-BASIS-CURRENT P1,
+    # BUILD-CONFLICT-SCAN-STEP-MISSING P1).
+    # NOTE: KAIZEN.md carries the rule prose; no [RULE:no-ambiguity-rule] pointer there —
+    # the canonical phrases must be PRESENT so consistency bites on removal
+    # (same pattern as prevention-first-ladder + kaizen-behavioural-closure).
+    canonical:
+      - "scan all existing PROPs"
+      - "conflict_scan"
+      - "declared and resolved"
+    key_phrases: ["conflict_scan", "scan all existing PROPs", "declared and resolved"]
+    banned_negations:
+      - "conflict_scan is optional"
+      - "no conflict scan required"
+      - "skip the conflict scan"
+      - "scan is advisory"
+    appears_in:
+      - KAIZEN.md
+      - KERNEL.md
+      - GATES.md
+
+  - id: design-fidelity-drift-crosswalk
+    # Clarification (PBF-PROP-013-A, BS-06): one-paragraph crosswalk distinguishing the 6 fidelity/drift
+    # PROPs by stage + what each checks. Pure clarification — no rule changes.
+    assertion: >
+      Six PROPs each use "fidelity" and "drift" for a different gate at a different stage:
+      016 = style pick at planning-tail; 019 = UI-contract markers into the card at design-lock;
+      031 = external-reference lock inside the frozen packet; 033 = rendered-fidelity mid-build
+      per card; 034 = lock-fidelity anti-drift across handoffs/corrections; 035 = Fixing Stage home.
+    scope: clarification
+    key_phrases: ["design-fidelity / drift crosswalk", "which check fires when"]
+    banned_negations: []
+    appears_in:
+      - GATES.md

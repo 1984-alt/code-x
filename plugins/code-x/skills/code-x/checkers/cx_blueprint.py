@@ -1,4 +1,4 @@
-# cmd_blueprint: the per-module BLUEPRINT-READY gate (PROP-039, fold v1.18).
+# cmd_blueprint: the per-module BLUEPRINT-READY gate (P-PROP-005, fold v1.18).
 #
 #   cx check blueprint <packet-dir> --module <id> --state <state.yaml> --approval <BLUEPRINT-APPROVAL.yaml>
 #   cx check blueprint <packet-dir> --all   --state <state.yaml> --approval <BLUEPRINT-APPROVAL.yaml>
@@ -179,7 +179,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
         findings.append(("P1", mloc,
             f"module '{mid}' kind '{kind or '(missing)'}' is not one of {sorted(VALID_KINDS)} — "
             "every buildable module declares its kind so the gate enforces the per-kind field set "
-            "(BLUEPRINT-PER-KIND-FIELDS, PROP-039)"))
+            "(BLUEPRINT-PER-KIND-FIELDS, P-PROP-005)"))
         return
     if kind == "screen":
         for fld in ("controls", "nav"):
@@ -187,14 +187,14 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 findings.append(("P1", mloc,
                     f"screen module '{mid}' omits required '{fld}' — a screen kind requires "
                     "design+nav+controls; a missing field set is a silent skip "
-                    "(BLUEPRINT-PER-KIND-FIELDS, PROP-039)"))
+                    "(BLUEPRINT-PER-KIND-FIELDS, P-PROP-005)"))
     else:  # shared_logic — design+nav are N/A, but the skip must be written, never silent.
         na = module.get("design_nav_na_reason")
         if not _is_str(na):
             findings.append(("P1", mloc,
                 f"shared_logic module '{mid}' omits 'design_nav_na_reason' — design+nav are N/A for a "
                 "shared_logic kind but the skip must carry an explicit reason, never be silent "
-                "(BLUEPRINT-PER-KIND-FIELDS, PROP-039)"))
+                "(BLUEPRINT-PER-KIND-FIELDS, P-PROP-005)"))
 
     # ── anchors: recompute every span hash + coverage ──────────────────────────────────────────
     anchors = module.get("anchors")
@@ -203,16 +203,16 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
     if not isinstance(anchors, list):
         findings.append(("P1", mloc,
             f"module '{mid}' has no 'anchors' list — every visible blueprint item must carry a stable "
-            "source anchor (BLUEPRINT-ANCHOR-RESOLVES, PROP-039)"))
+            "source anchor (BLUEPRINT-ANCHOR-RESOLVES, P-PROP-005)"))
         anchors = []
     for j, a in enumerate(anchors):
         aloc = f"{mloc}#anchors[{j}]"
         if not isinstance(a, dict):
-            findings.append(("P1", aloc, "anchor row is not a mapping (PROP-039)"))
+            findings.append(("P1", aloc, "anchor row is not a mapping (P-PROP-005)"))
             continue
         aid = str(a.get("anchor_id", "") or "").strip()
         if not aid:
-            findings.append(("P1", aloc, "anchor row has no anchor_id (PROP-039)"))
+            findings.append(("P1", aloc, "anchor row has no anchor_id (P-PROP-005)"))
             continue
         declared_ids.append(aid)
         anchor_by_id[aid] = a
@@ -220,14 +220,14 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
         recomputed, rerr = _span_hash(packet_dir, a.get("file"), a.get("line"))
         if rerr:
             findings.append(("P1", aloc,
-                f"anchor '{aid}' does not resolve: {rerr} (BLUEPRINT-ANCHOR-RESOLVES, PROP-039)"))
+                f"anchor '{aid}' does not resolve: {rerr} (BLUEPRINT-ANCHOR-RESOLVES, P-PROP-005)"))
             continue
         declared = str(a.get("source_hash", "") or "").strip().lower()
         if declared != recomputed:
             findings.append(("P1", aloc,
                 f"anchor '{aid}' source_hash mismatch: declared {declared[:12] or '(missing)'}…, "
                 f"recomputed {recomputed[:12]}… — the anchored source span changed since the manifest "
-                "was generated (BLUEPRINT-ANCHOR-RESOLVES, PROP-039)"))
+                "was generated (BLUEPRINT-ANCHOR-RESOLVES, P-PROP-005)"))
 
     # BLUEPRINT-ANCHOR-COVERAGE (P0): declared anchor set must EQUAL the expected set derived from
     # canonical sources — a missing OR a duplicate anchor fails.
@@ -235,7 +235,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
     if dupes:
         findings.append(("P0", mloc,
             f"module '{mid}' has duplicate anchor_id(s) {dupes} — a duplicate lets an incomplete "
-            "manifest still hash cleanly (BLUEPRINT-ANCHOR-COVERAGE, PROP-039)"))
+            "manifest still hash cleanly (BLUEPRINT-ANCHOR-COVERAGE, P-PROP-005)"))
     expected = _derive_expected_anchor_ids(reg_module, mid, screen_id, kind, contracts, screen_nav)
     declared_set = set(declared_ids)
     missing_anchors = sorted(expected - declared_set)
@@ -244,14 +244,14 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
             f"module '{mid}' anchor set is INCOMPLETE — missing {missing_anchors} expected from "
             "MODULE-REGISTRY + requirements + controls + nav; an omitted requirement/control that "
             "still hashes clean is exactly the hole this clause closes "
-            "(BLUEPRINT-ANCHOR-COVERAGE, PROP-039)"))
+            "(BLUEPRINT-ANCHOR-COVERAGE, P-PROP-005)"))
     # extra anchors not derivable from any canonical source = the manifest fabricated an item.
     extra_anchors = sorted(declared_set - expected)
     if extra_anchors:
         findings.append(("P0", mloc,
             f"module '{mid}' declares anchor(s) {extra_anchors} not derivable from any canonical "
             "source (registry/requirements/controls/nav) — the anchor set must EQUAL the expected set "
-            "(BLUEPRINT-ANCHOR-COVERAGE, PROP-039)"))
+            "(BLUEPRINT-ANCHOR-COVERAGE, P-PROP-005)"))
 
     # ── BLUEPRINT-SCREEN-DESIGN-LOCKED (P1): each screen module has a hash-bound ui_lock_manifest ──
     if kind == "screen":
@@ -261,7 +261,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
             findings.append(("P1", mloc,
                 f"screen module '{mid}' has no hash-bound, in-packet ui_lock_manifest — a screen's "
                 "design must be locked (style+provenance) before it is buildable "
-                "(BLUEPRINT-SCREEN-DESIGN-LOCKED, PROP-039)"))
+                "(BLUEPRINT-SCREEN-DESIGN-LOCKED, P-PROP-005)"))
         else:
             declared_lock = str(module.get("ui_lock_hash", "") or "").strip().lower()
             actual_lock = hashlib.sha256(lock_target.read_bytes()).hexdigest()
@@ -269,7 +269,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 findings.append(("P1", mloc,
                     f"screen module '{mid}' ui_lock_hash mismatch: declared {declared_lock[:12] or '(missing)'}…, "
                     f"actual {actual_lock[:12]}… — the locked design is not hash-bound to the manifest "
-                    "(BLUEPRINT-SCREEN-DESIGN-LOCKED, PROP-039)"))
+                    "(BLUEPRINT-SCREEN-DESIGN-LOCKED, P-PROP-005)"))
 
     # ── BLUEPRINT-NAV-COMPLETE (P1): every nav to_screen resolves to a screen REGISTERED IN THE FROZEN
     #    REGISTRY (or the independent screens-manifest) — NEVER a manifest-only row (CXBP-002). A fake
@@ -291,7 +291,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 findings.append(("P1", mloc,
                     f"screen module '{mid}' nav target '{to}' is a dangling screen — it resolves to no "
                     "screen registered in the frozen MODULE-REGISTRY or screens-manifest (a manifest-only "
-                    "row never satisfies it) (BLUEPRINT-NAV-COMPLETE, PROP-039)"))
+                    "row never satisfies it) (BLUEPRINT-NAV-COMPLETE, P-PROP-005)"))
 
     # ── BLUEPRINT-CONTROL-HAS-CONTRACT (P1): every control_id resolves to a full behaviour contract ──
     if kind == "screen":
@@ -304,28 +304,28 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 findings.append(("P1", mloc,
                     f"control '{cid or '(unnamed)'}' on module '{mid}' carries no contract_id — a "
                     "control needs a behaviour contract, not just a label "
-                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, PROP-039)"))
+                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, P-PROP-005)"))
                 continue
             ctr = contracts.get(ctr_id)
             if not isinstance(ctr, dict):
                 findings.append(("P1", mloc,
                     f"control '{cid}' contract_id '{ctr_id}' does not resolve in {CONTRACTS_NAME} — "
                     "the generator never synthesizes a contract from a data-fn attribute "
-                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, PROP-039)"))
+                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, P-PROP-005)"))
                 continue
             miss = [f for f in CONTRACT_FIELDS if not _is_str(ctr.get(f))]
             if miss:
                 findings.append(("P1", mloc,
                     f"control '{cid}' contract '{ctr_id}' missing/placeholder {miss} — a behaviour "
                     "contract needs tap_outcome+state_change+error_empty+done_test_ref "
-                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, PROP-039)"))
+                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, P-PROP-005)"))
                 continue
             # the done_test_ref must resolve to an acceptance_criterion (done-test).
             if not _done_test_resolves(packet_dir, ctr.get("done_test_ref")):
                 findings.append(("P1", mloc,
                     f"control '{cid}' contract '{ctr_id}' done_test_ref '{ctr.get('done_test_ref')}' "
                     "does not resolve to a BUILDING requirement's acceptance_criterion "
-                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, PROP-039)"))
+                    "(BLUEPRINT-CONTROL-HAS-CONTRACT, P-PROP-005)"))
 
     # ── BLUEPRINT-FEATURE-HAS-DONE-TEST (P1): every BUILDING req in the module has a done-test ──
     building_reqs = _building_reqs_for_module(packet_dir, reg_module)
@@ -335,7 +335,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
             findings.append(("P1", mloc,
                 f"module '{mid}' BUILDING requirement '{rid}' has no acceptance_criterion done-test in "
                 f"{REQUIREMENTS_NAME} — every feature needs a written 'done' test "
-                "(BLUEPRINT-FEATURE-HAS-DONE-TEST, PROP-039)"))
+                "(BLUEPRINT-FEATURE-HAS-DONE-TEST, P-PROP-005)"))
 
     # ── BLUEPRINT-NO-OPEN-CLARIFICATION (P1): no surviving marker in the module scope ──
     for a in anchors:
@@ -348,7 +348,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
             findings.append(("P1", mloc,
                 f"module '{mid}' anchored source '{a.get('file')}' carries an unresolved "
                 f"'{CLARIFY_MARKER}: …]' marker — an open question blocks readiness "
-                "(BLUEPRINT-NO-OPEN-CLARIFICATION, PROP-039)"))
+                "(BLUEPRINT-NO-OPEN-CLARIFICATION, P-PROP-005)"))
             break
 
     # ── recompute the module's approved_source_hash from its coverage-complete anchor source_hashes ──
@@ -368,7 +368,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
         findings.append(("P0", mloc,
             f"module '{mid}' has no CEO approval receipt in the --approval file — a module is not "
             "BLUEPRINT-READY without a present, source-current CEO approval "
-            "(BLUEPRINT-APPROVAL-CURRENT, PROP-039)"))
+            "(BLUEPRINT-APPROVAL-CURRENT, P-PROP-005)"))
     else:
         approved_hash = str(receipt.get("approved_source_hash", "") or "").strip().lower()
         if approved_hash != recomputed_module_hash:
@@ -376,7 +376,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 f"module '{mid}' approval is STALE: approved_source_hash {approved_hash[:12] or '(missing)'}…"
                 f" != recomputed current source-hash {recomputed_module_hash[:12]}… — a plan edit after "
                 "approval auto-invalidates it; the CEO must re-approve "
-                "(BLUEPRINT-APPROVAL-CURRENT, PROP-039)"))
+                "(BLUEPRINT-APPROVAL-CURRENT, P-PROP-005)"))
 
     # BLUEPRINT-REVIEW-RECEIPT (P1): review-required DERIVED from the FROZEN registry risk_flags.
     reg_flags = {str(f).strip().lower() for f in (reg_module.get("risk_flags") or [])}
@@ -386,31 +386,31 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
             findings.append(("P1", mloc,
                 f"module '{mid}' is registry-risk-flagged ({sorted(reg_flags & REVIEW_REQUIRED_FLAGS)}) "
                 "but carries no typed review_receipt — a manifest boolean never satisfies it; an "
-                "opposite-family review receipt is mandatory (BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                "opposite-family review receipt is mandatory (BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
         else:
             miss = [f for f in REVIEW_RECEIPT_STRING_FIELDS if not _is_str(rr.get(f))]
             if miss:
                 findings.append(("P1", mloc,
                     f"module '{mid}' review_receipt missing/blank {miss} — needs reviewer_family + "
                     "three_leg_ask + verdict + reviewed_source_hash + review_ref "
-                    "(BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                    "(BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
             else:
                 verdict = str(rr.get("verdict", "")).strip().upper()
                 if verdict not in VALID_VERDICTS:
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt verdict '{verdict}' is not one of "
-                        f"{sorted(VALID_VERDICTS)} (BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        f"{sorted(VALID_VERDICTS)} (BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 elif verdict != "PASS":
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt verdict is '{verdict}' (not PASS) — an "
-                        "unresolved review does not authorize the build (BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "unresolved review does not authorize the build (BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 rsh = str(rr.get("reviewed_source_hash", "")).strip().lower()
                 if rsh != recomputed_module_hash:
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt reviewed_source_hash {rsh[:12] or '(missing)'}… "
                         f"!= recomputed current source-hash {recomputed_module_hash[:12]}… — the review "
                         "was of an older plan; re-review the current source "
-                        "(BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "(BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 # CXBP-003: review_ref must be path-safe (no symlink/escape) AND the review file must
                 # EXIST — a non-existent or escaping review_ref is not a review.
                 review_ref = str(rr.get("review_ref", "")).strip()
@@ -418,12 +418,12 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 if ref_err:
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt review_ref '{review_ref}' {ref_err} "
-                        "(BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "(BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 elif not safe_ref.is_file():
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt review_ref '{review_ref}' resolves to no real "
                         "review file next to the approval — a missing review file is not a review "
-                        "(BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "(BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 # CXBP-003: reviewer_family must be the OPPOSITE cross-family group of the builder —
                 # a same-family review is a blind-spot, not a cross-family catch (P1-5).
                 rev_group = _family_group(rr.get("reviewer_family"))
@@ -431,18 +431,18 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                 if rev_group is None:
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt reviewer_family '{rr.get('reviewer_family')}' is "
-                        f"not a known family {sorted(VALID_FAMILIES)} (BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        f"not a known family {sorted(VALID_FAMILIES)} (BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 elif bld_group is None:
                     findings.append(("P1", mloc,
                         f"module '{mid}': the builder_family '{builder_family or '(missing)'}' on the "
                         "approval is unknown/absent — the gate cannot prove the review is opposite-family "
-                        "(fail-closed, BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "(fail-closed, BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
                 elif rev_group == bld_group:
                     findings.append(("P1", mloc,
                         f"module '{mid}' review_receipt reviewer_family '{rr.get('reviewer_family')}' is "
                         f"the SAME cross-family group as the builder '{builder_family}' — a review must be "
                         "by the OPPOSITE family (a same-family review is a blind-spot) "
-                        "(BLUEPRINT-REVIEW-RECEIPT, PROP-039)"))
+                        "(BLUEPRINT-REVIEW-RECEIPT, P-PROP-005)"))
 
     # BLUEPRINT-NO-HIDDEN-SEVERITY (P1): no open P0–P3 mapped to the module (fail-closed to global).
     _check_hidden_severity(state, mid, mloc, findings)
@@ -531,27 +531,27 @@ def _check_hidden_severity(state, mid: str, mloc: str, findings: list) -> None:
     if not isinstance(state, dict):
         findings.append(("P1", mloc,
             f"module '{mid}': --state did not load as a mapping — the hidden-severity check requires "
-            "--state to read open findings (fail-closed, BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "--state to read open findings (fail-closed, BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
         return
     of = state.get("open_findings")
     if not isinstance(of, dict):
         findings.append(("P1", mloc,
             f"module '{mid}': state.open_findings is missing or not a mapping — the gate cannot prove "
             "there is no open severity mapped to this module (fail-closed, BLUEPRINT-NO-HIDDEN-SEVERITY, "
-            "PROP-039)"))
+            "P-PROP-005)"))
         return
     counts = of.get("counts")
     if not isinstance(counts, dict):
         findings.append(("P1", mloc,
             f"module '{mid}': state.open_findings.counts is missing or not a mapping {{p0..p3}} — a "
-            "severity tally that cannot be read fails CLOSED (BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "severity tally that cannot be read fails CLOSED (BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
         return
     items = of.get("items")
     if not isinstance(items, list):
         findings.append(("P1", mloc,
             f"module '{mid}': state.open_findings.items is missing or not a list — without an itemized "
             "list a non-zero count has no attribution to disprove (fail-closed, "
-            "BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
         return
     open_total = 0
     bad_count = False
@@ -564,7 +564,7 @@ def _check_hidden_severity(state, mid: str, mloc: str, findings: list) -> None:
     if bad_count:
         findings.append(("P1", mloc,
             f"module '{mid}': state.open_findings.counts has a non-integer p0..p3 value — an "
-            "unparseable severity tally fails CLOSED (BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "unparseable severity tally fails CLOSED (BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
         return
     for it in items:
         if not isinstance(it, dict):
@@ -577,18 +577,18 @@ def _check_hidden_severity(state, mid: str, mloc: str, findings: list) -> None:
             findings.append(("P1", mloc,
                 f"module '{mid}': an open {sev} finding has NO module attribution — it fails CLOSED to "
                 "global and blocks every module until attributed/resolved "
-                "(BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+                "(BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
         elif item_mod == mid:
             findings.append(("P1", mloc,
                 f"module '{mid}' has an open {sev} finding mapped to it — a module with an open finding "
-                "is not BLUEPRINT-READY (BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+                "is not BLUEPRINT-READY (BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
     # counts > itemized findings => a hidden severity with no attribution (fail-closed).
     if open_total > len([i for i in items if isinstance(i, dict)
                          and str(i.get("severity", "")).strip().upper() in ("P0", "P1", "P2", "P3")]):
         findings.append(("P1", mloc,
             f"module '{mid}': open_findings.counts report {open_total} open finding(s) but fewer are "
             "itemized — an un-itemized open severity has no module attribution and fails CLOSED "
-            "(BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "(BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
 
 
 def cmd_blueprint(args) -> int:
@@ -601,7 +601,7 @@ def cmd_blueprint(args) -> int:
         print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — packet-dir not found or not a directory")
         return 1
     if packet_dir.is_symlink():
-        print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — packet-dir is a symlink (fail-closed, PROP-039)")
+        print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — packet-dir is a symlink (fail-closed, P-PROP-005)")
         return 1
 
     module_arg = getattr(args, "module", None)
@@ -616,13 +616,13 @@ def cmd_blueprint(args) -> int:
     manifest_path = packet_dir / MANIFEST_NAME
     if not manifest_path.is_file():
         print(f"FIX-FIRST\n  [P0] {manifest_path} — the immutable blueprint-manifest.yaml is missing "
-              "from the frozen packet (PROP-039)")
+              "from the frozen packet (P-PROP-005)")
         return 1
     mdata, merr = load_yaml(str(manifest_path))
     bp = nested_get(mdata, "blueprint_manifest") if isinstance(mdata, dict) else None
     if merr or not isinstance(bp, dict) or not isinstance(bp.get("modules"), list):
         print(f"FIX-FIRST\n  [P0] {manifest_path} — not a typed blueprint_manifest with a 'modules' "
-              f"list ({merr or 'wrong shape'}) (PROP-039)")
+              f"list ({merr or 'wrong shape'}) (P-PROP-005)")
         return 1
     # the manifest must NOT store its own packet-hash (self-referential under _compute_packet_hash, P1-2).
     if bp.get("generated_from_packet_hash") is not None:
@@ -630,14 +630,14 @@ def cmd_blueprint(args) -> int:
             "blueprint-manifest carries a self-referential 'generated_from_packet_hash' — a file "
             "INSIDE the frozen packet cannot store the hash of the packet that contains it; binding "
             "rides the frozen-packet content hash + the external receipt (BLUEPRINT-MANIFEST-HASH-BOUND, "
-            "PROP-039)"))
+            "P-PROP-005)"))
 
     # ── BLUEPRINT-MANIFEST-HASH-BOUND (P0): the --approval receipt's manifest_hash + packet_hash must
     #    equal the recomputed manifest + frozen-packet hashes ──────────────────────────────────────
     try:
         real_packet_hash = _compute_packet_hash(packet_dir)
     except Exception as e:
-        print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — could not recompute frozen-packet hash: {e} (PROP-039)")
+        print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — could not recompute frozen-packet hash: {e} (P-PROP-005)")
         return 1
     real_manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
 
@@ -649,7 +649,7 @@ def cmd_blueprint(args) -> int:
         findings.append(("P0", "--approval",
             "--approval <BLUEPRINT-APPROVAL.yaml> required — the mutable approval/review receipts live "
             "OUTSIDE the frozen packet; without them readiness cannot be proven "
-            "(BLUEPRINT-MANIFEST-HASH-BOUND, PROP-039)"))
+            "(BLUEPRINT-MANIFEST-HASH-BOUND, P-PROP-005)"))
     else:
         approval_root = Path(approval_path).resolve().parent
         adata, aerr = load_yaml(approval_path)
@@ -657,7 +657,7 @@ def cmd_blueprint(args) -> int:
         if aerr or not isinstance(approval_block, dict):
             findings.append(("P0", approval_path,
                 f"--approval is not a typed blueprint_approval mapping ({aerr or 'wrong shape'}) "
-                "(BLUEPRINT-MANIFEST-HASH-BOUND, PROP-039)"))
+                "(BLUEPRINT-MANIFEST-HASH-BOUND, P-PROP-005)"))
             approval_block = None
         else:
             builder_family = str(approval_block.get("builder_family", "") or "").strip()
@@ -667,12 +667,12 @@ def cmd_blueprint(args) -> int:
                 findings.append(("P0", approval_path,
                     f"approval packet_hash {rec_packet[:12] or '(missing)'}… != recomputed frozen-packet "
                     f"hash {real_packet_hash[:12]}… — a STALE receipt for a different packet "
-                    "(BLUEPRINT-MANIFEST-HASH-BOUND, PROP-039)"))
+                    "(BLUEPRINT-MANIFEST-HASH-BOUND, P-PROP-005)"))
             if rec_manifest != real_manifest_hash:
                 findings.append(("P0", approval_path,
                     f"approval manifest_hash {rec_manifest[:12] or '(missing)'}… != recomputed manifest "
                     f"hash {real_manifest_hash[:12]}… — the receipt is bound to an older manifest "
-                    "(BLUEPRINT-MANIFEST-HASH-BOUND, PROP-039)"))
+                    "(BLUEPRINT-MANIFEST-HASH-BOUND, P-PROP-005)"))
 
     # ── load --state (required for BLUEPRINT-NO-HIDDEN-SEVERITY) ────────────────────────────────
     state_path = getattr(args, "state", None)
@@ -680,11 +680,11 @@ def cmd_blueprint(args) -> int:
     if not state_path:
         findings.append(("P1", "--state",
             "--state required — the gate reads open P0–P3 findings mapped to the module from state "
-            "(BLUEPRINT-NO-HIDDEN-SEVERITY, PROP-039)"))
+            "(BLUEPRINT-NO-HIDDEN-SEVERITY, P-PROP-005)"))
     else:
         sdata, serr = load_yaml(state_path)
         if serr or not isinstance(sdata, dict):
-            findings.append(("P1", state_path, f"--state did not load: {serr or 'not a mapping'} (PROP-039)"))
+            findings.append(("P1", state_path, f"--state did not load: {serr or 'not a mapping'} (P-PROP-005)"))
         else:
             state = sdata
 
@@ -699,7 +699,7 @@ def cmd_blueprint(args) -> int:
         if not targets:
             findings.append(("P0", str(manifest_path),
                 f"module '{module_arg}' is not in the blueprint-manifest — cannot check readiness "
-                "(PROP-039)"))
+                "(P-PROP-005)"))
     else:
         targets = modules
 
@@ -710,7 +710,7 @@ def cmd_blueprint(args) -> int:
         if reg_module is None:
             findings.append(("P0", mloc,
                 f"manifest module '{mid}' is not in the frozen {REGISTRY_NAME} — kind/risk/requirements "
-                "are derived from the canonical registry, never the manifest alone (PROP-039)"))
+                "are derived from the canonical registry, never the manifest alone (P-PROP-005)"))
             continue
         _validate_module(packet_dir, bp, m, mloc, reg_module, approval_block, state, findings,
                          reg_index, screen_nav, builder_family, approval_root)
@@ -719,7 +719,7 @@ def cmd_blueprint(args) -> int:
         print("PASS")
         scope = f"module '{module_arg}'" if module_arg else f"all {len(targets)} module(s)"
         print(f"  [INFO] {scope} BLUEPRINT-READY — plan complete + CEO-approved + source-current + "
-              "reviewed-where-required (recomputed from source, PROP-039)")
+              "reviewed-where-required (recomputed from source, P-PROP-005)")
         return 0
     return findings_report(findings)
 
@@ -757,7 +757,7 @@ def _registry_index(packet_dir: Path, findings: list) -> dict:
     if not isinstance(rows, list):
         findings.append(("P0", str(reg_path),
             f"frozen {REGISTRY_NAME} has no module_registry.modules list — the gate derives kind/risk/"
-            "requirements from the canonical registry (PROP-039)"))
+            "requirements from the canonical registry (P-PROP-005)"))
         return out
     for m in rows:
         if isinstance(m, dict) and m.get("module_id"):

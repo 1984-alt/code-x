@@ -1,0 +1,13 @@
+# Fixture: registry pointing to a queue-shaped file with correct middot separators
+# Used by: CONSISTENCY-SLASH-SHORTHAND-PROP-QUEUE contract test (good path)
+# Expected: PASS — no slash-shorthand PROP ids in the scoped queue file
+scan_scope:
+  rule_bearing:
+    - checkers/tests/fixtures/consistency_slash_good_queue.md
+
+rules:
+  - id: test-rule-slash-queue-good
+    canonical: "NO new gate family"
+    key_phrases: ["NO new gate family"]
+    appears_in:
+      - checkers/tests/fixtures/consistency_slash_good_queue.md

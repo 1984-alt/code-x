@@ -1,0 +1,17 @@
+# gitleaks config for the Code-X public repo.
+#
+# Extends the default ruleset (so real secret patterns are still caught everywhere), and
+# allowlists the deterministic checker's TEST-FIXTURE tree. Those fixtures are synthetic by
+# construction — acceptance-receipt ids (e.g. ACCEPT-m_live-...), demo tokens, and 64-hex
+# sha256 receipt pins — none of which are real credentials. gitleaks' generic-api-key rule
+# flags their shape, not any actual secret.
+title = "Code-X gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic identifiers in the checker's test fixtures are not secrets"
+paths = [
+    '''checkers/tests/fixtures/.*''',
+]

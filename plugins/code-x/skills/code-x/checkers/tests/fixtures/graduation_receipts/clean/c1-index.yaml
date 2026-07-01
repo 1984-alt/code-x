@@ -1,0 +1,7 @@
+# c1_demo_gate_never_fired evidence: enumerates the project's live_slice modules + points at
+# each one's real MODULE-ACCEPTANCE receipt (reused in-place: module_acceptance_live_slice_good.yaml,
+# already proven to pass validate_module_demo by the existing test suite).
+modules:
+  - module_id: m_live
+    live_slice: true
+    acceptance_receipt: module_acceptance_live_slice_good.yaml

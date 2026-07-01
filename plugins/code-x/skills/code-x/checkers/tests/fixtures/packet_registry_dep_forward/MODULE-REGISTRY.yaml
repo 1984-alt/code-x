@@ -1,0 +1,15 @@
+module_registry:
+  frozen_packet_hash: forward-test
+  modules:
+  - module_id: m_a
+    requirement_ids:
+    - REQ-001
+    dependency_modules:
+    - m_b
+    card_ids:
+    - BUILD-W1-001
+  - module_id: m_b
+    requirement_ids: []
+    dependency_modules: []
+    card_ids:
+    - BUILD-W1-002

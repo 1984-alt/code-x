@@ -2,7 +2,7 @@
 # but carries NO placeable anchor (engine_epoch_id / effective_at) AND no engine_epoch_legacy_ref.
 # A bare self-declared epoch must NOT resolve the row — that was the bypass. Fail closed.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

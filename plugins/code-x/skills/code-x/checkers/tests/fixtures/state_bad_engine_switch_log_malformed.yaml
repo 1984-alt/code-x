@@ -1,7 +1,7 @@
 # BAD state — PROP-025 / GPT #18: a malformed engine_switch_log row (missing to_engine
 # + effective_at). The epoch chain cannot be reconstructed, so the ladder fails closed.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

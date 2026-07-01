@@ -1,0 +1,9 @@
+# c2_ceo_first_accept evidence: append-only demo-attempt-history per live_slice module. Attempt #1
+# is accepted — proves the CEO accepted on the FIRST demo (a current-state receipt cannot prove
+# this; R1.0).
+modules:
+  - module_id: m_live
+    attempts:
+      - attempt: 1
+        ceo_verdict: accepted
+        turn_ref: handoffs/2026-06-20-slice-home-accept.md

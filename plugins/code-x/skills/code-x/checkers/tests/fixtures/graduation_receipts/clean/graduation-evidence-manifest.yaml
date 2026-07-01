@@ -1,0 +1,45 @@
+# Per-project evidence manifest (R1.2) — indexes every snapshotted file + its FULL sha256
+# (R1.4). Every criterion's declared `receipt` path in the ledger entry must appear here with the
+# SAME hash — a receipt absent from (or hash-mismatched in) its own manifest is unindexed/unbound.
+# R2.5: also lists every reader-resolved SIDECAR (c3 fidelity sidecars, c4 dir_refs anchors, c7
+# registry + coderabbit egress) — not only the top-level criterion receipts.
+graduation_evidence_manifest:
+  project_id: clean-fixture
+  files:
+    - path: graduation_receipts/clean/c1-index.yaml
+      sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a
+    - path: graduation_receipts/clean/c2-history.yaml
+      sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b
+    - path: graduation_receipts/clean/c3-fidelity.yaml
+      sha256: c54b72753049ba9de65e0ffd7dd9c95fef9cd3bab4b6a16ce8a4b17a19441dbc
+    - path: graduation_receipts/clean/c4-blueprint.yaml
+      sha256: 8a6ef04e9d038a169642d35596847fcbf394c5c2f90981de0df08a3acb8ff358
+    - path: graduation_receipts/clean/c5-incidents.yaml
+      sha256: 7694895533f95511f60a185cfd7c4be0a03432016cc0beacf2778ada97fb7ddb
+    - path: state_good_final_ready_attempt1.yaml
+      sha256: 62a8def8a43a7d8035037f555c9a73b24784d7bfd61462dfed5dfd9e36820620
+    - path: graduation_receipts/clean/c7-review-index.yaml
+      sha256: a93658d2dcb2e0c1c3ee40d5c674dcb9f10a06de8c0567f7c2dfaa17e2786c02
+    - path: graduation_receipts/clean/coderabbit-receipt.yaml
+      sha256: b3bcd6af30a53f5ce485909552e037ad18078881239f935d394fcc73a9f551b9
+    # R2.1/R2.5 c3 sidecars — real reader-output-adjacent artifacts backing each fidelity block.
+    - path: dom_good.html
+      sha256: bb8341004082012da058ce6f3478872dba5c5df0bea633e200a1d356fe4478fe
+    - path: screenshot_good.png
+      sha256: e878950f8091ec010cf5cc723bdea027a8539cf7147cfea199c2f666232dcd4e
+    - path: ui_lock_manifest_good.yaml
+      sha256: 861df675a6d2c2e583f65661565c1ce720fabf9993fdb385e8ba5f6180a3fb61
+    # R2.1/R2.5 c4 dir_refs anchors (packet/approval/state/review the blueprint reader needs).
+    - path: graduation_receipts/clean/dir-anchor-packet.yaml
+      sha256: c1304e0a5abb163b7a82e0302c8053b5a252e6d57578cba5eed9757035821b13
+    - path: graduation_receipts/clean/dir-anchor-approval.yaml
+      sha256: c41440aedcb916440dd71662c41f265445e13a198c025b013d7956f2a4d71eae
+    - path: graduation_receipts/clean/dir-anchor-state.yaml
+      sha256: fbd4545a24ab9c7d2cc2238827d3f02ad92dd7193cc1baea9fb0ede761e5e9cf
+    - path: graduation_receipts/clean/dir-anchor-review.yaml
+      sha256: af5d538fabd9cf9586cec5117ba1def1a0ca7ecf3707bb7794c283eb575366a9
+    # R2.5 c7 sidecars — the module registry + coderabbit egress receipt.
+    - path: module_registry_good.yaml
+      sha256: e8c629294ae11602fc30fecf52ff7fc29a3325103e206ec5c93b8590ab6eca4e
+    - path: egress_scrub_good.yaml
+      sha256: 2b8175917c8d7dff592a3897a04e9cc20ac33d5b37afc1c77ceeb991abb5ef04

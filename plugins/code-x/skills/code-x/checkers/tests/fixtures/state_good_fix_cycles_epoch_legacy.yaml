@@ -2,7 +2,7 @@
 # per-row anchor carry engine_family + an explicit engine_epoch_legacy_ref, so they resolve to
 # their own epoch (the documented legacy path; closes the self-declared bypass without one).
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

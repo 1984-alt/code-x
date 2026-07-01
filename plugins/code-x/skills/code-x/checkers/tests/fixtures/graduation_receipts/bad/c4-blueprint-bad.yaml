@@ -1,0 +1,6 @@
+# c4 variant: blueprint verdict is NOT green — the newest project in the streak did not match its
+# locked blueprint.
+verdict: fix_first
+unbudgeted_additions:
+  - item: "extra admin toggle"
+    ceo_decision_ref: ""

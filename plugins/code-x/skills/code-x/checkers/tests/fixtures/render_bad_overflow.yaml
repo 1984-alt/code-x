@@ -1,5 +1,5 @@
 # RENDER-FIT-OVERFLOW (P1): the rendered content is 617px wide on a 390px phone viewport
-# (a live-production module defect class). The evidence is otherwise fresh + valid + pinned, and its
+# (the live-production m6 Meat defect class). The evidence is otherwise fresh + valid + pinned, and its
 # viewport_width (390) MATCHES the pinned profile width — the overflow comes from content_width,
 # not a lied-about viewport — so the ONLY clause that fires is the overflow defect.
 # Run with: --repo-head aaaaaaaaaaaa.

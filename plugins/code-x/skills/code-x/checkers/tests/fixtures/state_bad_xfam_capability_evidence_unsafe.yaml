@@ -1,7 +1,7 @@
 # BAD: PROP-026 / GPT review F6 — stage_3 evidence ref points outside the repo (absolute path);
 # a fake/external path must not satisfy stage_3.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

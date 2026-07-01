@@ -1,0 +1,44 @@
+# BAD: anti_slop.role is cross_review (not slop_removal) -> P1 ANTI-SLOP-MALFORMED.
+module_acceptance:
+  module_id: m1
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs:
+    - evidence/conformance-m1-extracted-actuals.diff
+  quality_card:
+    security: most-secure-way — parameterized queries, secrets-by-name-never-value
+    efficient: no gold-plating; single import path, no premature framework
+    regression: PASS
+    tests: critical paths covered (import, dedupe, day totals)
+    conformance: extracted actuals match the locked implementation-contract (routes + schema)
+  self_review:
+    family_relation: same_family
+    status: PASS
+    review_ref: reviews/m1-self-review.md
+  build_validation:
+    applicability: applies
+    status: PASS
+    ran: [tests]
+    reviewer: build-validator-agent
+    builder: cx-sonnet-builder
+    claims:
+      - claim_id: bv-m1-tests
+        check: tests
+        claimed_verdict: PASS
+        command: "python3 tests/run.py"
+        exit_code: 0
+        log_path: logs/build_validation_pass.txt
+        produced_at: "2026-07-01T00:00:00Z"
+        produced_by: build-validator-agent
+  anti_slop:
+    status: PASS
+    role: cross_review
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m1-anti-slop.md
+  ts: "2026-06-13T16:00:00+00:00"

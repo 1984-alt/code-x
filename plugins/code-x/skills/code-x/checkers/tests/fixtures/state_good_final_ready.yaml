@@ -1,6 +1,6 @@
 # GOOD state for final-ready — all findings zero, no card in flight
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

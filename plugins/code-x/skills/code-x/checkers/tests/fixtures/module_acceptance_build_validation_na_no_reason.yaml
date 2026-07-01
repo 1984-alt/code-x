@@ -1,0 +1,32 @@
+# BAD: build_validation applicability: not_applicable but na_reason/acceptance_artifact_type missing -> P1 BUILD-VALIDATION-MALFORMED (na-branch).
+# Uses non-risk module m3 so ONLY the na-branch MALFORMED fires (a risk module would also fire NA-INVALID P0).
+module_acceptance:
+  module_id: m3
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0011223344
+  conformance_evidence_refs:
+    - evidence/conformance-m1-extracted-actuals.diff
+  quality_card:
+    security: most-secure-way — parameterized queries, secrets-by-name-never-value
+    efficient: no gold-plating; single import path, no premature framework
+    regression: PASS
+    tests: critical paths covered (import, dedupe, day totals)
+    conformance: extracted actuals match the locked implementation-contract (routes + schema)
+  self_review:
+    family_relation: same_family
+    status: PASS
+    review_ref: reviews/m1-self-review.md
+  build_validation:
+    applicability: not_applicable
+  anti_slop:
+    status: PASS
+    role: slop_removal
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m1-anti-slop.md
+  ts: "2026-06-13T16:00:00+00:00"

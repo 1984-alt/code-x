@@ -1,7 +1,7 @@
 # BAD: active_build_engine missing -> P1 (session must declare its build engine)
 # GOOD state file — should PASS cx check state
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

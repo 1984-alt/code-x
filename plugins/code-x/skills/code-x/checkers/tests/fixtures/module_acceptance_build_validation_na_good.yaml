@@ -1,0 +1,33 @@
+# GOOD: module m3 (ui-only, no build artifact — e.g. a docs/config-only module) declares build_validation
+# applicability: not_applicable with a reasoned na_reason + acceptance_artifact_type. anti_slop stays
+# always-on (no N/A path) and is present + valid. Proves a declared, reasoned N/A is a PASS.
+module_acceptance:
+  module_id: m3
+  verdict: accepted
+  generated_by: cx-accept
+  state_sha_before: 9f8e7d6c5b4a
+  quality_card_hash: qc0033445566
+  quality_card:
+    security: no code surface; documentation only
+    efficient: single doc, no duplication
+    regression: PASS
+    tests: n/a — no build to test
+    conformance: doc matches the locked spec
+  self_review:
+    family_relation: same_family
+    status: PASS
+    review_ref: reviews/m3-self-review.md
+  build_validation:
+    applicability: not_applicable
+    na_reason: m3 is a documentation-only module (no code diff, nothing to typecheck/lint/test/build)
+    acceptance_artifact_type: docs
+  anti_slop:
+    status: PASS
+    role: slop_removal
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m3-anti-slop.md
+  ts: "2026-07-01T00:00:00+00:00"

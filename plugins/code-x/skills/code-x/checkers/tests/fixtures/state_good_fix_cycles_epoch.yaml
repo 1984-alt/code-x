@@ -3,7 +3,7 @@
 # Sample 2026-06-18 regression: GPT seats under the CODEX epoch must NOT false-fire the
 # PROP-021 seat-family check once active_build_engine is ANTHROPIC again.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

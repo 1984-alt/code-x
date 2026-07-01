@@ -1,4 +1,4 @@
-# cmd_evals: env-wrapped protocol self-test runner (PROP-018 rail).
+# cmd_evals: env-wrapped protocol self-test runner (B-PROP-002 rail).
 #
 #   cx check evals [--checkers-dir <dir>]
 #
@@ -46,6 +46,14 @@ def cmd_evals(args) -> int:
     # cx binary belongs to) — a redirected checkers tree never weakens the exit gate.
     _run("consistency --strict",
          [sys.executable, str(THIS_DIR / "cx"), "check", "consistency", "--strict"],
+         findings)
+
+    # live kaizen-queue closure — every APPLIED behavioural PROP must carry real enforcement
+    # (PBF-PROP-012 Part C wires the A2-deferred line; the real queue must be closure-clean).
+    _run("kaizen (live queue)",
+         [sys.executable, str(THIS_DIR / "cx"), "check", "kaizen",
+          "--conflict-scan",
+          str(THIS_DIR.parent / "MEMORY" / "PROTOCOL-IMPROVEMENT-QUEUE.md")],
          findings)
 
     return findings_report(findings)

@@ -1,4 +1,6 @@
 # GOOD: full quality bar for m1 (money + shared shell) — quality card core four + conformance proof + regression PASS.
+# EVAL-040: build_validation (re-readable PASS claim over logs/build_validation_pass.txt) + anti_slop
+# (same-family slop_removal) legs added — both are always-on, required for module-quality PASS.
 module_acceptance:
   module_id: m1
   verdict: accepted
@@ -13,4 +15,32 @@ module_acceptance:
     regression: PASS
     tests: critical paths covered (import, dedupe, day totals)
     conformance: extracted actuals match the locked implementation-contract (routes + schema)
+  self_review:
+    family_relation: same_family
+    status: PASS
+    review_ref: reviews/m1-self-review.md
+  build_validation:
+    applicability: applies
+    status: PASS
+    ran: [tests]
+    reviewer: build-validator-agent
+    builder: cx-sonnet-builder
+    claims:
+      - claim_id: bv-m1-tests
+        check: tests
+        claimed_verdict: PASS
+        command: "python3 tests/run.py"
+        exit_code: 0
+        log_path: logs/build_validation_pass.txt
+        produced_at: "2026-07-01T00:00:00Z"
+        produced_by: build-validator-agent
+  anti_slop:
+    status: PASS
+    role: slop_removal
+    family_relation: same_family
+    reviewer_family: anthropic
+    builder_family: anthropic
+    reviewer: sonnet-anti-slop-reviewer
+    builder: cx-sonnet-builder
+    review_ref: reviews/m1-anti-slop.md
   ts: "2026-06-13T16:00:00+00:00"

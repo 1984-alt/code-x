@@ -22,19 +22,52 @@ module_acceptance:
   screenshot_hashes: []       # sha of each screenshot the CEO saw (hashes, not paths)
   quality_card_hash:          # sha of the module's quality card (core four + conformance answer)
   conformance_evidence_refs: []   # money/login/data: the extracted-actuals-vs-manifest diff(s)
+  self_review:                # v1.21: same-family module self-review receipt/evidence; required by cx check module-quality in the v1.21 review-routing rail
+    family_relation: same_family
+    status:                   # PASS | PASS_AFTER_FIX
+    review_ref:               # path/ref to the re-readable self-review record, or use receipt_ref/report_ref/findings_ref/review_agent
+  # EVAL-040: post-build MACHINE-VALIDATION leg — the build actually passed, PROVEN by re-readable logs.
+  # Always-on (like self_review); required by cx check module-quality. A module with no build to
+  # validate (docs/config/protocol-only) uses the typed applicability: not_applicable escape.
+  build_validation:
+    applicability:            # applies | not_applicable   (REQUIRED scalar)
+    # --- when applicability: not_applicable (docs/config/protocol-only module, no build exists) ---
+    na_reason:                 # REQUIRED string — why this module has no build to validate
+    acceptance_artifact_type:  # REQUIRED string — docs | config | protocol
+    # --- when applicability: applies ---
+    status:            # PASS | PASS_AFTER_FIX   (an honest FAIL/other = P1, the module is not accepted)
+    ran: []            # REQUIRED non-empty LIST of check tokens actually run, e.g. [typecheck, lint, tests, build]
+    reviewer:          # REQUIRED scalar — the machine runner that produced this leg (build-validator agent / CI), DISTINCT from builder
+    builder:           # REQUIRED scalar — the module builder identity (for the reviewer!=builder same-wave self-grading check)
+    claims: []         # REQUIRED list of typed evidence-claim rows, shaped like cx_evidence EVIDENCE_CLAIM_REQUIRED_KEYS:
+                        #   claim_id / check (must be named in `ran`) / claimed_verdict / command / exit_code /
+                        #   log_path (re-readable — module-quality RE-READS this file) / produced_at / produced_by /
+                        #   fail_markers (optional) / nonzero_pass_semantics (optional)
+  # EVAL-040: post-build ANTI-SLOP review leg — AI-slop stripped (dead code · over-abstraction ·
+  # defensive theater · narrative comments · premature frameworks). Same-family, fresh non-builder
+  # reviewer in the slop_removal role. Always-on (no N/A path — slop applies to any authored artifact).
+  anti_slop:
+    status:            # PASS | PASS_AFTER_FIX
+    role:              # slop_removal   (REQUIRED scalar — proves the review's ROLE, not just its family)
+    family_relation:   # same_family    (a module anti-slop pass cannot be deferred to cross-family/final review debt)
+    reviewer_family:   # REQUIRED scalar — e.g. anthropic | gpt
+    builder_family:    # REQUIRED scalar — e.g. anthropic | gpt
+    reviewer:          # REQUIRED scalar — reviewer identity (for the reviewer!=builder same-wave self-grading check)
+    builder:           # REQUIRED scalar — builder identity
+    review_ref:        # re-readable anchor (or receipt_ref/report_ref/findings_ref/review_agent/review_id)
   state_sha_before:           # sha12 of CODE-X-STATE BEFORE this acceptance was recorded (anti-forge binding)
-  repo_sha_before:            # PROP-028: repo HEAD commit (hex, >=12) at the moment this module's BUILD STARTED — an empty diff vs HEAD = phantom completion (nothing shipped). Omit only with a typed legacy_no_baseline carve-out reason.
-  # PROP-032: REQUIRED when the FROZEN registry flags this module live_slice (a user-facing page slice).
+  repo_sha_before:            # BF-PROP-006: repo HEAD commit (hex, >=12) at the moment this module's BUILD STARTED — an empty diff vs HEAD = phantom completion (nothing shipped). Omit only with a typed legacy_no_baseline carve-out reason.
+  # B-PROP-008: REQUIRED when the FROZEN registry flags this module live_slice (a user-facing page slice).
   # Proves the CEO DROVE the real running build live on the local machine — not a Mode A screenshot/shell. Presence
   # + shape only; whether it felt right stays the CEO's accept. Missing/blank on a live_slice = P0 (the
   # next slice cannot start). A walking_skeleton slice still needs this (the CEO taps through the running shell).
   live_slice_accept:
-    live_url:                 # REQUIRED — the running build URL the CEO opened + drove (served locally; the local-serve pattern)
+    live_url:                 # REQUIRED — the running build URL the CEO opened + drove (served locally on the local machine; live-production local-serve pattern)
     ceo_drove:                # REQUIRED — true: the CEO DROVE the running build live (not just saw a screenshot)
     ceo_turn_ref:             # REQUIRED — the handoff/turn where the CEO drove it + recorded the live accept
     repo_sha:                 # REQUIRED — the slice's shipped HEAD the CEO drove (hex commit)
     viewport:                 # the device/viewport the CEO drove it at (e.g. 390x844 phone, or desktop)
-  # PROP-036 verify-app gate: REQUIRED on a live_slice module — a PRECONDITION to the CEO live-drive above.
+  # B-PROP-010 verify-app gate: REQUIRED on a live_slice module — a PRECONDITION to the CEO live-drive above.
   # Proves the verify-app agent DROVE the running build and checked its acceptance criteria at runtime
   # BEFORE the CEO drove it, so behavior is machine-verified before the CEO live-drive. Presence + binding
   # + verdict only; the checker does NOT re-run the app (the agent's job) and never claims the behavior was
@@ -44,4 +77,17 @@ module_acceptance:
     repo_sha:                 # REQUIRED — the build commit the agent drove (hex-shaped, >=12) — RECORDS which build was driven; shape only, NOT verified to be HEAD/a real commit (mirrors live_slice_accept.repo_sha); non-hex = P0
     generated_by:             # REQUIRED — the verify-app runner that produced this receipt (machine-stamped; empty = model-authored text, not a runtime gate)
     criteria_ref:             # REQUIRED — where the checked acceptance criteria came from (e.g. the slice card's acceptance_criteria)
+  # PBF-PROP-012 Part E (P2-006): SEE-AND-TEST demo block — required on every live_slice module.
+  # The orchestrator must open the running build on its real surface, capture a screenshot, and
+  # obtain the CEO's typed accept token BEFORE offering the live-drive accept.
+  # Absence → the module is not validly accepted; the next module is blocked.
+  # Declared once in session_start.module_demo_mode; per-module evidence recorded here.
+  # [RULE:module-demo-mode-ack]
+  module_demo:
+    surface:            # "web" → Chrome | "mobile" → iPhone 13 Pro simulator
+    screenshot_path:    # relative path to the captured screenshot file (hash-bound below)
+    screenshot_hash:    # sha256 of the screenshot file — binds the demo evidence to the receipt
+    ceo_accept_token:   # CEO's typed token embedding the build's repo_sha prefix
+    turn_ref:           # handoff/turn where the CEO typed the accept token
+    verdict:            # accepted | rejected
   ts:                         # ISO timestamp the receipt was generated

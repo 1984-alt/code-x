@@ -1,0 +1,3 @@
+# c4 sidecar (R1.2/R2.1): anchor file for the FROZEN PACKET dir the blueprint reader needs.
+anchor: packet
+ref: clean-fixture packet manifest (honest-scope anchor, R2.1)

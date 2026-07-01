@@ -1,0 +1,13 @@
+# Fixture: registry pointing to a queue-shaped file with slash-shorthand PROP ids
+# Used by: CONSISTENCY-SLASH-SHORTHAND-PROP-QUEUE contract test
+# Expected: FIX-FIRST — B-PROP-003/022 detected in the scoped queue file
+scan_scope:
+  rule_bearing:
+    - checkers/tests/fixtures/consistency_slash_bad_queue.md
+
+rules:
+  - id: test-rule-slash-queue
+    canonical: "NO new gate family"
+    key_phrases: ["NO new gate family"]
+    appears_in:
+      - checkers/tests/fixtures/consistency_slash_bad_queue.md

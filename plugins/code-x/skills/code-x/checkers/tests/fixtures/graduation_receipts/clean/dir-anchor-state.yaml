@@ -1,0 +1,3 @@
+# c4 sidecar (R1.2/R2.1): anchor file for the CODE-X-STATE dir the blueprint reader needs.
+anchor: state
+ref: clean-fixture state anchor (honest-scope anchor, R2.1)

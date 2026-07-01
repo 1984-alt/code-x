@@ -1,6 +1,6 @@
 # BAD: PROP-026 stage_3 self-asserted with no opposite-family evidence (anti-game, GPT #4).
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 current_stage: BUILD_FACTORY
 current_mode: MODULE_BUILD

@@ -1,4 +1,4 @@
-# cmd_design_fidelity: deterministic UI-fidelity gate (PROP-019, G3/G6).
+# cmd_design_fidelity: deterministic UI-fidelity gate (B-PROP-003, G3/G6).
 #
 # Compares a live DOM snapshot (saved HTML / accessibility-tree dump) against the
 # locked reference's ui_marker_manifest, authored at design-lock time:
@@ -52,7 +52,7 @@ def cmd_design_fidelity(args) -> int:
     if err:
         print(f"FIX-FIRST\n  [P0] {manifest_path} — {err}")
         return 1
-    # PROP-022: ui_marker_manifest extended into ui_lock_manifest (one owner = this
+    # B-PROP-004: ui_marker_manifest extended into ui_lock_manifest (one owner = this
     # check, never a parallel gate). Legacy ui_marker_manifest still accepted.
     is_lock_manifest = isinstance(raw, dict) and isinstance(raw.get("ui_lock_manifest"), dict)
     manifest = (raw.get("ui_lock_manifest") if is_lock_manifest
@@ -71,7 +71,7 @@ def cmd_design_fidelity(args) -> int:
             # until the next clean module boundary (the marker checks below still bite).
             print(f"WARN: {manifest_path} is a legacy ui_marker_manifest — no audit_status/"
                   "ceo_acceptance_ref enforced; migration-debt path (--legacy-migration). "
-                  "Migrate to ui_lock_manifest (PROP-022).")
+                  "Migrate to ui_lock_manifest (B-PROP-004).")
         else:
             # V1.10: NEW builds get NO advisory escape — design-fidelity BLOCKS. A UI module
             # needs an audited + CEO-accepted ui_lock_manifest (audit_status PASS +
@@ -82,17 +82,17 @@ def cmd_design_fidelity(args) -> int:
                 "is removed for new builds (pass --legacy-migration ONLY for an in-flight project's "
                 "documented migration debt)"))
     if is_lock_manifest:
-        # PROP-022: planning-authored, opposite-family audited, CEO-accepted, hash-frozen —
+        # B-PROP-004: planning-authored, opposite-family audited, CEO-accepted, hash-frozen —
         # the builder only CONSUMES it. No PASS = no build.
         if str(manifest.get("audit_status", "")).upper() != "PASS":
             findings.append(("P0", manifest_path,
                 "ui_lock_manifest.audit_status is not PASS — the lock manifest must be "
                 "opposite-family audited against the frozen lock before any build "
-                "consumes it (no PASS = no build, PROP-022)"))
+                "consumes it (no PASS = no build, B-PROP-004)"))
         if not str(manifest.get("ceo_acceptance_ref", "") or "").strip():
             findings.append(("P0", manifest_path,
                 "ui_lock_manifest.ceo_acceptance_ref missing — the CEO accepts the lock "
-                "manifest before the builder consumes it (PROP-022)"))
+                "manifest before the builder consumes it (B-PROP-004)"))
 
     # ui_lock_manifest section names (dom_markers · controls · shell_regions) with
     # legacy ui_marker_manifest aliases.
@@ -165,7 +165,7 @@ def cmd_design_fidelity(args) -> int:
             findings.append((_sev(sel), loc,
                 f"required shell selector '{sel}' missing from live DOM"))
 
-    # PROP-022 lock-vocabulary coverage: translation_keys · ui_states · alert_variants.
+    # B-PROP-004 lock-vocabulary coverage: translation_keys · ui_states · alert_variants.
     # --build-vocab = the vocabulary actually used by the build (extracted mechanically).
     # Build vocabulary absent from the manifest = INVENTED vocabulary (P1); manifest
     # vocabulary absent from the build = drift (P2).
@@ -178,7 +178,7 @@ def cmd_design_fidelity(args) -> int:
         findings.append(("P1", manifest_path,
             f"ui_lock_manifest locks vocabulary ({', '.join(locked_vocab_sections)}) but "
             "no --build-vocab was supplied — vocabulary coverage UNVERIFIED; extract the "
-            "build's vocabulary and pass it (PROP-022)"))
+            "build's vocabulary and pass it (B-PROP-004)"))
     if build_vocab_path:
         bv_raw, bv_err = load_yaml(build_vocab_path)
         if bv_err or not isinstance(bv_raw, dict):
@@ -193,11 +193,11 @@ def cmd_design_fidelity(args) -> int:
                     findings.append(("P1", build_vocab_path,
                         f"build {section} entry '{entry}' absent from the ui_lock_manifest — "
                         "invented vocabulary; the builder consumes the lock, it never "
-                        "extends it (PROP-022)"))
+                        "extends it (B-PROP-004)"))
                 for entry in sorted(locked - built):
                     findings.append(("P2", loc,
                         f"ui_lock_manifest {section} entry '{entry}' missing from the build — "
-                        "locked vocabulary drifted (PROP-022)"))
+                        "locked vocabulary drifted (B-PROP-004)"))
 
     # Screenshot = supporting evidence; existence + non-trivial size only (no pixel-AI).
     shot = Path(screenshot_path)
@@ -209,7 +209,7 @@ def cmd_design_fidelity(args) -> int:
         findings.append(("P2", screenshot_path,
             f"screenshot extension '{shot.suffix}' not in {sorted(SCREENSHOT_EXTS)}"))
 
-    # PROP-031: external-visual-reference lock binding + side-by-side ACCEPT receipt.
+    # P-PROP-004: external-visual-reference lock binding + side-by-side ACCEPT receipt.
     # When the lock's baseline is an external app capture (not team-produced output), the
     # lock must trace to the captured reference and the CEO must have ACCEPTED the produced
     # screen side-by-side with that reference at the target viewport. cx check packet owns
@@ -220,13 +220,13 @@ def cmd_design_fidelity(args) -> int:
                 findings.append(("P1", manifest_path,
                     f"ui_lock_manifest.baseline_source is external_capture but '{f}' is missing — "
                     "the lock baseline must trace to the captured external reference, not to "
-                    "team-produced output (PROP-031)"))
+                    "team-produced output (P-PROP-004)"))
         receipt = manifest.get("side_by_side_accept")
         if not isinstance(receipt, dict):
             findings.append(("P0", manifest_path,
                 "external_capture lock has no side_by_side_accept receipt — the CEO must ACCEPT the "
                 "produced screen side-by-side with the captured reference at the target viewport "
-                "before G7 (the gap that let 'like MM' ship from memory, PROP-031)"))
+                "before G7 (the gap that let 'like MM' ship from memory, P-PROP-004)"))
         else:
             req = ("produced_screen_hash", "reference_capture_hash", "viewport_id",
                    "produced_dimensions", "reference_dimensions", "composite_path",
@@ -235,20 +235,20 @@ def cmd_design_fidelity(args) -> int:
             if miss:
                 findings.append(("P0", manifest_path,
                     f"side_by_side_accept receipt missing {miss} — an ACCEPT with no reference "
-                    "in-frame is not a valid taste gate (PROP-031)"))
+                    "in-frame is not a valid taste gate (P-PROP-004)"))
             pd = str(receipt.get("produced_dimensions", "") or "").strip()
             rd = str(receipt.get("reference_dimensions", "") or "").strip()
             if pd and rd and pd != rd:
                 findings.append(("P1", manifest_path,
                     f"side_by_side_accept produced_dimensions ({pd}) != reference_dimensions ({rd}) "
-                    "— not judged at the same viewport (PROP-031)"))
+                    "— not judged at the same viewport (P-PROP-004)"))
             comp = str(receipt.get("composite_path", "") or "").strip()
             if comp:
                 cp = Path(comp)
                 if cp.is_absolute() or ".." in cp.parts:
                     findings.append(("P1", manifest_path,
                         f"side_by_side_accept composite_path '{comp}' must be lock-relative, no "
-                        "'..'/absolute (PROP-031)"))
+                        "'..'/absolute (P-PROP-004)"))
                 else:
                     base = Path(manifest_path).resolve().parent
                     full = base / cp
@@ -259,10 +259,10 @@ def cmd_design_fidelity(args) -> int:
                     if escapes:
                         findings.append(("P1", manifest_path,
                             f"side_by_side_accept composite_path '{comp}' is a symlink or resolves "
-                            "outside the lock directory — no symlink-ancestor escape (PROP-031)"))
+                            "outside the lock directory — no symlink-ancestor escape (P-PROP-004)"))
                     elif not full.is_file():
                         findings.append(("P1", manifest_path,
                             f"side_by_side_accept composite_path '{comp}' is not a real file beside "
-                            "the lock — the side-by-side image must exist (PROP-031)"))
+                            "the lock — the side-by-side image must exist (P-PROP-004)"))
 
     return findings_report(findings)

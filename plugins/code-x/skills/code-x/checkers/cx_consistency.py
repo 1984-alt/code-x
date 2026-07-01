@@ -26,10 +26,24 @@ def _canonical_phrases(canonical_raw) -> list[str]:
     return [_normalise_ws(str(canonical_raw))] if str(canonical_raw).strip() else []
 
 
-# PROP-005/012: structural sweep exemptions — never swept in ANY mode.
+# PBF-PROP-004 · PBF-PROP-007: structural sweep exemptions — never swept in ANY mode.
 # The registry cannot be an "unregistered copy" of itself (handled separately by
 # path), and tests/fixtures are deliberately pinned good/bad copies of rule text.
 _NEVER_SWEPT_PREFIXES = ("checkers/tests/",)
+
+# CONSISTENCY-SLASH-SHORTHAND-PROP (PBF-PROP-014 / PROP-044): a PROP-id token
+# immediately followed by /<digits> is a slash-shorthand list — it silently
+# mis-reads because the trailing /NNN are old PROP numbers, not part of the id.
+# Rule-bearing canon must use middot (·) as list separator.
+_SLASH_SHORTHAND_RE = re.compile(
+    r'(?<![A-Za-z0-9_])[A-Z]{1,3}-?PROP-[0-9]{3}(?:/[0-9]{2,3})+'
+)
+# CONSISTENCY-STALE-BARE-PROP: a bare PROP-NNN (no stage-prefix) in rule-bearing
+# canon is a stale old-format id after migration. Exempt: PROP-009 / PROP-010
+# (explicitly retired), and PROP-028-* frozen clause-ids.
+_STALE_BARE_PROP_RE = re.compile(r'(?<![A-Za-z0-9_-])PROP-(\d{3})(?![-\d])')
+_RETIRED_BARE_PROPS = {"PROP-009", "PROP-010"}
+_FROZEN_CLAUSE_PROP_PREFIX = "PROP-028"
 
 
 def _path_safe(root: Path, rel_path: str, registry_path: str, findings: list) -> Path | None:
@@ -111,7 +125,7 @@ def cmd_consistency(args) -> int:
                 findings.append(("P1", registry_path,
                     f"rule '{rid}': appears_in path does not exist: {rel_path}"))
 
-    # --- PROP-005/012: declared sweep scope (scan_scope.rule_bearing) ---
+    # --- PBF-PROP-004 · PBF-PROP-007: declared sweep scope (scan_scope.rule_bearing) ---
     # Effective sweep scope = rule_bearing ∪ all appears_in paths. A registry
     # WITHOUT scan_scope keeps the legacy full-tree sweep (backward-compat for
     # external/test registries); the canonical registry declares it.
@@ -183,7 +197,7 @@ def cmd_consistency(args) -> int:
 
     # --- Soft WARN / --strict FAIL: unlisted files with ≥2 key_phrases ---
     # P2-05: scan BOTH .md and .yaml (P1-08: strict mode)
-    # PROP-005/012: the sweep covers RULE-BEARING CANON ONLY (scan_scope ∪
+    # PBF-PROP-004 · PBF-PROP-007: the sweep covers RULE-BEARING CANON ONLY (scan_scope ∪
     # appears_in). Out-of-scope narrative/history is silent in BOTH modes —
     # narrative cites rules, canon defines them. Sweep silence never exempts an
     # active dispatch artifact: the current card/deck/state are checked by their
@@ -249,5 +263,75 @@ def cmd_consistency(args) -> int:
     # Print warnings (soft — do not affect exit code)
     for w in warnings:
         print(w)
+
+    # --- CONSISTENCY-SLASH-SHORTHAND-PROP + CONSISTENCY-STALE-BARE-PROP ---
+    # Scan every rule-bearing scope file for slash-shorthand PROP lists and
+    # stale bare-old-format PROP ids. Both are P1 in rule-bearing canon.
+    # This check is ACTIVE even when scope is not declared (legacy registries
+    # sweep all in-scope candidates loaded above via all_file_contents).
+    all_scope_rels: set[str] = set()
+    # Explicit rule_bearing files
+    all_scope_rels.update(scope_files)
+    # Files loaded via appears_in
+    all_scope_rels.update(all_appears_in)
+    # Files loaded during the unregistered-copy sweep
+    all_scope_rels.update(r for r in all_file_contents if _in_sweep(r))
+
+    # --- scan_scope.id_integrity: SLASH-SHORTHAND only (no STALE-BARE-PROP) ---
+    # Files here carry intentional legacy_id bare PROP-NNN records (e.g. PIQ.md)
+    # so STALE-BARE-PROP would produce false positives. They must still be clean
+    # of slash-shorthand PROP lists, which are always a mis-resolved id mistake.
+    id_integrity_rels: set[str] = set()
+    id_integrity_raw = scope_block.get("id_integrity") or []
+    for rel in id_integrity_raw:
+        rel = str(rel)
+        safe = _path_safe(root, rel, registry_path, findings)
+        if safe is None:
+            continue
+        if not safe.exists():
+            findings.append(("P1", registry_path,
+                f"scan_scope.id_integrity path does not exist: {rel} — a stale scope "
+                f"entry will silently miss slash-shorthand violations"))
+            continue
+        id_integrity_rels.add(rel)
+
+    for rel in sorted(all_scope_rels):
+        content = all_file_contents.get(rel)
+        if content is None:
+            p = (root / rel)
+            if not p.is_file():
+                continue
+            try:
+                content = p.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+
+        # CONSISTENCY-SLASH-SHORTHAND-PROP (P1)
+        for m in _SLASH_SHORTHAND_RE.finditer(content):
+            findings.append(("P1", rel,
+                f"CONSISTENCY-SLASH-SHORTHAND-PROP: {m.group()!r} is a slash-shorthand "
+                f"PROP list — use middot (·) as separator instead of /"))
+
+        # CONSISTENCY-STALE-BARE-PROP (P1)
+        for m in _STALE_BARE_PROP_RE.finditer(content):
+            token = f"PROP-{m.group(1)}"
+            if token in _RETIRED_BARE_PROPS or token.startswith(_FROZEN_CLAUSE_PROP_PREFIX):
+                continue
+            findings.append(("P1", rel,
+                f"CONSISTENCY-STALE-BARE-PROP: {token!r} is a bare old-format PROP id "
+                f"in rule-bearing canon — use the stage-prefixed id, or annotate as "
+                f"retired (exempt: PROP-009, PROP-010, PROP-028-*)"))
+
+    # id_integrity files: SLASH-SHORTHAND only (STALE-BARE-PROP intentionally skipped)
+    for rel in sorted(id_integrity_rels - all_scope_rels):
+        p = root / rel
+        try:
+            content = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        for m in _SLASH_SHORTHAND_RE.finditer(content):
+            findings.append(("P1", rel,
+                f"CONSISTENCY-SLASH-SHORTHAND-PROP: {m.group()!r} is a slash-shorthand "
+                f"PROP list — use middot (·) as separator instead of /"))
 
     return findings_report(findings)

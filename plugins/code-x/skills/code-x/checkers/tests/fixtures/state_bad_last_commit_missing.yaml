@@ -1,7 +1,7 @@
 # BAD fixture: P2-02 — state missing last_commit
 # Expected: FIX-FIRST mentioning last_commit
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

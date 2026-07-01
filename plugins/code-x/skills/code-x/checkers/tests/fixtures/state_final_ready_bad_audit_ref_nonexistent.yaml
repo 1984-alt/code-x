@@ -1,7 +1,7 @@
 # BAD: built_app_audit.report_ref points at a NON-EXISTENT dir => P0 block (v1.12 FIX-1)
 # The ceremonial-gate hole: shape-valid + path-safe, but the audit report does not exist.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

@@ -1,7 +1,7 @@
 # BAD: final cross-family receipt is bound (real file + matching hash) but has NO verdict →
 # a missing verdict must NOT silently ship (P0) [V1.10]. Everything else is final-ready-clean.
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

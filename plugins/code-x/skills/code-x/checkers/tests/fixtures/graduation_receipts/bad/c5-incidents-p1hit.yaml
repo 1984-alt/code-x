@@ -1,0 +1,8 @@
+# c5 variant: one P1 row dated inside the (closed) post-ship window for this build_tag — proves
+# the recompute reads real dated rows, not just row count.
+build_tag: bad-crit5-v1
+rows:
+  - date: 2026-01-05
+    severity: P1
+    build_tag: bad-crit5-v1
+    disposition: fixed

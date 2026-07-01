@@ -1,0 +1,20 @@
+# c3_zero_design_drift evidence: design + render + lock fidelity all PASS, zero P0/P1 drift.
+# R2.1/R2.5 honest-scope: each kind-block names a real reader-output-adjacent sidecar_ref
+# (manifest-hash-bound, R2.5) instead of a bare hand-typed verdict summary; render_fidelity also
+# carries the repo_head field the render reader binds freshness against (R1.2).
+design_fidelity:
+  verdict: PASS
+  drift_p0: 0
+  drift_p1: 0
+  sidecar_ref: dom_good.html
+render_fidelity:
+  verdict: PASS
+  drift_p0: 0
+  drift_p1: 0
+  sidecar_ref: screenshot_good.png
+  repo_head: 4f6da6e6d2c1a9b0e7f3c8d1a2b3c4d5e6f70123
+lock_fidelity:
+  verdict: PASS
+  drift_p0: 0
+  drift_p1: 0
+  sidecar_ref: ui_lock_manifest_good.yaml

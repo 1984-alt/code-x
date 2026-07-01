@@ -1,4 +1,4 @@
-# cmd_structure: the STRUCTURE LOCK (PROP-035 Lever A, fold v1.16).
+# cmd_structure: the STRUCTURE LOCK (F-PROP-001 Lever A, fold v1.16).
 #
 #   cx check structure <card> --repo-root <dir>
 #
@@ -14,7 +14,7 @@
 #   LAYER 2 — advisory only (NOT here yet).  Same-file restructuring — component splits, route-table
 #     edits, prop-wiring, CSS restructuring — changes structure WITHOUT changing paths, so Layer-1
 #     cannot see it. It graduates to blocking via a follow-up PROP once machine-extraction +
-#     same-commit repeatability are proven (the PROP-033 staging). Meanwhile mitigated by the visual
+#     same-commit repeatability are proven (the B-PROP-009 staging). Meanwhile mitigated by the visual
 #     lock (render-fidelity catches CSS/layout drift) + allowed_files (a same-file edit is still
 #     scope-bound).
 #
@@ -150,7 +150,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     if not ref:
         findings.append(("P1", loc,
             "mode: FIX card without structure_lock_ref — a fix must bind to the frozen architecture it "
-            "preserves; nothing freezes the file tree otherwise (PROP-035 Lever A / FIX-STAGE-STRUCT-LOCK-REF)"))
+            "preserves; nothing freezes the file tree otherwise (F-PROP-001 Lever A / FIX-STAGE-STRUCT-LOCK-REF)"))
         return findings
 
     # FIX-STAGE-STRUCT-PATHSAFE — the ref must be a real in-tree path (no absolute / '..' / symlink /
@@ -158,12 +158,12 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     resolved, perr = resolve_in_repo(repo_root, ref)
     if perr is not None:
         findings.append(("P1", loc,
-            f"structure_lock_ref {perr} (PROP-035 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
+            f"structure_lock_ref {perr} (F-PROP-001 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
         return findings
     if resolved is None or not resolved.is_file():
         findings.append(("P1", loc,
             f"structure_lock_ref '{ref}' does not resolve to a real in-repo file — a missing lock is not "
-            "a preserved architecture (PROP-035 Lever A / FIX-STAGE-STRUCT-LOCK-REF)"))
+            "a preserved architecture (F-PROP-001 Lever A / FIX-STAGE-STRUCT-LOCK-REF)"))
         return findings
 
     doc, derr = load_yaml(str(resolved))
@@ -172,7 +172,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
         findings.append(("P1", loc,
             f"structure_lock_ref '{ref}' is not a typed structure_lock mapping {{generator, "
             "accepted_at_commit, roots, paths, manifest_sha}} — an arbitrary file is not a lock "
-            "(PROP-035 Lever A / FIX-STAGE-STRUCT-FORGED)"))
+            "(F-PROP-001 Lever A / FIX-STAGE-STRUCT-FORGED)"))
         return findings
 
     generator = str(lock.get("generator", "") or "").strip()
@@ -189,30 +189,30 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     if generator != GENERATOR_MARKER:
         findings.append(("P1", loc,
             f"structure_lock.generator '{generator}' is not the machine marker '{GENERATOR_MARKER}' — a "
-            "hand-authored lock is forged; only an emitted receipt is trusted (PROP-035 Lever A / "
+            "hand-authored lock is forged; only an emitted receipt is trusted (F-PROP-001 Lever A / "
             "FIX-STAGE-STRUCT-FORGED)"))
         return findings
     if not isinstance(paths, list):
         findings.append(("P1", loc,
             "structure_lock.paths is missing or not a list — a lock with no frozen path list cannot be "
-            "compared (PROP-035 Lever A / FIX-STAGE-STRUCT-FORGED)"))
+            "compared (F-PROP-001 Lever A / FIX-STAGE-STRUCT-FORGED)"))
         return findings
     if len(commit) < 7 or not all(c in "0123456789abcdef" for c in commit.lower()):
         findings.append(("P1", loc,
             f"structure_lock.accepted_at_commit '{commit}' is not a commit sha — the lock must be "
-            "sha-bound to the commit it was accepted at (PROP-035 Lever A / FIX-STAGE-STRUCT-FORGED)"))
+            "sha-bound to the commit it was accepted at (F-PROP-001 Lever A / FIX-STAGE-STRUCT-FORGED)"))
         return findings
     if not _commit_exists(repo_root, commit):
         findings.append(("P1", loc,
             f"structure_lock.accepted_at_commit '{commit}' is not a real commit in this repo — an "
-            "invented commit is not a binding (PROP-035 Lever A / FIX-STAGE-STRUCT-FORGED)"))
+            "invented commit is not a binding (F-PROP-001 Lever A / FIX-STAGE-STRUCT-FORGED)"))
         return findings
     # any path-unsafe entry in the frozen list (or roots) is a forged/unsafe manifest
     for entry in list(paths) + list(roots):
         if path_is_unsafe(str(entry)):
             findings.append(("P1", loc,
                 f"structure_lock contains an unsafe path '{entry}' (absolute / '..') — every frozen path "
-                "must be repo-relative in-tree (PROP-035 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
+                "must be repo-relative in-tree (F-PROP-001 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
             return findings
     # each root must resolve INSIDE the repo and not be a symlink (xfam built-code review #2): path_is_unsafe
     # above catches absolute / '..' but NOT a symlinked root that escapes the repo. resolve_in_repo rejects
@@ -222,7 +222,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
         if rerr is not None:
             findings.append(("P1", loc,
                 f"structure_lock root {rerr} — a frozen root must be a real in-repo directory, never a "
-                "symlink/escape (PROP-035 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
+                "symlink/escape (F-PROP-001 Lever A / FIX-STAGE-STRUCT-PATHSAFE)"))
             return findings
 
     # FIX-STAGE-STRUCT-HASH-RECOMPUTE — never trust the declared hash; recompute from the receipt's own
@@ -231,12 +231,12 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     if not declared_sha:
         findings.append(("P1", loc,
             "structure_lock.manifest_sha missing — the lock must carry the recomputable hash binding its "
-            "paths to its commit (PROP-035 Lever A / FIX-STAGE-STRUCT-HASH-RECOMPUTE)"))
+            "paths to its commit (F-PROP-001 Lever A / FIX-STAGE-STRUCT-HASH-RECOMPUTE)"))
         return findings
     if declared_sha != real_sha:
         findings.append(("P1", loc,
             f"structure_lock.manifest_sha '{declared_sha}' != the RECOMPUTED hash '{real_sha}' of its "
-            "commit + paths — a self-declared structure hash is never trusted (PROP-035 Lever A / "
+            "commit + paths — a self-declared structure hash is never trusted (F-PROP-001 Lever A / "
             "FIX-STAGE-STRUCT-HASH-RECOMPUTE)"))
         return findings
 
@@ -249,7 +249,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     if terr or frozen_tree is None:
         findings.append(("P1", loc,
             f"cannot recompute the frozen tree from git ls-tree at '{commit}' to bind the structure_lock — "
-            f"{terr} (fail closed) (PROP-035 Lever A / FIX-STAGE-STRUCT-TREE-BOUND)"))
+            f"{terr} (fail closed) (F-PROP-001 Lever A / FIX-STAGE-STRUCT-TREE-BOUND)"))
         return findings
     declared_paths = {str(p) for p in paths}
     if declared_paths != frozen_tree:
@@ -259,7 +259,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
             f"structure_lock.paths do not match git ls-tree at {commit[:12]} (omitted-from-lock: {missing}; "
             f"not-in-tree: {extra}) — the frozen architecture is bound to the REAL tree, never a self-declared "
             "paths list; omitting a deleted/renamed file to empty the live diff is the forgery this closes "
-            "(PROP-035 Lever A / FIX-STAGE-STRUCT-TREE-BOUND)"))
+            "(F-PROP-001 Lever A / FIX-STAGE-STRUCT-TREE-BOUND)"))
         return findings
 
     # FIX-STAGE-STRUCT-MANIFEST — the actual Layer-1 drift: the live in-scope tree vs the frozen path
@@ -270,7 +270,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
     if lerr or live is None:
         findings.append(("P1", loc,
             f"cannot recompute the live file tree to compare against the structure_lock — {lerr} "
-            "(fail closed) (PROP-035 Lever A / FIX-STAGE-STRUCT-MANIFEST)"))
+            "(fail closed) (F-PROP-001 Lever A / FIX-STAGE-STRUCT-MANIFEST)"))
         return findings
     frozen = frozen_tree
     changed = (live - frozen) | (frozen - live)  # created/untracked + deleted/moved
@@ -282,7 +282,7 @@ def validate_structure_lock(card: dict, repo_root: str, loc: str) -> list:
         findings.append(("P1", loc,
             f"mode: FIX card restructured the file tree OUTSIDE its allowed_files {sorted(allowed_raw)}: "
             f"{drift} — a fix preserves the architecture; create/rename/move/delete outside the declared "
-            "scope is drift. SURFACE + revert (Lever E revert_receipt), do not fix-forward (PROP-035 "
+            "scope is drift. SURFACE + revert (Lever E revert_receipt), do not fix-forward (F-PROP-001 "
             "Lever A / FIX-STAGE-STRUCT-MANIFEST)"))
     return findings
 
@@ -302,7 +302,7 @@ def _load_fix_cards(cards_dir: Path) -> list:
 def compute_structure_findings(repo_root: str, cards_dir: Path) -> tuple[list, str | None]:
     """Aggregate Layer-1 structural-drift findings across every mode: FIX card in the live deck. Reused
     by cx_module_acceptance so a module cannot be accepted while a fix card's structure lock is drifted
-    or forged (mirrors how the Andon wall already re-runs the PROP-034 drift Layer-1 validator). Returns
+    or forged (mirrors how the Andon wall already re-runs the BF-PROP-007 drift Layer-1 validator). Returns
     (findings, fatal_error); a fatal_error means the cards-dir could not be read — fail closed."""
     if not cards_dir.is_dir():
         return [], f"structure cards-dir '{cards_dir}' is not a directory"
@@ -316,7 +316,7 @@ def compute_structure_findings(repo_root: str, cards_dir: Path) -> tuple[list, s
         if derr or not isinstance(data, dict):
             findings.append(("P2", f"structure cards-dir card '{card_path.name}'",
                 f"could not parse as a YAML mapping ({derr or 'not a mapping'}) — a malformed card cannot "
-                "be checked for a structure obligation; fix or remove it (fail closed, PROP-035 Lever A)"))
+                "be checked for a structure obligation; fix or remove it (fail closed, F-PROP-001 Lever A)"))
     for card, path in _load_fix_cards(cards_dir):
         findings.extend(validate_structure_lock(card, repo_root, f"fix card '{card.get('id', path.name)}'"))
     return findings, None

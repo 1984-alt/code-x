@@ -1,6 +1,6 @@
 # GOOD state file — should FAIL cx check state
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

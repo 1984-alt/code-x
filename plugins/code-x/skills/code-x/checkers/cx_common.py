@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.19"    # Code-X V1 protocol version (V1.19 = PROP-040 whole-packet integration review; v1.18 = PROP-039 the Master Blueprint; v1.17 = PROP-036 Verify-App Gate; v1.16 = PROP-035 the Fixing Stage; v1.15 = PROP-034 lock-fidelity continuity; v1.14 = PROP-033 in-loop rendered-fidelity gate)
+PROTOCOL_VERSION = "1.21.4"            # LOCKED CANONICAL 2026-07-01 (CEO-D-037) — canon-hygiene patch (Codex audit CXAUD-001..005): Python≥3.10 entrypoint guard · handoff continuity restored on main · version/status/EVALS headers reconciled to the v1.21.x locks · locked rails de-drafted. No gate-logic change. Prior: v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
@@ -24,7 +24,7 @@ VALID_REVIEW_MODES = {"NONE", "SCAN", "DELTA", "SLICE", "FULL"}
 VALID_WASTE_FLAGS = {"over_read", "repeated_review", "loop", "wrong_model_tier",
                      "unclear_card", "missing_evidence"}
 
-# --- BUILD-ENGINE-PROFILES enforcement (PROP-013) -------------------------
+# --- BUILD-ENGINE-PROFILES enforcement (PBF-PROP-008) -------------------------
 # Canonical profiles file lives at Code-X-V1 root (one level up from checkers/).
 DEFAULT_PROFILES_PATH = Path(__file__).resolve().parent.parent / "BUILD-ENGINE-PROFILES.yaml"
 
@@ -48,7 +48,7 @@ def resolve_profiles_path(args) -> tuple[str, str | None]:
     """Profiles file: --profiles flag > CX_PROFILES env (TEST-ONLY) > canonical default.
     CX_PROFILES is honored ONLY when CODE_X_TEST_MODE=1 — production reads live canon.
     A stale env var silently redirecting validation to an old profiles file is the
-    green-but-not-enforcing class (PROP-014 fold, GPT P1-02 — fail LOUD, not silent).
+    green-but-not-enforcing class (P-PROP-001 fold, GPT P1-02 — fail LOUD, not silent).
     Returns (path, error): error is a P1 finding message when the env is set outside
     test mode; callers must emit it and skip profile checks (the path is untrusted)."""
     flag = getattr(args, "profiles", None)
@@ -163,7 +163,7 @@ def safe_repo_ref(ref: str, root) -> tuple[Path | None, str | None]:
     (dep-scan receipt · render bundle · verify_app receipt · CodeRabbit receipt +
     its egress receipt). It mirrors the canonical acceptance_ref guard in
     cx_module_acceptance.validate_accepted_module — the Andon-wall path-safety the
-    v1.10 R4/R11 folds landed (PROP-037 factors it into one place so every
+    v1.10 R4/R11 folds landed (B-PROP-011 factors it into one place so every
     build-turn read carries the FULL class, not just the absolute/'..' half).
 
     Returns (resolved_path, None) for a SAFE ref, or (None, reason) when the ref is

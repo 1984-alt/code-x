@@ -1,8 +1,8 @@
-# cmd_dep_scan: validate a dependency-scan receipt before the first build card (PROP-027).
+# cmd_dep_scan: validate a dependency-scan receipt before the first build card (B-PROP-006).
 #
 #   cx check dep-scan <receipt> --repo-root <dir>
 #
-# A HARD pre-build supply-chain gate (amends PROP-014 PACKET-CONTENTS S1): promotes the
+# A HARD pre-build supply-chain gate (amends P-PROP-001 PACKET-CONTENTS S1): promotes the
 # soft "S1 rides existing reviews — no new gate" line to a mechanical gate. The receipt
 # is a typed, auditable scan record (GPT #12) that lives OUTSIDE the frozen packet but is
 # hash-bound to each lockfile (GPT #15). 0 high/critical OR a typed CEO waiver (GPT #13);
@@ -84,14 +84,14 @@ def cmd_dep_scan(args) -> int:
     if not isinstance(blk, dict):
         findings.append(("P0", loc,
             "dependency_scan block missing — the pre-build supply-chain gate needs a typed "
-            "scan receipt {scans: [...], waivers: [...]} (PROP-027)"))
+            "scan receipt {scans: [...], waivers: [...]} (B-PROP-006)"))
         return findings_report(findings)
 
     scans = blk.get("scans")
     if not isinstance(scans, list) or not scans:
         findings.append(("P0", loc,
             "dependency_scan.scans must be a non-empty list — at least one ecosystem must be "
-            "scanned before build authorization; an empty scan set is not a clean scan (PROP-027)"))
+            "scanned before build authorization; an empty scan set is not a clean scan (B-PROP-006)"))
         scans = []
 
     # typed waivers (GPT #13)
@@ -109,7 +109,7 @@ def cmd_dep_scan(args) -> int:
             findings.append(("P2", loc,
                 f"dependency_scan.waivers[{i}] missing {missing} — a supply-chain waiver must record "
                 "the CEO decision ref, advisory ids, package, severity, reason, mitigation, expiry "
-                "and owner (auditable + time-boxed) (PROP-027)"))
+                "and owner (auditable + time-boxed) (B-PROP-006)"))
         waiver_pkgs.add(str(w.get("package", "")))
         for a in (w.get("advisory_ids") or []):
             waiver_advs.add(str(a))
@@ -124,7 +124,7 @@ def cmd_dep_scan(args) -> int:
             findings.append(("P1", loc,
                 f"dependency_scan.scans[{i}] missing {missing} — a scan record must pin ecosystem, "
                 "command, scanner version, advisory-db timestamp, manifest + lockfile, lockfile hash, "
-                "produced_at and high/critical counts (auditable, non-forgeable) (PROP-027)"))
+                "produced_at and high/critical counts (auditable, non-forgeable) (B-PROP-006)"))
             continue
         if field_present(s, "manifest"):
             declared_manifests.add(str(Path(str(s.get("manifest")))))
@@ -141,11 +141,11 @@ def cmd_dep_scan(args) -> int:
         lf_path, reason = _safe_in_repo(lf_ref, repo)
         if lf_path is None:
             findings.append(("P0", loc,
-                f"dependency_scan.scans[{i}].lockfile '{lf_ref}' {reason} (PROP-027)"))
+                f"dependency_scan.scans[{i}].lockfile '{lf_ref}' {reason} (B-PROP-006)"))
         elif not lf_path.is_file():
             findings.append(("P0", loc,
                 f"dependency_scan.scans[{i}] lockfile '{lf_ref}' does not exist under the repo — a "
-                "scanned ecosystem must have a pinned lockfile committed (PROP-027 / GPT #14)"))
+                "scanned ecosystem must have a pinned lockfile committed (B-PROP-006 / GPT #14)"))
         else:
             scanned_lockfiles.add(str(Path(lf_ref)))
             actual = _sha12(str(lf_path))
@@ -153,7 +153,7 @@ def cmd_dep_scan(args) -> int:
                 findings.append(("P0", loc,
                     f"dependency_scan.scans[{i}].lockfile_hash {s.get('lockfile_hash')} != the "
                     f"lockfile's sha12 {actual} — the scan is not bound to THIS lockfile (stale / "
-                    "forged, or the lockfile changed after the scan) (PROP-027 / GPT #11,#12)"))
+                    "forged, or the lockfile changed after the scan) (B-PROP-006 / GPT #11,#12)"))
 
         # 0 high/critical is the bar; anything above must ENUMERATE each advisory and cover EACH with a
         # typed CEO waiver — a single blanket waiver may NOT hide an unrelated advisory (GPT review F3).
@@ -164,7 +164,7 @@ def cmd_dep_scan(args) -> int:
                     f"dependency_scan.scans[{i}] reports {high} high / {crit} critical advisories but "
                     "high_critical_advisories does not name exactly that many — each high/critical "
                     "advisory must be named to be matched to a typed CEO waiver (0 high/critical is the "
-                    "bar) (PROP-027 / GPT F3)"))
+                    "bar) (B-PROP-006 / GPT F3)"))
             else:
                 uncovered = [a for a in advs if str(a) not in waiver_advs
                              and str(s.get("package", "")) not in waiver_pkgs]
@@ -172,7 +172,7 @@ def cmd_dep_scan(args) -> int:
                     findings.append(("P1", loc,
                         f"dependency_scan.scans[{i}] advisories {uncovered} need a typed CEO waiver — a "
                         "blanket waiver may not hide an unrelated advisory; each high/critical must be "
-                        "individually covered (CEO-DECISION-LEDGER ref) (PROP-027 / GPT F3)"))
+                        "individually covered (CEO-DECISION-LEDGER ref) (B-PROP-006 / GPT F3)"))
 
     # scan-all-pairs (GPT #14 + F4): every manifest AND every lockfile discovered under the repo must
     # be covered by a scan entry — a second lockfile in a scanned root cannot go unscanned.
@@ -180,12 +180,12 @@ def cmd_dep_scan(args) -> int:
         if mf not in declared_manifests:
             findings.append(("P1", loc,
                 f"manifest '{mf}' found under the repo is not covered by any dependency_scan.scans "
-                "entry — every package-manager root must be scanned before build (PROP-027 / GPT #14)"))
+                "entry — every package-manager root must be scanned before build (B-PROP-006 / GPT #14)"))
     for lf in _discover(repo, LOCKFILE_NAMES):
         if lf not in scanned_lockfiles:
             findings.append(("P1", loc,
                 f"lockfile '{lf}' found under the repo is not covered by any dependency_scan.scans "
                 "entry — every lockfile must be scanned (a 2nd lockfile cannot go unscanned) "
-                "(PROP-027 / GPT F4)"))
+                "(B-PROP-006 / GPT F4)"))
 
     return findings_report(findings)

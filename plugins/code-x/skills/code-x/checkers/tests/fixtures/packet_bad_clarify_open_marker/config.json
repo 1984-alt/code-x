@@ -1,5 +1,5 @@
 {
   "feature_flags": {
-    "deposit_fee_model": "[NEEDS-CLARIFICATION: does the GoFood channel deduct a platform fee before payout, or is the displayed amount already net?]"
+    "deposit_fee_model": "[NEEDS-CLARIFICATION: does the food-delivery channel deduct a platform fee before payout, or is the displayed amount already net?]"
   }
 }

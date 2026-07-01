@@ -1,7 +1,7 @@
 # BAD: final-ready with everything zero/PASS but NO final_cross_family_receipt -> P0 [V1.10]
 # ("last" became "never" — the Sample ship-gate miss. Cross-family must run before ship.)
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

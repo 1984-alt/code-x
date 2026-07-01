@@ -1,7 +1,7 @@
 # BAD: state ASSERTS verdict PASS, but the bound (hash-matching) receipt artifact says verdict
 # REJECTED → the recorded review is not the artifact; state alone is not the gate (P0) [V1.10].
 
-project: sample
+project: my-app
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY

@@ -38,6 +38,10 @@ actor_record:
   fixer:          { actor: codex, family: gpt, model: gpt-5.5 }
   final_reviewer: { required: yes, actor: claude-opus, family: claude, model: claude-opus-4 }
 
+coderabbit:
+  required: yes
+  receipt:
+
 family_note:
   known_quirk: gpt family tends toward verbose output and defensive fallbacks
   leash: keep output lean; no extra verbs beyond the 6 subcommands
@@ -112,3 +116,8 @@ execution:                                  # injected from BUILD-ENGINE-PROFILE
   claude_code: { subagent: general-purpose, model: sonnet, effort: standard }
   codex_app:   { agent: worker, model: gpt-5.5, effort: medium }
   limits: { max_parallel_subagents: 4, max_depth: 1 }
+  prevention_preamble:
+    rule: builder-prevention-preamble
+    injected: yes
+    standard_ref: BUILDER-STANDARD.md
+    preamble_sha12: a1b2c3d4e5f6
