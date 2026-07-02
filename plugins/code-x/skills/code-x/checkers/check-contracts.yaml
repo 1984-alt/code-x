@@ -3967,6 +3967,72 @@ clauses:
     good:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "rounding", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
 
+  # ──────────────────────────────────────────────────────────────
+  # check: blueprint-page  (P-PROP-007 v1.22.2 — the projection-views render-faithfulness gate)
+  # Sibling of `cx check blueprint` (UNCHANGED). Each clause = a pinned BAD fixture page rejected
+  # at P1 (recomputed from source, never a written flag) + a GOOD fixture page that passes.
+  # ──────────────────────────────────────────────────────────────
+
+  - id: BLUEPRINT-STORYBOARD-FRAMES
+    check: blueprint-page
+    kind: gate
+    clause: "the page's data-storyboard-frame set equals the registered kind:screen module set in scope — a missing/omitted locked screen frame fails; also the fail-closed umbrella for a missing/unreadable/unparseable page"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_missing_frame.html", "--all"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-STORYBOARD-FRAMES"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
+  - id: BLUEPRINT-STORYBOARD-EDGES
+    check: blueprint-page
+    kind: gate
+    clause: "the page's data-storyboard-edge set equals the screens-manifest's declared nav edges (from->to) in scope — a hand-drawn arrow not in the INDEPENDENT source fails"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_handdrawn_edge.html", "--all"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-STORYBOARD-EDGES"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
+  - id: BLUEPRINT-STORYBOARD-LANES
+    check: blueprint-page
+    kind: gate
+    clause: "one data-journey-lane per manifest user_journeys entry, verbatim text — a dropped journey lane fails (HONEST LIMIT: presence + verbatim text only, no verified screen path — OQ2, CEO-D-040)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_missing_lane.html", "--all"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-STORYBOARD-LANES"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
+  - id: BLUEPRINT-PROTOTYPE-TAB-LOCKED
+    check: blueprint-page
+    kind: gate
+    clause: "the page's data-proto-src (path-safe, in-packet) + recomputed sha256 must equal each in-scope screen module's ui_lock_manifest path + hash — a divergent/invented embed fails"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_proto_hash_mismatch.html", "--all"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-PROTOTYPE-TAB-LOCKED"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
+  - id: BLUEPRINT-ANCHOR-ID-VISIBLE
+    check: blueprint-page
+    kind: gate
+    clause: "the page's data-anchor-id set equals the manifest's coverage-complete anchor set in scope — an invented or missing visible anchor id fails"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_anchor_invented.html", "--all"]
+      expect_severity: P1
+      expect_contains: "BLUEPRINT-ANCHOR-ID-VISIBLE"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
   # ── packet-floor (cx check packet) — registry coverage before freeze (P1-7) ──
 
   - id: PACKET-MODULE-REGISTRY-COVERS-SCREENS

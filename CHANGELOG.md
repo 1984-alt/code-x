@@ -10,6 +10,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.2]
+
+Syncs the public release up to protocol **v1.22.2** — a patch fold, no gate-logic change to existing checks.
+
+### Added
+- **Master Blueprint visual parity** (P-PROP-007): the plan page now renders three CEO-facing projection views on top of the per-module blueprint, all pure projections of already-locked source — a flow storyboard (frames + nav-edge arrows + one lane per journey), a prototype tab (the clickable Mode A screens embedded beside the static locked designs), and visible feedback anchor ids on every screen/control. New sibling checker `cx check blueprint-page` recomputes each view from canonical source and requires the rendered page's machine-readable markers to be set-equal — a hand-drawn edge, a dropped journey lane, a divergent prototype embed, or an invented anchor id fails closed. `cx check blueprint` itself is unchanged. 5 new gate clauses (`BLUEPRINT-STORYBOARD-FRAMES`/`-EDGES`/`-LANES`, `BLUEPRINT-PROTOTYPE-TAB-LOCKED`, `BLUEPRINT-ANCHOR-ID-VISIBLE`), each proven against a pinned bad fixture (392 gate clauses now bite; 411 self-tests).
+
+---
+
 ## [1.22.1]
 
 Syncs the public release up to protocol **v1.22.1** — a patch fold, no gate-logic change.

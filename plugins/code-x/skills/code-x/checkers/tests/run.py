@@ -2814,20 +2814,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_locked(self):
-        """The checker reports v1.22 as the locked canonical protocol version (CEO-D-038, Audit Stage + SOP bind)."""
+    def test_protocol_version_constant_marks_1_22_2_locked(self):
+        """The checker reports v1.22.2 as the locked canonical protocol version (CEO-D-040, P-PROP-007 patch)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.1")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.2")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_locked(self):
-        """`cx --version` reports the locked v1.22 canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_2_locked(self):
+        """`cx --version` reports the locked v1.22.2 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.1(?!\d)")
+        self.assertRegex(out, r"V1\.22\.2(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -3870,6 +3870,237 @@ class TestCheckBlueprint(unittest.TestCase):
         rc, out = self._run(self.GOOD, "home", state="blueprint_bad_state_items_malformed.yaml")
         self.assertEqual(rc, 1)
         self.assertIn("items is missing or not a list", out)
+
+
+# ---------------------------------------------------------------------------
+# blueprint-page (P-PROP-007 v1.22.2 — the projection-views render-faithfulness gate)
+# ---------------------------------------------------------------------------
+class TestCheckBlueprintPage(unittest.TestCase):
+    """P-PROP-007: cx check blueprint-page recomputes the three projection views (storyboard
+    frames/edges/lanes + prototype tab + anchor ids) from canonical source and requires the
+    rendered page's markers to be set-equal; cx check blueprint itself stays untouched."""
+
+    GOOD_PACKET = "blueprint_good_packet"
+    GOOD_PAGE = "blueprint_good_page.html"
+
+    @classmethod
+    def setUpClass(cls):
+        subprocess.run([sys.executable, str(FIXTURES / "_gen_blueprint_fixtures.py")], check=True)
+        subprocess.run([sys.executable, str(FIXTURES / "_gen_blueprint_page_fixtures.py")], check=True)
+
+    def _run(self, page, packet=None, all_=True):
+        args = [fix(packet or self.GOOD_PACKET), "--page", fix(page)]
+        if all_:
+            args += ["--all"]
+        return run_cx("check", "blueprint-page", *args)
+
+    def test_good_page_all_modules_passes(self):
+        rc, out = self._run(self.GOOD_PAGE)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_module_flag_rejected(self):
+        # xfam X2 (CEO-D-040): --module was REMOVED — the page is a whole-plan artefact checked
+        # whole, always. Passing --module must fail as an unknown argument, not silently scope.
+        rc, out = run_cx("check", "blueprint-page", fix(self.GOOD_PACKET),
+                         "--page", fix(self.GOOD_PAGE), "--module", "home")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("unrecognized argument", (out or "").lower())
+
+    def test_missing_frame_fails_p1(self):
+        rc, out = self._run("blueprint_bad_page_missing_frame.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P1]", out)
+        self.assertIn("BLUEPRINT-STORYBOARD-FRAMES", out)
+
+    def test_handdrawn_edge_fails_p1(self):
+        rc, out = self._run("blueprint_bad_page_handdrawn_edge.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-STORYBOARD-EDGES", out)
+
+    def test_missing_journey_lane_fails_p1(self):
+        rc, out = self._run("blueprint_bad_page_missing_lane.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-STORYBOARD-LANES", out)
+
+    def test_prototype_hash_mismatch_fails_p1(self):
+        rc, out = self._run("blueprint_bad_page_proto_hash_mismatch.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-PROTOTYPE-TAB-LOCKED", out)
+
+    def test_invented_anchor_id_fails_p1(self):
+        rc, out = self._run("blueprint_bad_page_anchor_invented.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-ANCHOR-ID-VISIBLE", out)
+
+    def test_missing_page_fails_closed_at_frames(self):
+        rc, out = run_cx("check", "blueprint-page", fix(self.GOOD_PACKET), "--all")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-STORYBOARD-FRAMES", out)
+        self.assertIn("--page", out)
+
+    def test_unreadable_page_fails_closed(self):
+        rc, out = self._run("blueprint_bad_page_unreadable.html")
+        self.assertEqual(rc, 1)
+        self.assertIn("BLUEPRINT-STORYBOARD-FRAMES", out)
+        self.assertIn("fail-closed", out)
+
+    def test_pathsafe_proto_src_rejected(self):
+        rc, out = self._run(self.GOOD_PAGE)
+        self.assertEqual(rc, 0)
+        # a proto src escaping the packet must be rejected, not silently trusted
+        import tempfile as _tmp
+        bad_html = ('<section data-storyboard-frame="home">h</section>'
+                   '<section data-storyboard-frame="detail">d</section>'
+                   '<div data-storyboard-edge="home->detail"></div>'
+                   '<p data-journey-lane="1">I tap Add entry, the app opens the form</p>'
+                   '<p data-journey-lane="1">money rounds the same everywhere</p>'
+                   '<iframe data-proto-src="../../../etc/passwd" data-proto-src-hash="' + "0" * 64 + '"></iframe>'
+                   '<span data-anchor-id="req:REQ-001"></span>'
+                   '<span data-anchor-id="req:REQ-002"></span>'
+                   '<span data-anchor-id="control:add_entry"></span>'
+                   '<span data-anchor-id="nav:home->detail"></span>'
+                   '<span data-anchor-id="req:REQ-003"></span>')
+        with _tmp.NamedTemporaryFile("w", suffix=".html", delete=False) as f:
+            f.write(bad_html)
+            path = f.name
+        try:
+            rc, out = run_cx("check", "blueprint-page", fix(self.GOOD_PACKET), "--page", path, "--all")
+            self.assertEqual(rc, 1)
+            self.assertIn("BLUEPRINT-PROTOTYPE-TAB-LOCKED", out)
+            self.assertIn("does not resolve to a real, in-packet", out)
+        finally:
+            os.unlink(path)
+
+    def test_blueprint_semantics_unchanged(self):
+        # cx check blueprint (the existing gate) must still PASS exactly as before — zero behavior
+        # change from adding the new sibling subcommand.
+        rc, out = run_cx("check", "blueprint", fix(self.GOOD_PACKET), "--all",
+                         "--state", fix("blueprint_good_state.yaml"),
+                         "--approval", fix("blueprint_good_approval.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS for --all, got {rc}.\n{out}")
+
+    # F1 (self-review, fail-closed): a kind:screen module whose ui_lock_manifest ref does NOT
+    # resolve to a real, in-packet, non-symlink file must NOT be silently dropped from
+    # expected_proto — it must fail closed with a P1 finding instead of letting a page stripped
+    # of that module's prototype embed PASS.
+    def test_unsafe_lock_ref_fails_closed_p1(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = os.path.join(tmp, "packet")
+            shutil.copytree(fix(self.GOOD_PACKET), packet)
+            manifest_path = Path(packet) / "blueprint-manifest.yaml"
+            text = manifest_path.read_text(encoding="utf-8")
+            # 'detail' shares home's lock ref today; break ONLY detail's, leaving home's intact
+            # so this pins the fail-closed path in isolation (not a duplicate of the hash-mismatch
+            # or missing-embed fixtures).
+            lines = text.splitlines()
+            out_lines = []
+            in_detail = False
+            for ln in lines:
+                if ln.strip().startswith("- module_id: detail"):
+                    in_detail = True
+                if in_detail and ln.strip().startswith("ui_lock_manifest:"):
+                    indent = ln[:len(ln) - len(ln.lstrip())]
+                    out_lines.append(f"{indent}ui_lock_manifest: ui-locks/does-not-exist.lock.yaml")
+                    in_detail = False
+                    continue
+                out_lines.append(ln)
+            manifest_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+            rc, out = run_cx("check", "blueprint-page", packet, "--page", fix(self.GOOD_PAGE), "--all")
+            self.assertEqual(rc, 1)
+            self.assertIn("[P1]", out)
+            self.assertIn("BLUEPRINT-PROTOTYPE-TAB-LOCKED", out)
+            self.assertIn("does not resolve to a real, in-packet, non-symlink file", out)
+
+    # F6 (self-review): pin the EXTRA-frame rejection path (a hand-drawn frame not derivable from
+    # any registered kind:screen module) — only the missing-frame direction had a fixture before.
+    def test_extra_frame_hand_drawn_fails_p1(self):
+        import hashlib as _hashlib
+        lock_hash = _hashlib.sha256(Path(fix("blueprint_good_packet")).joinpath(
+            "ui-locks", "home.lock.yaml").read_bytes()).hexdigest()
+        bad_html = ('<section data-storyboard-frame="home">h</section>'
+                   '<section data-storyboard-frame="detail">d</section>'
+                   '<section data-storyboard-frame="ghostscreen">ghost</section>'
+                   '<div data-storyboard-edge="home->detail"></div>'
+                   '<p data-journey-lane="1">I tap Add entry, the app opens the form</p>'
+                   '<p data-journey-lane="1">money rounds the same everywhere</p>'
+                   f'<iframe data-proto-src="ui-locks/home.lock.yaml" data-proto-src-hash="{lock_hash}"></iframe>'
+                   '<span data-anchor-id="req:REQ-001"></span>'
+                   '<span data-anchor-id="req:REQ-002"></span>'
+                   '<span data-anchor-id="control:add_entry"></span>'
+                   '<span data-anchor-id="nav:home->detail"></span>'
+                   '<span data-anchor-id="req:REQ-003"></span>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as f:
+            f.write(bad_html)
+            path = f.name
+        try:
+            rc, out = self._run(path)
+            self.assertEqual(rc, 1)
+            self.assertIn("BLUEPRINT-STORYBOARD-FRAMES", out)
+            self.assertIn("not derivable from any registered", out)
+            self.assertIn("ghostscreen", out)
+        finally:
+            os.unlink(path)
+
+    # F6 (self-review): pin the EXTRA-lane rejection path (a re-typed/invented lane text with no
+    # verbatim match in the manifest) — only the missing-lane direction had a fixture before.
+    def test_extra_lane_invented_text_fails_p1(self):
+        import hashlib as _hashlib
+        lock_hash = _hashlib.sha256(Path(fix("blueprint_good_packet")).joinpath(
+            "ui-locks", "home.lock.yaml").read_bytes()).hexdigest()
+        bad_html = ('<section data-storyboard-frame="home">h</section>'
+                   '<section data-storyboard-frame="detail">d</section>'
+                   '<div data-storyboard-edge="home->detail"></div>'
+                   '<p data-journey-lane="1">I tap Add entry, the app opens the form</p>'
+                   '<p data-journey-lane="1">money rounds the same everywhere</p>'
+                   '<p data-journey-lane="1">this journey was never approved</p>'
+                   f'<iframe data-proto-src="ui-locks/home.lock.yaml" data-proto-src-hash="{lock_hash}"></iframe>'
+                   '<span data-anchor-id="req:REQ-001"></span>'
+                   '<span data-anchor-id="req:REQ-002"></span>'
+                   '<span data-anchor-id="control:add_entry"></span>'
+                   '<span data-anchor-id="nav:home->detail"></span>'
+                   '<span data-anchor-id="req:REQ-003"></span>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as f:
+            f.write(bad_html)
+            path = f.name
+        try:
+            rc, out = self._run(path)
+            self.assertEqual(rc, 1)
+            self.assertIn("BLUEPRINT-STORYBOARD-LANES", out)
+            self.assertIn("this journey was never approved", out)
+        finally:
+            os.unlink(path)
+
+    # F2 (self-review): an HTML void element (e.g. <br>) inside a journey lane must not leak the
+    # lane buffer past its real closing tag — the void element is closed immediately, not pushed
+    # onto the tag stack unclosed. The manifest's journey text is "I tap Add entry, the app opens
+    # the form"; splitting it across a <br> right after the existing space must still concatenate
+    # to the exact verbatim string and PASS clean (no false P1 anywhere).
+    def test_void_element_inside_lane_parses_verbatim(self):
+        import hashlib as _hashlib
+        lock_hash = _hashlib.sha256(Path(fix("blueprint_good_packet")).joinpath(
+            "ui-locks", "home.lock.yaml").read_bytes()).hexdigest()
+        good_html = ('<section data-storyboard-frame="home">h</section>'
+                   '<section data-storyboard-frame="detail">d</section>'
+                   '<div data-storyboard-edge="home->detail"></div>'
+                   '<p data-journey-lane="1">I tap Add entry, <br>the app opens the form</p>'
+                   '<p data-journey-lane="1">money rounds the same everywhere</p>'
+                   f'<iframe data-proto-src="ui-locks/home.lock.yaml" data-proto-src-hash="{lock_hash}"></iframe>'
+                   '<span data-anchor-id="req:REQ-001"></span>'
+                   '<span data-anchor-id="req:REQ-002"></span>'
+                   '<span data-anchor-id="control:add_entry"></span>'
+                   '<span data-anchor-id="nav:home->detail"></span>'
+                   '<span data-anchor-id="req:REQ-003"></span>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as f:
+            f.write(good_html)
+            path = f.name
+        try:
+            rc, out = self._run(path)
+            self.assertEqual(rc, 0, f"Expected PASS (verbatim match across <br>), got:\n{out}")
+            self.assertIn("PASS", out)
+        finally:
+            os.unlink(path)
 
 
 # ---------------------------------------------------------------------------

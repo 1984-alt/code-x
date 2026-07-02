@@ -47,6 +47,7 @@ from cx_render_fidelity import cmd_render_fidelity
 from cx_drift import cmd_drift
 from cx_structure import cmd_structure
 from cx_blueprint import cmd_blueprint
+from cx_blueprint_page import cmd_blueprint_page
 from cx_whole_packet_review import cmd_whole_packet_review
 from cx_kaizen import cmd_kaizen
 from cx_graduation import cmd_graduation
@@ -158,7 +159,7 @@ def main():
     p_ct.add_argument("--repo-root", dest="repo_root", required=True, help="Path to the git repo root")
 
     # evals (PROP-018: env-wrapped protocol suites)
-    p_ev = check_sub.add_parser("evals", help="Run run.py + run_contracts.py + consistency --strict env-wrapped")
+    p_ev = check_sub.add_parser("evals", help="Run run.py + run_contracts.py + consistency --strict + live kaizen, env-wrapped")
     p_ev.add_argument("--checkers-dir", dest="checkers_dir", default=None,
                       help="TEST-ONLY: alternate checkers tree for the two suites")
 
@@ -270,6 +271,21 @@ def main():
     p_bp.add_argument("--approval", dest="approval", default=None,
                       help="Path to the out-of-packet BLUEPRINT-APPROVAL.yaml (approval/review receipts)")
 
+    # blueprint-page (P-PROP-007 v1.22.2: render-faithfulness sibling of blueprint — recomputes each
+    # of the three projection views (storyboard frames/edges/lanes + prototype tab + anchor ids) from
+    # canonical source and requires the rendered page's markers to be set-equal. cx check blueprint
+    # semantics are UNTOUCHED; this is a new sibling subcommand, not a new gate family. The page is a
+    # WHOLE-PLAN artefact — checked whole, always; there is no --module scoping here (xfam X2,
+    # CEO-D-040). Per-module gating already lives in `cx check blueprint`.)
+    p_bpg = check_sub.add_parser("blueprint-page",
+                                 help="Blueprint page render-faithfulness (whole-page): storyboard frames/"
+                                      "edges/lanes + prototype tab + anchor ids all derive from locked source")
+    p_bpg.add_argument("packet_dir", help="Frozen packet directory (contains the immutable blueprint-manifest.yaml)")
+    p_bpg.add_argument("--page", dest="page", default=None, help="Path to the rendered Master Blueprint HTML page")
+    p_bpg.add_argument("--all", dest="all", action="store_true", default=False,
+                       help="Check every module in the manifest (only supported mode — the page is a "
+                            "whole-plan artefact)")
+
     # whole-packet-review (PROP-040 v1.19: the G7 build-authorization INTEGRATION gate — a current,
     # PASS, opposite-family review of the WHOLE frozen packet, hash-bound, before any module build.)
     p_wpr = check_sub.add_parser("whole-packet-review",
@@ -366,6 +382,7 @@ def main():
         "drift": cmd_drift,
         "structure": cmd_structure,
         "blueprint": cmd_blueprint,
+        "blueprint-page": cmd_blueprint_page,
         "whole-packet-review": cmd_whole_packet_review,
         "kaizen": cmd_kaizen,
         "graduation": cmd_graduation,

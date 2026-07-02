@@ -51,6 +51,10 @@
 | PROP-042 | PBF-PROP-012 | Review-routing + orchestration |
 | PROP-043 | PBF-PROP-013 | Stage-rename + crosswalk |
 | PROP-044 | PBF-PROP-014 | No-ambiguity rule |
+| PROP-045 | PBF-PROP-015 | cx_state arity crash fix (parse-P0 masking) |
+| PROP-046 | PBF-PROP-016 | Public CI runs the full eval gate (run.py-only scar) |
+| PROP-047 | P-PROP-007 | Blueprint visual parity (storyboard + prototype tab + anchor ids) |
+| PROP-048 | PBF-PROP-017 | One-line installer, dependencies pulled from official sources |
 
 ## Retired (no new id)
 

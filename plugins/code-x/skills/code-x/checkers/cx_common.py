@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.22.1"          # LOCKED CANONICAL 2026-07-02 (CEO-D-039, patch: public CI full eval gate). Prior major: v1.22 (CEO-D-038) — A-PROP-001 Audit Stage (4th stage; absorbs B-PROP-007) + PBAF-PROP-001 SOP asset bind (Code-X-V1/SOP/ + applicability model). Prior: v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
+PROTOCOL_VERSION = "1.22.2"          # LOCKED CANONICAL 2026-07-02 (CEO-D-040) — P-PROP-007 Master Blueprint visual parity: storyboard + prototype tab + anchor ids, new cx check blueprint-page (patch). Prior: v1.22.1 (CEO-D-039) PBF-PROP-016 public CI runs the full eval gate; v1.22 (CEO-D-038) A-PROP-001 Audit Stage + PBAF-PROP-001 SOP asset bind; v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}

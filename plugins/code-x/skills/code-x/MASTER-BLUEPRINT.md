@@ -126,6 +126,54 @@ blueprint`). **Risk callouts** flag money / data / privacy items tied to their p
 **plain language** with an **auto-glossary** for any surviving jargon (the "dedupe" lesson); builder/
 technical detail is collapsed at the bottom. Dependencies are blockers-only context, not a big surface.
 
+## The three projection views (P-PROP-007, fold v1.22.2)
+
+The page renders three CEO-facing views on TOP of the per-module blueprint — all pure
+projections of already-locked source (🔒 render-never-re-type; no new planning data):
+
+1. **FLOW STORYBOARD** — the whole app as one connected map: each `kind: screen` module's
+   locked design rendered as a frame, an arrow per nav edge, a lane per distinct manifest
+   `user_journeys` entry (journey text verbatim, set-equal — duplicate journey text collapses
+   to one lane, xfam X4; presence + text only, no more; OQ2, CEO-D-040). Frames derive from
+   the frozen registry + screens-manifest; arrows derive from the screens-manifest's declared
+   nav edges (the same INDEPENDENT source the anchor-coverage recompute uses — CXBP-001);
+   a hand-drawn arrow or an omitted locked edge is a projection defect, not a style choice.
+2. **PROTOTYPE TAB** — the G6 Mode A clickable screens embedded as a second tab beside the
+   static locked designs, so the CEO drives the flow inside the same page they approve. The
+   embed references the Mode A locked artefact by path + content hash (`ui_lock_manifest`);
+   a divergent copy fails. Interactivity itself stays Mode A's own scope.
+3. **FEEDBACK ANCHOR IDS** — every rendered screen/control item shows its existing source
+   anchor id as a visible short id (e.g. `S3.btn-save`), so CEO feedback maps directly to a
+   machine-checkable `lock_anchor_ref` on FIX cards. Ids come ONLY from the manifest anchor
+   set — an invented or missing id fails.
+
+**Enforcement — `cx check blueprint-page <packet-dir> --page <html> --all`** (whole-page only —
+no `--module` scope; the page is a whole-plan artefact, checked whole; per-module gating already
+lives in `cx check blueprint` — xfam X2, CEO-D-040) (sibling of `cx check blueprint`, which is
+UNCHANGED): recomputes each projection's expected
+set from canonical sources and requires the page's machine-readable markers
+(`data-storyboard-frame` / `data-storyboard-edge` / `data-journey-lane` / `data-proto-src` +
+`data-proto-src-hash` / `data-anchor-id`) to be SET-EQUAL — fail-closed on a missing or
+unparseable page. Clauses: `BLUEPRINT-STORYBOARD-FRAMES` · `BLUEPRINT-STORYBOARD-EDGES` ·
+`BLUEPRINT-STORYBOARD-LANES` · `BLUEPRINT-PROTOTYPE-TAB-LOCKED` · `BLUEPRINT-ANCHOR-ID-VISIBLE`
+(all P1, pinned BAD fixtures). Run it whenever the page is (re)generated, before showing the
+CEO. The page remains decorative — these clauses prove the PROJECTION derives from source;
+truth stays the manifest + receipts + packet source. It runs at generation time and bites in
+CI/evals; a stale/unfaithful page does NOT block module-start — the manifest/approval gates
+already guard building (OQ1, CEO-D-040; not wired into the approval flow this patch).
+
+**Honest limits of the views:** all three projections are checked as DOM MARKERS, not visual/CSS
+truth — marker parity is not visual parity (e.g. a page can hide a marker with CSS and still
+pass; a hand-drawn storyboard image sitting next to a correct marker also passes). The CEO's own
+eyes + design-fidelity gate own the visual layer; `cx check blueprint-page` only proves each
+marker set derives from locked source. Concretely: journey lanes are presence + verbatim-text
+(the manifest's `user_journeys` carry no screen sequence, so a lane is not a verified click-path —
+OQ2, CEO-D-040; a `screen_path` field is a possible future PROP, not built here); storyboard
+frames/edges are DOM-presence of the marker attribute, not proof the frame renders the locked
+design visually; "visible" anchor ids are DOM-presence, not a CSS-visibility proof (same
+presence-not-quality bound as the plain-language/glossary check); the prototype tab proves the
+locked artefact is embedded byte-identical, not that it FEELS right (the CEO's drive owns that).
+
 ## Honest limits (fail-closed, stated up front)
 
 - HTML decorative; the manifest (immutable, in-packet) + the approval/review receipts (mutable,
@@ -141,6 +189,9 @@ technical detail is collapsed at the bottom. Dependencies are blockers-only cont
 - Plain-language / glossary is **presence + generation, not an English-quality gate** (P-PROP-003 pattern).
 - Legacy build-wave-first packets keep heuristic screen↔module matching until re-planned screen-first.
 - Portable `cx check` (no Claude-only hook dependency).
+- Projection views (storyboard / prototype tab / anchor ids) are derivation-checked by cx check
+  blueprint-page — set-equality vs recomputed source; lane sequence + CSS visibility + prototype
+  feel stay human-owned (P-PROP-007).
 
 ## Enforcement (so green = enforcing)
 
@@ -151,4 +202,6 @@ fixture that fails-closed at the stated severity, proved by `tests/run_contracts
 module-start` + `cx check build-turn`; packet-floor registry coverage in `cx check packet`. See `GATES.md`
 (the order-wall wiring + G6/G7 lines), `PACKET-CONTENTS.md` (the screen-first planning ladder),
 `MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` (P-PROP-005), and
-`design-history/prop-039-gpt-review-synthesis-2026-06-25.md` (the review synthesis).
+`design-history/prop-039-gpt-review-synthesis-2026-06-25.md` (the review synthesis) + the P-PROP-007
+projection clauses (BLUEPRINT-STORYBOARD-* · BLUEPRINT-PROTOTYPE-TAB-LOCKED ·
+BLUEPRINT-ANCHOR-ID-VISIBLE) at the new `cx check blueprint-page` and `EVALS.md` EVAL-046.
