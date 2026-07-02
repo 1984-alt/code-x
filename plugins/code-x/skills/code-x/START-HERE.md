@@ -1,6 +1,5 @@
 # Code-X V1 — START HERE (the map)
 
-> 🚧 V1 status: see `STATUS.md`. The LIVE protocol is still `../Code-X` (v0.13) until V1 is locked.
 > This file is the MAP — read it once to learn the layout. What you read EVERY session is just the **KERNEL + state + your one card**.
 
 ## What Code-X V1 is (one line)

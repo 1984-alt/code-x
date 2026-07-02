@@ -8,7 +8,7 @@
 
 AI coding tools that won't build what you actually meant. They drift, cut corners, and skip requirements, then report "all tests pass" on work that's broken — and if you can't read code, you can't catch any of it.
 
-The method, in one breath: you lock the plan first and review it as a visual **Master Blueprint**; the AI then builds one small work-order at a time; a deterministic Python checker — not another AI — blocks dropped requirements, stale approvals, fake-done work, unsafe file paths, and many forms of drift from the locked plan; then, at each review checkpoint, a *different* AI family reviews the result. The name is the method — **C**laude Code **+** Code**x**, the two tools it runs on and the two AIs that check each other's work.
+The method, in one breath: you lock the plan first and review it as a visual **Master Blueprint**; the AI then builds one small work-order at a time; a deterministic Python checker — not another AI — blocks dropped requirements, stale approvals, fake-done work, unsafe file paths, and many forms of drift from the locked plan; when the build is done, a read-only **Audit** stage judges the finished app against the plan and a 13-layer ship-readiness standard before anything ships; then, at each review checkpoint, a *different* AI family reviews the result. The name is the method — **C**laude Code **+** Code**x**, the two tools it runs on and the two AIs that check each other's work.
 
 The point isn't to make AI coding magical. It's to make it hard for the AI to quietly cut corners while the person directing it can't see the code.
 
@@ -20,6 +20,7 @@ It's early days — but the proof is real and runnable: **396 self-tests** green
 
 - **387 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
 - **396 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
+- **A machine drives every screen before you do.** A verify-app agent runs each finished page and proves the runtime behavior first; then the director drives it live on the real surface, and that acceptance is pinned to a real screenshot and the exact code fingerprint it approved.
 - **A real bug, caught in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *thrown out* when cross-family review found a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
 - **No single layer is forge-proof.** The protection is the whole *stack* — a checker the AI can't argue with, an opposite-family reviewer, and a human who owns every call — not any one gate. (How it holds, and where it doesn't, is spelled out below.)
 
@@ -42,8 +43,11 @@ Drift — the AI wandering from what you pictured — is the famous failure. It 
 | **Decision-amnesia** | a settled decision quietly re-asked, reversed, or forgotten |
 | **Wrong-looking results** | a screen that renders broken — wrong size, overflow — yet passes every check |
 | **Runaway cost** | review loops repeating until the bill explodes |
+| **Ships-unready** | runs on your machine — but with no HTTPS, no backups, no error logs; not actually ready for real use |
+| **Phantom completion** | a work-order reported "done" when nothing in the code actually changed |
+| **Plan-drift across sessions** | the locked plan quietly mutating as corrections and handoffs pile up |
 
-Every new failure that shows up gets folded into a new rule, receipt, or deterministic check, so it's harder to repeat. That's the engine: the protocol is shaped by real mistakes, not designed up front.
+Every new failure that shows up gets folded into a new rule, receipt, or deterministic check, so it's harder to repeat. Drift alone is now caught by six different gates at different stages — from locked style direction to a frozen file tree during fixes. That's the engine: the protocol is shaped by real mistakes, not designed up front.
 
 ---
 
@@ -72,7 +76,27 @@ The Master Blueprint is the planning stage made reviewable by a non-coder. From 
 - **`cx check blueprint` recomputes readiness from the source** — a module can't be built until its blueprint is complete and approved. A pretty page can't hide a gap.
 - **Change the plan and your approval is void** — sign-off is pinned to a fingerprint of the plan; edit it later and that module un-approves itself until you re-approve.
 
+Beneath the page sits a planning floor the checker enforces: the plan must cover **twenty categories** (security, backups, error handling, money rules, …) — ten of which can never be waved off as not-applicable — and a fresh cold-reader traces every original ask into the frozen docs before anything locks.
+
 That's the wedge versus a plain written spec: a spec is text a non-coder can't really judge, checked only at build time; the Blueprint is something you genuinely understood *before* the build began. Like building a house — the architect's render is for the client, while the construction documents go to the builder.
+
+---
+
+## The SOP: a 13-layer ship-readiness standard
+
+Behind the four stages sits a written standard — the **Code-X SOP**: a 9-principle constitution plus **13 layers of what production software actually needs, each ending in a ship gate**:
+
+> 1. Frontend · 2. Backend / API · 3. Database & Storage · 4. Auth & Permissions · 5. Hosting & Deployment · 6. Cloud & Compute · 7. CI/CD & Version Control · 8. Security & RLS · 9. Rate Limiting · 10. Caching & CDN · 11. Load Balancing & Scaling · 12. Error Tracking & Logs · 13. Availability & Recovery
+
+It's not an audit-time checklist bolted on at the end — it threads all four stages: **Planning** must address all 13 layers in a coverage map, **Building** cards cite the layers they must satisfy, the **Audit** stage runs the ship gates against the finished build, and **Fixing** takes the findings.
+
+The part that makes it enforceable for a non-coder: **which layers apply is derived, never argued.** Nine observable facts about the build (is there a UI? does it store data? is it reachable beyond this machine? is the data sensitive? …) decide applicability by lookup — and the auditor re-derives those same facts from the built app itself, so a layer can't be dodged by mislabeling. "We decided to skip it" is not a state that exists. Applicability is judged **per sub-item, never per whole layer**: a local single-user app may drop CDN and load balancing, but it still owes static-asset caching and tested backups. Three rules are hard whenever their facts hold: **HTTPS** the moment the app is reachable over any network (your phone counts) · **version control** always, even for a one-shot script · **backups with a tested restore** whenever the data is sensitive.
+
+So the standard scales itself: a headless one-shot script owes only version control and basic logging; a local single-user money app engages 12 of 13 layers at least in part; a public multi-user product owes all 13 in full.
+
+**Scope, honestly:** these 13 layers are the *solo-builder* tier — Code-X's own lane. They correspond to Tier 1 of [The Faction](https://www.mattmurphy.ai/the-faction/)'s three-tier infrastructure picture; Tier 2 (what growing teams need to stay organized) and Tier 3 (platforms with multiple teams and compliance requirements) are deliberately out of scope here.
+
+The SOP lives in the repo as its own versioned, hash-pinned asset ([`SOP/`](plugins/code-x/skills/code-x/SOP/)) — it improves on its own clock, and the protocol pins exactly which version it holds you to.
 
 ---
 
@@ -167,12 +191,15 @@ No single layer is forge-proof. The protection is the **stack**, where each laye
 - **Hash-bound receipts** that tie every approval and review to a fingerprint of the source.
 - **An opposite-family reviewer** — a *different* vendor, not the AI that wrote the code.
 - **A fresh reader** who didn't author the artefact, and **a human** who owns the decisions.
+- **An append-only decision ledger** — every settled decision is recorded; contradicting one later without a recorded override is itself a blocking finding.
 
-**What `cx` proves:** required artefacts exist, fields are present, hashes match, paths are safe, statuses are typed, approvals are current, and reverse coverage holds — every requirement marked `BUILDING` has a card, so nothing was dropped at compile.
+**What `cx` proves:** required artefacts exist, fields are present, hashes match, paths are safe, statuses are typed, approvals are current, and reverse coverage holds — every requirement marked `BUILDING` has a card, so nothing was dropped at compile. Newer check families keep the same shape: screen-render fidelity, blueprint readiness, and session-handoff continuity (boot receipts are machine-generated; a handoff's plan-lock pointer is recomputed from the real files at write and at read, so a resume can't quietly drift).
 
 **What `cx` can't prove:** that the requirement was *right*, that the product judgment is sound, that the security model holds, or that a test is meaningful rather than tautological. Those need the fresh reader, the cross-family review, and the human. *Green ≠ enforcing* applies to `cx` itself — it checks shape and existence, not meaning.
 
 **Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 387 gate clauses), cross-family review of the tests, and the Audit stage's whole-app check that the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
+
+**Security runs the same fail-closed shape:** dependencies are scanned before build (zero high/critical findings, or an explicit human waiver on record), every card answers a security tripwire that is checked against the actual diff — not self-attested — and anything that leaves the machine passes a PII/egress scrub first.
 
 **Why four review layers, not one?** Because the director can't fix bugs by hand, so the system catches as much as it can before the human is asked to trust the result:
 
@@ -181,7 +208,9 @@ No single layer is forge-proof. The protection is the **stack**, where each laye
 3. **Self-review** — the builder family reviews its own work, under a capped loop.
 4. **Opposite-family review** — a *different* AI family reviews the module before it ships.
 
-The expensive part was never *having* reviews — it was the **looping** (review → fix → re-review → fix…). Code-X catches mechanical issues first, asks each reviewer for all findings in one pass, fixes the whole class, and pins it with a deterministic test. Keep the coverage, kill the loops.
+The same ladder guards more than the build: the entire frozen plan gets a full opposite-family read before building is ever authorized, and at the final audit the cross-family receipt is mandatory. Shipping itself is certified, not declared — the checker auto-assembles the final-ready certificate, and a passing final audit is a hard precondition of it.
+
+The expensive part was never *having* reviews — it was the **looping** (review → fix → re-review → fix…). Code-X catches mechanical issues first, asks each reviewer for all findings in one pass, fixes the whole class, and pins it with a deterministic test. Keep the coverage, kill the loops. (Nine review passes on a single bank-statement parser — the case documented in [VALIDATION.md](VALIDATION.md) — is what forced that rule.)
 
 ---
 
@@ -206,12 +235,13 @@ The shared baseline is plan-first development:
 | card deck (each card traces to a frozen packet slice) | tasks |
 | build stage, one card at a time | implement |
 | `cx check deck` (deterministic reverse coverage) | analyze (often AI-driven) |
+| Audit stage (read-only whole-app judgment + 13 ship gates) | — no direct equivalent |
 
 What Code-X adds on top:
 
 - **A deterministic checker.** `cx` is mechanical Python, not an AI checking an AI. For someone who can't read the code, a gate that *can't be talked around* is worth more than another model's opinion. This is the core difference.
 - **The Master Blueprint.** The plan becomes one page a non-coder reviews and approves screen-by-screen, with readiness recomputed from source rather than taken on faith.
-- **The Audit stage.** A dedicated, read-only 4th stage between Building and Fixing that verifies the finished app is actually wired and running (not just that requirements and tests look right) against both the plan and a 13-gate ship-readiness standard.
+- **The Audit stage.** A dedicated, read-only 4th stage between Building and Fixing that verifies the finished app is actually wired and running — not just that requirements and tests look right (see the SOP section above).
 - **A non-coder framing,** plus an always-on security baseline and mandatory cross-family review (Spec Kit has both as well, in lighter, AI-generated form).
 
 In one line: **a shared plan-first baseline, plus a deterministic checker, a reviewable Master Blueprint, and a non-coder framing — arrived at independently.**
@@ -220,7 +250,7 @@ In one line: **a shared plan-first baseline, plus a deterministic checker, a rev
 
 ## Who this is for
 
-I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't build Code-X, I *directed* it. I said what I wanted; Claude did the hands-on building; Codex and GPT cross-reviewed the work and drove many of the improvements. That's the experiment: can someone who doesn't write code still direct AI rigorously enough that the software comes out faithful to their intent? I think of the role as an **AI build director** — like a film director who owns the final cut without operating the camera.
+I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't build Code-X, I *directed* it. I said what I wanted; Claude did the hands-on building; Codex and GPT cross-reviewed the work and drove many of the improvements. That's the experiment: can someone who doesn't write code still direct AI rigorously enough that the software comes out faithful to their intent? I think of the role as an **AI build director** — like a film director who owns the final cut without operating the camera. Even how the AI talks back is a written standard, not a hope — plain language, no unexplained jargon, decisions posed so a non-coder can actually decide them (`VOICE.md`, applied as a review lens).
 
 - **If you're a vibe-coder or non-coder:** this is a way of working you can try today. Install it, read `START-HERE.md`, build something — then see [OPERATING-MODES.md](OPERATING-MODES.md) for how I actually drive it.
 - **If you're a professional engineer:** please tear it apart. Where is it naive, unsafe, over-built, or reinventing a wheel? Issues and PRs that challenge the design are the most welcome contribution — the explicit aim is for people who know more than I do to make it better. See [CONTRIBUTING.md](CONTRIBUTING.md). This isn't a formal proof; it's an open method shaped by real use and real mistakes, shared so those mistakes are harder to repeat.
@@ -229,7 +259,7 @@ I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't bu
 
 ## Roadmap & help wanted
 
-The headline open item is an **Autonomous Build/Session Loop** — a policy layer that drives the build stage hands-off and stops only when human input is genuinely required (a real gate failure, or a decision the locked plan didn't pre-decide). Other valuable work: independent reproductions, stronger example projects, the future `/cx-accept` runner, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
+The headline open item is an **Autonomous Build/Session Loop**. Today a human still babysits context windows and session handoffs; the missing piece is a policy layer that drives the build hands-off *across sessions* and stops only when human input is genuinely required — a real gate failure, or a decision the locked plan didn't pre-decide. Other valuable work: independent reproductions, stronger example projects, the future `/cx-accept` runner, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
 
 ---
 
@@ -237,7 +267,7 @@ The headline open item is an **Autonomous Build/Session Loop** — a policy laye
 
 **Influences:**
 
-- **@mattmurphyai** (Instagram) — his reels and ideas about working with AI shaped the author's thinking on observability, dependencies, and security. An indirect but real influence.
+- **Matt Murphy — @mattmurphyai (Instagram) / [The Faction](https://www.mattmurphy.ai/the-faction/)** — his reels and ideas about working with AI shaped the author's thinking on observability, dependencies, and security; The Faction's Tier-1 infrastructure map for solo builders shaped the whole 13-layer structure of the SOP ship-readiness standard.
 - **[ponytail](https://github.com/DietrichGebert/ponytail) by DietrichGebert** — evaluating this plugin shaped Code-X's prevention-first ladder: decide what *not* to build before writing any code. Its idea — *"the best code is the code you never wrote"* — became the ladder's first rung.
 - **The Toyota Way / Kaizen** — the continuous-improvement philosophy behind the protocol's self-improvement loop.
 

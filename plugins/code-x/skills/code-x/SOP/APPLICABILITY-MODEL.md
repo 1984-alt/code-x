@@ -65,7 +65,7 @@ some N/A · **N/A** whole layer off — every sub-item N/A.
 phone counts). N/A at E0 (no server). At E1 (strictly localhost) traffic never leaves the
 machine, so not required there — but the moment it's exposed, it becomes mandatory.
 
-## 3. Worked proof — a live-production money app (money app)
+## 3. Worked proof — a live-production money app
 
 ```
 A1 UI = YES · A2 request = YES · A3 persist = YES · A4 multi-identity = NO · A5 exposure = E2 (iPhone)
@@ -88,7 +88,7 @@ A6 sensitive = YES (money) · A7 async = YES (fetchers) · A8 metered = NO (free
 | 12 Error Tracking/Logs | APPLIES | unattended money pipeline (A7+A6) — logs + alert you; external Sentry optional |
 | 13 Availability/Recovery | PARTIAL | backups + tested restore mandatory (A6 money); external uptime/RTO-RPO scaled down (E2, single user) |
 
-**a live-production money app result (under Rule 2):** 5 APPLIES · 7 PARTIAL · only 1 N/A (Load Balancing — the
+**Result (under Rule 2):** 5 APPLIES · 7 PARTIAL · only 1 N/A (Load Balancing — the
 single layer that truly needs more than one machine). Everything else engages at least in
 part.
 
@@ -97,7 +97,7 @@ part.
 | Build archetype | Roughly… |
 |--|--|
 | Headless one-shot script (E0, no UI, no persist, no secret) | Only #7 version control + light #12 logs. Everything else N/A. The agreed floor. |
-| Local single-user app — a live-production money app | 5 apply · 7 partial · 1 N/A |
+| Local single-user app (e.g. a live-production money app) | 5 apply · 7 partial · 1 N/A |
 | Public multi-user SaaS (all facts true, E3) | All 13 apply, full. Nothing folds. |
 
 ## 5. Rulings — all locked (Decision §8 + two follow-ups)
