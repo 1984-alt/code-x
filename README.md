@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.22-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.22.1-orange.svg)
 
 **Code-X is a build protocol for non-coders directing AI to build software — faithfully, without writing the code.** It's one Indonesian vibe-coder's answer to a specific, maddening problem.
 
@@ -13,6 +13,42 @@ The method, in one breath: you lock the plan first and review it as a visual **M
 The point isn't to make AI coding magical. It's to make it hard for the AI to quietly cut corners while the person directing it can't see the code.
 
 It's early days — but the proof is real and runnable: **396 self-tests** green in CI, **387 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
+
+---
+
+## Who Code-X is for
+
+Code-X is built for one person in particular: the **solo builder who can't read code**.
+You direct AI coding agents. You've been burned by vibe coding — the AI says "done" and
+it isn't, the design drifts while you weren't looking, bugs surface weeks later and you
+can't tell where. You want to ship software you can actually trust for your own projects,
+and you don't have an engineer to check the AI's work.
+
+Code-X is that check. It trades speed for evidence: locked plans, deterministic gates,
+cross-family AI review, and a read-only audit stage — every step leaves proof a
+non-coder can verify. The protocol itself is free and open-source; you pay only for the
+AI tools you already use.
+
+### Who Code-X is NOT for
+
+**If you want a fast MVP, a prototype, or a small throwaway tool — don't use Code-X.**
+It is deliberately heavyweight; on a weekend experiment the process costs more than the
+bugs would. Use Claude Code, Codex, Cursor, or any capable AI builder directly. That is
+the right tool for that job.
+
+### The honest trade
+
+| | Vibe coding | Code-X |
+|---|---|---|
+| Speed | fast | slow — planning is most of the work |
+| Drift and fake-"done" | you discover them in production | gates catch them before you ship |
+| Who can verify the work | someone who reads code | a non-coder, from evidence |
+| Right for | MVPs, experiments, throwaways | software you'll rely on |
+
+One honest limit, stated up front: Code-X proves the **process** was followed — plans
+locked, coverage complete, reviews real, evidence hash-bound. It cannot prove the
+software is perfect. No process can. What it removes is the failure mode where nobody
+could have known.
 
 ---
 

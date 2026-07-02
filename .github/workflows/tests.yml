@@ -9,5 +9,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install pyyaml
-      - name: Run cx self-tests
-        run: python3 plugins/code-x/skills/code-x/checkers/tests/run.py
+      - name: Run full eval gate (cx check evals)
+        # cx check evals runs all four suites the private canon exits every protocol-change
+        # session on: tests/run.py (unit) + tests/run_contracts.py (every gate clause bites) +
+        # cx check consistency --strict (protocol-change exit gate) + cx check kaizen --conflict-scan
+        # (live queue closure) -- the queue file ships in this repo (skills/code-x/MEMORY/), so
+        # the kaizen leg has a real target here, not just in the private canon. A single command
+        # fails the job if ANY leg fails (PBF-PROP-016, folded v1.22.1).
+        run: python3 plugins/code-x/skills/code-x/checkers/cx check evals

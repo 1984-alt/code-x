@@ -2819,7 +2819,7 @@ class TestProtocolVersionIdentity(unittest.TestCase):
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.1")
         finally:
             sys.path.pop(0)
 
@@ -2827,7 +2827,7 @@ class TestProtocolVersionIdentity(unittest.TestCase):
         """`cx --version` reports the locked v1.22 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.22", out)
+        self.assertRegex(out, r"V1\.22\.1(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):

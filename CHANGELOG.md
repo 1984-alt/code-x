@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.1]
+
+Syncs the public release up to protocol **v1.22.1** — a patch fold, no gate-logic change.
+
+### Changed
+- **CI now runs the full eval gate, not just the unit suite.** `.github/workflows/tests.yml` ran only `checkers/tests/run.py`; an external GPT-5.5 Pro review flagged that public-CI-green therefore proved unit tests only, never that the gate clauses actually bite. CI now runs `cx check evals` (unit tests + the contract-bite harness + `consistency --strict` + the live kaizen-queue check), so a red gate clause fails the build, not just a red unit test.
+- **New "Who Code-X is for" README section**, stating plainly who the protocol is built for and who it is *not* for (fast MVPs and throwaway prototypes should use an AI builder directly). Added from an external Grok review.
+- **Backfilled tags** for releases that shipped without one at the time: `v1.12.1`, `v1.14.0`, `v1.17.0`, `v1.19.0`.
+
+---
+
 ## [1.22.0]
 
 Syncs the public release up to protocol **v1.22**. It adds a 4th stage — Audit — inserted between Building and Fixing, plus a formal SOP (Standard of Practice) ship-readiness asset that the Audit stage checks the built app against.
@@ -46,6 +57,8 @@ Syncs the public release up to protocol **v1.21** (and its v1.21.1–v1.21.4 pat
 ---
 
 ## [1.20.0]
+
+(published bundled with v1.21.0 — no separate tag)
 
 Syncs the public release up to protocol **v1.20**, folding in PROP-041 and its follow-up fixes.
 
@@ -184,6 +197,8 @@ Syncs the public release up to protocol **v1.14**, folding in everything from th
 
 ## [1.12.0]
 
+(pre-dates the public repository — no tag)
+
 ### Added
 - **Plain Talk (Communication Standard)** — `VOICE.md` governs how the AI communicates with the non-coder user: no-jargon/define-don't-delete, scannable/minimal, decisions presented as decidable options; exactly 3 status markers (✅ / ⚠️ / ❌); enforced by a plain-language review lens (not a machine check).
 - **Built-App Audit** — a final read-only whole-app audit before final-ready (gate G8): 3 angles (requirements ↔ original asks ↔ shipped reality) plus the "built + tested + green ≠ wired and running" killer check; includes a new `BUILT-APP-AUDIT.md`, a report template, and a light `cx check final-ready` precondition (a `built_app_audit` state block with a real audit report must exist).
@@ -192,6 +207,8 @@ Syncs the public release up to protocol **v1.14**, folding in everything from th
 ---
 
 ## [1.11.0] — Initial public release
+
+(pre-dates the public repository — no tag)
 
 ### Added
 - Two-stage planning → building methodology with enforced gate progression
