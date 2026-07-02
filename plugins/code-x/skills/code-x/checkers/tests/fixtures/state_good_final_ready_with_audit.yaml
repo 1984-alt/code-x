@@ -1,7 +1,7 @@
 # GOOD state for final-ready + built_app_audit block (v1.12)
 # All findings zero, cross-family receipt bound, audit run + dispositioned.
 
-project: my-app
+project: sample
 protocol_stamp: Code-X V1
 
 current_stage: BUILD_FACTORY
@@ -56,3 +56,8 @@ built_app_audit:
   status: run
   report_ref: audit_reports/sample-2026-06-19
   findings_dispositioned: true
+
+# v1.22 (F1 self-review fix): the FINAL Audit-stage receipt (A-PROP-001) — judged live by
+# collect_audit_findings(..., final=True), not just presence-checked.
+audit_stage_final:
+  report_ref: audit_good

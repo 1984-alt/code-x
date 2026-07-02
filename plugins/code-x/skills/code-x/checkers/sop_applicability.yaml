@@ -1,0 +1,127 @@
+# sop_applicability.yaml — the 13-layer SOP applicability rule table.
+# Data, not code-per-build (cx-check-audit-spec.md). Derived verbatim from
+# SOP/APPLICABILITY-MODEL.md (v0.2, PBAF-PROP-001). Loaded by cx_audit.py and
+# evaluated against the 9 recorded build-facts (A1-A9) — Rule 1 (derived, not
+# argued) + Rule 2 (per sub-item, not per layer).
+#
+# facts: A1 ui · A2 request_surface · A3 persistence · A4 multi_identity ·
+#        A5 exposure (E0|E1|E2|E3) · A6 sensitive_data · A7 async_compute ·
+#        A8 metered_calls · A9 scale_out
+
+facts:
+  - A1
+  - A2
+  - A3
+  - A4
+  - A5
+  - A6
+  - A7
+  - A8
+  - A9
+
+exposure_tiers: ["E0", "E1", "E2", "E3"]
+
+layers:
+  - id: 1
+    name: "Frontend"
+    applies_when: ["A1"]
+    hard_rule: null
+
+  - id: 2
+    name: "Backend / API"
+    applies_when: ["A2"]
+    na_subitems:
+      - {subitem: "cross_user_access", when_false: "A4"}
+    hard_rule: null
+
+  - id: 3
+    name: "Database & Storage"
+    applies_when: ["A3"]
+    na_subitems:
+      - {subitem: "per_user_scoping", when_false: "A4"}
+    hard_rule: null
+
+  - id: 4
+    name: "Auth & Permissions"
+    applies_when: ["A4", "A5>=E2"]
+    na_subitems:
+      - {subitem: "roles_scope_rls", when_false: "A4"}
+    hard_rule: null
+
+  - id: 5
+    name: "Hosting & Deploy"
+    applies_when: ["A5>=E1"]
+    na_subitems:
+      - {subitem: "dns_cdn_staging", when_false: "A5>=E3"}
+    hard_rule: {subitem: "https_padlock", mandatory_when: "A5>=E2"}
+
+  - id: 6
+    name: "Cloud & Compute"
+    applies_when: ["A7", "A8"]
+    na_subitems:
+      - {subitem: "cost_pooler", when_false: "A8 and A9"}
+    hard_rule: null
+
+  - id: 7
+    name: "CI/CD & Version Control"
+    applies_when: ["always"]
+    na_subitems:
+      - {subitem: "ci_pipeline", when_false: "not_solo_manual_deploy"}
+    hard_rule: {subitem: "version_control", mandatory_when: "always"}
+
+  - id: 8
+    name: "Security & RLS"
+    applies_when: ["A6", "A2", "A5>=E2"]
+    na_subitems:
+      - {subitem: "rls_multi_tenant", when_false: "A4"}
+      - {subitem: "cors_public_csp", when_false: "A5>=E3"}
+    hard_rule: {subitem: "https_padlock", mandatory_when: "A5>=E2"}
+
+  - id: 9
+    name: "Rate Limiting"
+    applies_when: ["A2 and A5>=E2 and A4", "A7", "A8"]
+    na_subitems:
+      - {subitem: "public_login_abuse", when_false: "A2 and A5>=E2 and A4"}
+    hard_rule: {subitem: "runaway_retry_backoff", mandatory_when: "A7 or A8"}
+
+  - id: 10
+    name: "Caching & CDN"
+    applies_when: ["A1", "A5==E3"]
+    na_subitems:
+      - {subitem: "cdn_cross_user_stampede", when_false: "A5==E3"}
+    hard_rule: {subitem: "static_asset_caching", mandatory_when: "A1"}
+
+  - id: 11
+    name: "Load Balancing & Scaling"
+    applies_when: ["A9"]
+    na_subitems: []
+    hard_rule: null
+
+  - id: 12
+    name: "Error Tracking & Logs"
+    applies_when: ["A5>=E1", "A7", "A6"]
+    na_subitems: []
+    hard_rule: null
+
+  - id: 13
+    name: "Availability & Recovery"
+    applies_when: ["A3 and A6", "A5>=E2"]
+    na_subitems:
+      - {subitem: "uptime_rto_rpo", when_false: "A5>=E2"}
+    hard_rule: {subitem: "backups_tested_restore", mandatory_when: "A6"}
+
+# Locked hard rules (CEO-decided, non-derivable) — cross-checked by the Audit
+# stage independent of layer scoping. See PBAF-PROP-001 Lever E.
+hard_rules:
+  - id: HTTPS_E2
+    description: "HTTPS/padlock mandatory at exposure tier E2 or higher."
+    condition: "A5>=E2"
+    subitem: "https_padlock"
+  - id: VERSION_CONTROL_ALWAYS
+    description: "Version control mandatory on every build, no exception."
+    condition: "always"
+    subitem: "version_control"
+  - id: BACKUPS_WHEN_SENSITIVE
+    description: "Backups + tested restore mandatory whenever data is sensitive (A6)."
+    condition: "A6"
+    subitem: "backups_tested_restore"

@@ -1,0 +1,22 @@
+project: cx-audit-fixture-test
+protocol_stamp: "Code-X V1"
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: claude
+next_actor: claude
+next_action: audit
+stop_status: "NONE"
+build_authorized: "yes"
+active_build_engine: CLAUDE_CODE
+orchestrator_model: "opus max"
+open_findings:
+  counts: {p0: 0, p1: 0, p2: 0, p3: 0}
+  items: []
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW

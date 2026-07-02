@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.21.4"            # LOCKED CANONICAL 2026-07-01 (CEO-D-037) — canon-hygiene patch (Codex audit CXAUD-001..005): Python≥3.10 entrypoint guard · handoff continuity restored on main · version/status/EVALS headers reconciled to the v1.21.x locks · locked rails de-drafted. No gate-logic change. Prior: v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
+PROTOCOL_VERSION = "1.22"            # LOCKED CANONICAL 2026-07-02 (CEO-D-038) — A-PROP-001 Audit Stage (4th stage; absorbs B-PROP-007) + PBAF-PROP-001 SOP asset bind (Code-X-V1/SOP/ + applicability model). Prior: v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
@@ -124,11 +124,37 @@ def findings_report(findings: list[tuple[str, str, str]]) -> int:
     return 1
 
 
+class _DuplicateKeyRejectingLoader(yaml.SafeLoader):
+    """yaml.SafeLoader subclass that FAILS on a repeated mapping key instead of the
+    stdlib default (silent last-key-wins). X5 (v1.22 xfam fix): safe_load's silent
+    overwrite is a data-loss / spoofing risk on money/audit/state inputs — a second
+    'disposition:' or 'verdict:' key later in the same mapping would silently replace
+    the first with no trace. This is the SHARED loader every checker inherits via
+    load_yaml() below, so audit/state/packet/deck/card inputs all get the protection
+    from one place (never a per-checker copy)."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=True)
+            try:
+                hashable_key = key
+                if hashable_key in seen:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping", node.start_mark,
+                        f"found duplicate key: {key!r}", key_node.start_mark)
+                seen.add(hashable_key)
+            except TypeError:
+                pass  # unhashable key (rare) — let the base class's own error surface
+        return super().construct_mapping(node, deep=deep)
+
+
 def load_yaml(path: str) -> tuple[dict | list | None, str | None]:
-    """Load YAML. Returns (data, error_string)."""
+    """Load YAML. Returns (data, error_string). Uses the duplicate-key-rejecting
+    loader (X5) — a repeated mapping key is a parse ERROR, never silent last-key-wins."""
     try:
         with open(path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+            data = yaml.load(f, Loader=_DuplicateKeyRejectingLoader)
         return data, None
     except FileNotFoundError:
         return None, f"file not found: {path}"

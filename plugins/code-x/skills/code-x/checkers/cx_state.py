@@ -692,7 +692,7 @@ def _check_fix_cycles(data: dict, loc: str, findings: list) -> None:
 
 
 _STAGE_TO_PROFILES_KEY = {"PLANNING_STUDIO": "planning_studio", "BUILD_FACTORY": "build_factory",
-                          "FIXING_STAGE": "fixing_stage"}
+                          "FIXING_STAGE": "fixing_stage", "AUDIT_STAGE": "audit_stage"}
 
 
 def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
@@ -729,6 +729,31 @@ def _engine_profile_checks(data: dict, args, loc: str, findings: list) -> None:
                 f"{branch_key} seat — the Fixing-stage seat cap is invisible (an over-tier orchestrator "
                 "would pass unchecked); add a fixing_stage seat for this engine (F-PROP-001 / "
                 "FIX-STAGE-SEAT-PROFILE)"))
+            return
+
+    # AUDIT-STAGE-SEAT-PROFILE (X4, v1.22 xfam fix): mirrors FIX-STAGE-SEAT-PROFILE exactly — an
+    # AUDIT_STAGE session MUST have an audit_stage orchestrator seat in BUILD-ENGINE-PROFILES, else
+    # the seat cap is invisible. Audit posture = verify / review-tier (never a builder seat) —
+    # same conductor-tier discipline as fixing_stage, just for the Audit stage's read-only judgment.
+    if str(data.get("current_stage", "")) == "AUDIT_STAGE":
+        profiles_path, env_err = resolve_profiles_path(args)
+        if env_err:
+            findings.append(("P1", loc, env_err))
+            return
+        profiles, perr = load_yaml(profiles_path)
+        if perr or not isinstance(profiles, dict):
+            findings.append(("P1", loc,
+                f"current_stage: AUDIT_STAGE but BUILD-ENGINE-PROFILES is unreadable at {profiles_path} — "
+                "cannot verify the audit_stage seat cap (fail closed) (A-PROP-001 / AUDIT-STAGE-SEAT-PROFILE)"))
+            return
+        branch_key = ENGINE_BRANCH_KEYS[str(engine)]
+        audit_seat = nested_get(profiles, "orchestrator", "audit_stage", branch_key)
+        if not isinstance(audit_seat, dict) or not audit_seat.get("model"):
+            findings.append(("P1", loc,
+                f"current_stage: AUDIT_STAGE but BUILD-ENGINE-PROFILES has no orchestrator.audit_stage."
+                f"{branch_key} seat — the Audit-stage seat cap is invisible (an over-tier orchestrator "
+                "would pass unchecked); add an audit_stage seat for this engine (A-PROP-001 / "
+                "AUDIT-STAGE-SEAT-PROFILE)"))
             return
 
     # clause: orchestrator_model must not exceed the profiles seat for engine + stage

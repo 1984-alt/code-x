@@ -1,0 +1,62 @@
+facts:
+  A1: true
+  A2: true
+  A3: true
+  A4: false
+  A5: "E2"
+  A6: true
+  A7: true
+  A8: false
+  A9: "false"
+layers:
+  - id: 1
+    verdict: APPLIES
+  - id: 2
+    verdict: APPLIES
+    subitems:
+      - {name: cross_user_access, applicable: false, driving_fact: "A4=false"}
+  - id: 3
+    verdict: APPLIES
+    subitems:
+      - {name: per_user_scoping, applicable: false, driving_fact: "A4=false"}
+  - id: 4
+    verdict: PARTIAL
+    subitems:
+      - {name: roles_scope_rls, applicable: false, driving_fact: "A4=false"}
+  - id: 5
+    verdict: PARTIAL
+    subitems:
+      - {name: https_padlock, applicable: true}
+      - {name: dns_cdn_staging, applicable: false, driving_fact: "A5<E3"}
+  - id: 6
+    verdict: PARTIAL
+    subitems:
+      - {name: cost_pooler, applicable: false, driving_fact: "A8=false,A9=false"}
+  - id: 7
+    verdict: APPLIES
+    subitems:
+      - {name: version_control, applicable: true}
+  - id: 8
+    verdict: PARTIAL
+    subitems:
+      - {name: https_padlock, applicable: true}
+      - {name: rls_multi_tenant, applicable: false, driving_fact: "A4=false"}
+  - id: 9
+    verdict: PARTIAL
+    subitems:
+      - {name: public_login_abuse, applicable: false, driving_fact: "A4=false"}
+  - id: 10
+    verdict: PARTIAL
+    subitems:
+      - {name: static_asset_caching, applicable: true}
+      - {name: cdn_cross_user_stampede, applicable: false, driving_fact: "A5<E3"}
+  - id: 11
+    verdict: N_A
+    driving_fact: "A9=false (single instance)"
+  - id: 12
+    verdict: APPLIES
+  - id: 13
+    verdict: PARTIAL
+    subitems:
+      - {name: backups_tested_restore, applicable: true}
+      - {name: uptime_rto_rpo, applicable: false, driving_fact: "A5<E2... n/a placeholder"}

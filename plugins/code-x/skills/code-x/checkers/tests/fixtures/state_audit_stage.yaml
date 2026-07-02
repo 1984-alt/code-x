@@ -1,0 +1,29 @@
+# AUDIT_STAGE state — PASSES cx check state vs the canonical profiles (which has an audit_stage seat);
+# BITES AUDIT-STAGE-SEAT-PROFILE when --profiles points at profiles_test.yaml (no audit_stage seat).
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: AUDIT_STAGE
+current_mode: REVIEW
+current_card: null
+current_actor: claude / fable high
+next_actor: claude
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: abc123def456
+next_action: run the Audit stage against the SOP ship gates
+stop_status: NONE
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: fable high

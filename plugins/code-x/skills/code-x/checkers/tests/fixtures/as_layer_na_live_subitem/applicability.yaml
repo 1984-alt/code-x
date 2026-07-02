@@ -1,0 +1,83 @@
+facts:
+  A1: true
+  A2: true
+  A3: true
+  A4: false
+  A5: E2
+  A6: true
+  A7: true
+  A8: false
+  A9: false
+layers:
+- driving_fact: A1=false (claimed, but built app has UI)
+  id: 1
+  verdict: N_A
+- id: 2
+  subitems:
+  - applicable: false
+    driving_fact: A4=false
+    name: cross_user_access
+  verdict: APPLIES
+- id: 3
+  subitems:
+  - applicable: false
+    driving_fact: A4=false
+    name: per_user_scoping
+  verdict: APPLIES
+- id: 4
+  subitems:
+  - applicable: false
+    driving_fact: A4=false
+    name: roles_scope_rls
+  verdict: PARTIAL
+- id: 5
+  subitems:
+  - applicable: true
+    name: https_padlock
+  - applicable: false
+    driving_fact: A5<E3
+    name: dns_cdn_staging
+  verdict: PARTIAL
+- id: 6
+  subitems:
+  - applicable: false
+    driving_fact: A8=false,A9=false
+    name: cost_pooler
+  verdict: PARTIAL
+- id: 7
+  verdict: APPLIES
+- id: 8
+  subitems:
+  - applicable: true
+    name: https_padlock
+  - applicable: false
+    driving_fact: A4=false
+    name: rls_multi_tenant
+  verdict: PARTIAL
+- id: 9
+  subitems:
+  - applicable: false
+    driving_fact: A4=false
+    name: public_login_abuse
+  verdict: PARTIAL
+- id: 10
+  subitems:
+  - applicable: true
+    name: static_asset_caching
+  - applicable: false
+    driving_fact: A5<E3
+    name: cdn_cross_user_stampede
+  verdict: PARTIAL
+- driving_fact: A9=false (single instance)
+  id: 11
+  verdict: N_A
+- id: 12
+  verdict: APPLIES
+- id: 13
+  subitems:
+  - applicable: true
+    name: backups_tested_restore
+  - applicable: false
+    driving_fact: A5<E2... n/a placeholder
+    name: uptime_rto_rpo
+  verdict: PARTIAL

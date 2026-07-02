@@ -1,0 +1,14 @@
+layers:
+  - {id: 1, verdict: APPLIES}
+  - {id: 2, verdict: APPLIES}
+  - {id: 3, verdict: APPLIES}
+  - {id: 4, verdict: PARTIAL}
+  - {id: 5, verdict: PARTIAL}
+  - {id: 6, verdict: PARTIAL}
+  - {id: 7, verdict: APPLIES}
+  - {id: 8, verdict: PARTIAL}
+  - {id: 9, verdict: PARTIAL}
+  - {id: 10, verdict: PARTIAL}
+  - {id: 11, verdict: N_A, driving_fact: "A9=false (single instance)"}
+  - {id: 12, verdict: APPLIES}
+  - {id: 13, verdict: PARTIAL}

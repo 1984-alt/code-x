@@ -50,6 +50,7 @@ from cx_blueprint import cmd_blueprint
 from cx_whole_packet_review import cmd_whole_packet_review
 from cx_kaizen import cmd_kaizen
 from cx_graduation import cmd_graduation
+from cx_audit import cmd_audit
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -320,6 +321,22 @@ def main():
     p_gr.add_argument("--window-days", dest="window_days", type=int, default=None,
                       help="Post-ship observation window in days (default: locked POSTSHIP_WINDOW_DAYS=14)")
 
+    # audit (A-PROP-001 + PBAF-PROP-001: the Audit stage — verify the built app against
+    # the SOP ship gates, read-only posture, between Building and Fixing).
+    p_ad = check_sub.add_parser(
+        "audit",
+        help="verify the built app against the SOP ship gates (Audit stage)"
+    )
+    p_ad.add_argument("audit_dir", help="Path to the audit report directory")
+    p_ad.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_ad.add_argument("--final", action="store_true", default=False,
+                      help="Run the final (whole-app) audit — fail-closed on any unresolved applicable item")
+    p_ad.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="Repo root receipt artifact refs resolve against (default: --state file's directory)")
+    p_ad.add_argument("--decision-ledger", dest="decision_ledger", default=None,
+                      help="Path to CEO-DECISION-LEDGER.md a ladder ceo_decision_ref resolves against "
+                           "(default: <repo-root>/CEO-DECISION-LEDGER.md; mirrors cx check deck/graduation)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -352,6 +369,7 @@ def main():
         "whole-packet-review": cmd_whole_packet_review,
         "kaizen": cmd_kaizen,
         "graduation": cmd_graduation,
+        "audit": cmd_audit,
     }
 
     fn = dispatch.get(args.check_cmd)

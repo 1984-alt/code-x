@@ -132,6 +132,9 @@ orchestrator:
   fixing_stage:                                        # F-PROP-001: the Fixing-stage conductor (preserve-posture). Same conductor tier as build_factory; a fix that touches a danger class escalates the per-card builder seat (high_risk row), not the orchestrator, and needs top_allowed_reason.
     claude_code: { model: fable, effort: medium }      # mirrors build_factory (window). From 2026-06-23 -> opus xhigh (fable_window)
     codex_app:   { model: gpt-5.5, effort: medium }    # reliable conductor; high only when a fix card marks high-risk/ambiguous
+  audit_stage:                                          # A-PROP-001 (X4, v1.22 xfam fix): the Audit-stage conductor. Posture = VERIFY (read-only judgment against the SOP ship gates), not build — so this seat mirrors the REVIEW tier (self_review / security_delta), not build_factory's medium conductor tier. xhigh extraordinary-only; max NEVER (unchanged ladder discipline).
+    claude_code: { model: fable, effort: high }        # CEO 2026-06-11 review-tier ruling: review seats = fable HIGH (window; sunset -> opus xhigh)
+    codex_app:   { model: gpt-5.5, effort: high }      # GPT review tier — matches self_review/security_delta codex_app seats
 
 # ── Role table (per-card seats; compiler picks the row by card mode + risk) ─────
 # claude_code.subagent = real agent types in the CEO's Claude Code roster (~/.claude/agents).

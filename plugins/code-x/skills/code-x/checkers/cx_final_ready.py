@@ -261,6 +261,55 @@ def cmd_final_ready(args) -> int:
                     f"built_app_audit.report_ref '{audit_ref}' has no AUDIT-SUMMARY.md — the audit "
                     "report directory must contain the bottom-line summary file (v1.12)"))
 
+    # --- v1.22 Audit stage (A-PROP-001 + PBAF-PROP-001): final-ready must not be reachable
+    # while skipping the 4th stage (GATES.md "a build cannot reach final-ready while skipping
+    # Audit"). Additive to (not a replacement for) built_app_audit above — that block is the
+    # angle-A/B/C engine record; this block is the FINAL Audit-stage receipt (angle D + the SOP
+    # hard rules + the review ladder), judged by the SAME collect_audit_findings() the `cx check
+    # audit` CLI uses (F1, v1.22 self-review — no divergent second copy of the judgment logic).
+    # Path-safety mirrors built_app_audit.report_ref exactly (repo-relative, non-symlink, in-tree).
+    audit_stage_blk = state.get("audit_stage_final")
+    if not isinstance(audit_stage_blk, dict):
+        findings.append(("P1", loc,
+            "audit_stage_final block missing from state — a valid FINAL Audit-stage receipt "
+            "(cx check audit --final) must exist and pass before final-ready (A-PROP-001; "
+            "GATES.md: 'a build cannot reach final-ready while skipping Audit') "
+            "[AUDIT-STAGE-FINAL-READY-CHAIN]"))
+    else:
+        as_ref = str(audit_stage_blk.get("report_ref", "") or "").strip()
+        if not as_ref:
+            findings.append(("P1", loc,
+                "audit_stage_final.report_ref missing — must be a repo-relative, non-symlink path "
+                "to the FINAL Audit-stage report directory [AUDIT-STAGE-FINAL-READY-CHAIN]"))
+        elif Path(as_ref).is_absolute() or ".." in Path(as_ref).parts:
+            findings.append(("P1", loc,
+                f"audit_stage_final.report_ref '{as_ref}' must be a repo-relative path "
+                "(no absolute path / .. escape) — mirrors built_app_audit.report_ref path-safety "
+                "[AUDIT-STAGE-FINAL-READY-CHAIN]"))
+        else:
+            base = Path(getattr(args, "repo_root", None)) if getattr(args, "repo_root", None) \
+                else Path(state_path).resolve().parent
+            base_resolved = base.resolve()
+            as_path = base / as_ref
+            if as_path.is_symlink() or not as_path.resolve().is_relative_to(base_resolved):
+                findings.append(("P1", loc,
+                    f"audit_stage_final.report_ref '{as_ref}' escapes the repo/state dir "
+                    "(symlink or path traversal) — rejected [AUDIT-STAGE-FINAL-READY-CHAIN]"))
+            elif not as_path.is_dir():
+                findings.append(("P1", loc,
+                    f"audit_stage_final.report_ref '{as_ref}' does not exist or is not a directory "
+                    "— the FINAL Audit-stage report must actually exist [AUDIT-STAGE-FINAL-READY-CHAIN]"))
+            else:
+                from cx_audit import collect_audit_findings
+                audit_findings = collect_audit_findings(
+                    as_path, final=True, state_path=state_path, repo_root=base)
+                if audit_findings:
+                    worst = next((s for s, _, _ in audit_findings if s == "P1"), audit_findings[0][0])
+                    reasons = "; ".join(m for _, _, m in audit_findings[:3])
+                    findings.append((worst, str(as_path),
+                        f"AUDIT-STAGE-FINAL-READY-CHAIN: the FINAL Audit-stage receipt at "
+                        f"'{as_ref}' does not pass ({len(audit_findings)} finding(s)): {reasons}"))
+
     # --- G8: dependency scan re-runs pre-ship (B-PROP-006 / GPT review F5) ---
     # READ/ASSEMBLE ONLY: final-ready requires the dependency-scan receipt to be PRESENT at ship when
     # the repo has package-manager manifests (the scan itself runs per-card at build-turn); a code

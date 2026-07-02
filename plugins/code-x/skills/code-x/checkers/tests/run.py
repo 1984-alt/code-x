@@ -1494,7 +1494,7 @@ class TestXfamCapability(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# PROP-042-DRAFT / V1.21-candidate — review routing hardening from a real project's planning skip
+# PROP-042-DRAFT / V1.21-candidate — review routing hardening from the a real project planning skip
 # ---------------------------------------------------------------------------
 class TestReviewRoutingHardening(unittest.TestCase):
     def test_build_state_rejects_coderabbit_not_applicable(self):
@@ -2246,7 +2246,7 @@ class TestCheckEvidenceNewFindings(unittest.TestCase):
 
     def test_evidence_path_resolves_relative_to_project_root_for_cards_dir(self):
         """PROP-041 follow-up: cards may declare repo-root evidence paths.
-        sample cards live under cards/ and require evidence/... at the project root; the
+        a real project cards live under cards/ and require evidence/... at the project root; the
         checker must not turn that into cards/evidence/... and block a real build.
         """
         import yaml, tempfile, os
@@ -2814,20 +2814,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_21_4_locked(self):
-        """The checker reports v1.21.4 as the locked canonical protocol version (CEO-D-037, canon-hygiene patch)."""
+    def test_protocol_version_constant_marks_1_22_locked(self):
+        """The checker reports v1.22 as the locked canonical protocol version (CEO-D-038, Audit Stage + SOP bind)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.21.4")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_21_locked(self):
-        """`cx --version` reports the locked v1.21 canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_locked(self):
+        """`cx --version` reports the locked v1.22 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertIn("V1.21", out)
+        self.assertIn("V1.22", out)
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -4291,7 +4291,159 @@ class StageRenameChecks(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Main
+# TestCheckAudit (A-PROP-001 + PBAF-PROP-001 — the Audit stage)
 # ---------------------------------------------------------------------------
+class TestCheckAudit(unittest.TestCase):
+    """cx check audit — AUDIT-STAGE-* clause suite."""
+
+    _STATE = fix("audit_state_good.yaml")
+
+    def test_good_audit_passes(self):
+        rc, out = run_cx("check", "audit", fix("audit_good"), "--state", self._STATE)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+    def test_final_good_passes(self):
+        rc, out = run_cx("check", "audit", fix("as_final_good"), "--state", self._STATE, "--final")
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_no_receipt_fails_entry_required(self):
+        rc, out = run_cx("check", "audit", fix("as_no_audit_receipt"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-ENTRY-REQUIRED", out)
+
+    def test_na_without_fact_fails_derived(self):
+        rc, out = run_cx("check", "audit", fix("as_na_no_fact"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-APPLICABILITY-DERIVED", out)
+
+    def test_whole_layer_na_with_live_subitem_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_layer_na_live_subitem"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-WHOLE-LAYER-NA-WITH-LIVE-SUBITEM", out)
+
+    def test_undispositioned_item_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_undispositioned_item"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-SHIPGATE-DISPOSITION", out)
+
+    def test_samefamily_receipt_fails_xfam(self):
+        rc, out = run_cx("check", "audit", fix("as_samefamily_receipt"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-XFAM-RECEIPT", out)
+
+    def test_ladder_skip_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_ladder_skip"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-REVIEW-LADDER", out)
+
+    def test_final_unresolved_fails_closed(self):
+        rc, out = run_cx("check", "audit", fix("as_final_unresolved"), "--state", self._STATE, "--final")
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-FAILCLOSED-FINAL", out)
+
+    def test_e2_no_https_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_e2_no_https"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-HTTPS-E2", out)
+
+    # ── F2 (v1.22 self-review): hard_rules driven generically from sop_applicability.yaml —
+    # an OMITTED ship-gate sub-item bites at the same severity as an explicit N/A. ──
+
+    def test_version_control_omitted_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_version_control_omitted"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-VERSION-CONTROL-ALWAYS", out)
+
+    def test_backups_omitted_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_backups_omitted"), "--state", self._STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-BACKUPS-WHEN-SENSITIVE", out)
+
+    # ── F7 (v1.22 self-review, CEO ruling 2026-07-02): a --final audit with ZERO cross_family
+    # receipts fails closed unless a typed escape mirrors the BF-PROP-005 stage_1 discipline —
+    # xfam_capability_evidence (manual scrubbed cross-family paste) or ceo_decision_ref waiver. ──
+
+    def test_final_no_xfam_no_escape_fails(self):
+        rc, out = run_cx("check", "audit", fix("as_final_no_xfam"), "--state", self._STATE, "--final")
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-FINAL-XFAM-REQUIRED", out)
+
+    def test_final_no_xfam_with_ceo_waiver_passes(self):
+        rc, out = run_cx("check", "audit", fix("as_final_xfam_waiver"), "--state", self._STATE, "--final",
+                         "--decision-ledger", fix("as_final_xfam_waiver/CEO-DECISION-LEDGER.md"))
+        self.assertEqual(rc, 0, f"Expected PASS with typed ceo_decision_ref waiver, got {rc}.\n{out}")
+
+    def test_nonfinal_no_xfam_not_gated(self):
+        """The F7 gate is FINAL-only — a per-module (light) audit without a cross_family receipt
+        must not fire AUDIT-STAGE-FINAL-XFAM-REQUIRED (the xfam pass is per-module optional)."""
+        rc, out = run_cx("check", "audit", fix("as_final_no_xfam"), "--state", self._STATE)
+        self.assertNotIn("AUDIT-STAGE-FINAL-XFAM-REQUIRED", out)
+
+    # ── F4 (v1.22 self-review): table_by_id compared report layer ids (possibly a quoted YAML
+    # string) against the SOP table's int ids WITHOUT coercion — a type mismatch silently
+    # SKIPPED the Rule 2 live-subitem cross-check (fail-open). _coerce_layer_id() normalizes
+    # both sides to int; an unparseable id is itself a fail-closed finding. ──
+
+    def _write_audit_dir(self, tmp, layer_line: str) -> str:
+        d = os.path.join(tmp, "audit")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "AUDIT-SUMMARY.md"), "w") as f:
+            f.write("# audit summary\n")
+        with open(os.path.join(d, "applicability.yaml"), "w") as f:
+            f.write(
+                "facts:\n  A1: true\n  A2: true\n  A3: true\n  A4: false\n  A5: E2\n"
+                "  A6: true\n  A7: true\n  A8: false\n  A9: false\n"
+                f"layers:\n{layer_line}")
+        return d
+
+    def test_string_layer_id_still_cross_checked(self):
+        """A layer id given as a quoted string ('1') in the report must still match the SOP
+        table's int id 1 — before F4 this type mismatch silently skipped Rule 2 entirely."""
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._write_audit_dir(
+                tmp, '- id: "1"\n  verdict: N_A\n  driving_fact: "A1=false (claimed, but built app has UI)"\n')
+            rc, out = run_cx("check", "audit", d, "--state", self._STATE)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("AUDIT-STAGE-WHOLE-LAYER-NA-WITH-LIVE-SUBITEM", out)
+
+    def test_unparseable_layer_id_fails_closed(self):
+        """A layer id that cannot be coerced to int must fail CLOSED with a dedicated finding —
+        never a silent skip of the Rule 2 cross-check (the pre-F4 fail-open behavior)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._write_audit_dir(
+                tmp, '- id: "not-a-number"\n  verdict: N_A\n  driving_fact: "some fact"\n')
+            rc, out = run_cx("check", "audit", d, "--state", self._STATE)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("AUDIT-STAGE-LAYER-ID-UNPARSEABLE", out)
+
+
+class TestCheckFinalReadyAuditStageChain(unittest.TestCase):
+    """F1 (v1.22 self-review): AUDIT-STAGE-FINAL-READY-CHAIN — final-ready must not be reachable
+    while skipping the Audit stage; wires cx_audit.collect_audit_findings into cx_final_ready."""
+
+    def test_good_state_with_audit_stage_final_passes(self):
+        rc, out = run_cx("check", "final-ready", fix("state_good_final_ready.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_missing_audit_stage_final_blocks(self):
+        rc, out = run_cx("check", "final-ready", fix("state_final_ready_bad_no_audit_stage.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("AUDIT-STAGE-FINAL-READY-CHAIN", out)
+
+
+class TestCheckPacketSopCoverageMap(unittest.TestCase):
+    """cx check packet — SOP-BIND-COVERAGE-MAP clause (PBAF-PROP-001 Lever B)."""
+
+    def test_good_packet_passes(self):
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_missing_sop_coverage_map_fails(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_no_sop_coverage_map"))
+        self.assertEqual(rc, 1)
+        self.assertIn("SOP-BIND-COVERAGE-MAP", out)
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main()

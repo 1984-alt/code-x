@@ -352,7 +352,7 @@ clauses:
     check: module-quality
     kind: gate
     clause: "module acceptance without a same-family self_review receipt is rejected (P1) — build-card intent is not enough; the module acceptance rail must prove the mandatory self-review ran before acceptance [PROP-042 / v1.21]"
-    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project (v1.20) skip class"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project v1.20 skip class"
     bad:
       args: ["--acceptance", "tests/fixtures/module_acceptance_no_self_review.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
       expect_severity: P1
@@ -545,12 +545,12 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
 
-  # ── PBF-PROP-012 Part E: SEE-AND-TEST gate — module_demo block enforces the show-step (the real-project fix) ──
+  # ── PBF-PROP-012 Part E: SEE-AND-TEST gate — module_demo block enforces the show-step (the a real project fix) ──
   - id: MODULE-DEMO-MISSING
     check: module-demo
     kind: gate
     clause: "a live_slice module accepted with NO module_demo block is rejected — the SEE-AND-TEST show-step was skipped; the demo block must record the surface, a machine-captured shown screenshot (hash-bound), and the CEO typed accept token before acceptance (P0) [PBF-PROP-012 Part E]"
-    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); fixes a real project's 'ceo_drove ticked without a demo' root cause"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); fixes the a real project 'ceo_drove ticked without a demo' root cause"
     bad:
       args: ["--acceptance", "tests/fixtures/module_demo_missing.yaml", "--repo-root", "tests/fixtures"]
       expect_severity: P0
@@ -936,7 +936,7 @@ clauses:
     check: card
     kind: gate
     clause: "a MODULE_BUILD / MODE_A_UI code-diff card must declare coderabbit.required: yes; planning cannot omit the CodeRabbit receipt rail [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/card_bad_missing_coderabbit.yaml"]
       expect_severity: P1
@@ -1337,7 +1337,7 @@ clauses:
     check: state
     kind: gate
     clause: "a BUILD_FACTORY state with accepted modules may not route directly to final xfam until the Built-App Audit / whole-app self-audit milestone is run and dispositioned [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/state_bad_final_xfam_without_built_app_audit.yaml"]
       expect_severity: P1
@@ -1366,6 +1366,18 @@ clauses:
       args: ["tests/fixtures/state_final_ready_bad_audit_ref_dotdot.yaml"]
       expect_severity: P0
       expect_contains: "built_app_audit"
+    good:
+      args: ["tests/fixtures/state_good_final_ready.yaml"]
+
+  - id: AUDIT-STAGE-FINAL-READY-CHAIN
+    check: final-ready
+    kind: gate
+    clause: "final-ready must not be reachable while skipping the v1.22 Audit stage — an ADDITIVE requirement (does not replace built_app_audit above) that a valid FINAL Audit-stage receipt (audit_stage_final.report_ref, judged live by the SAME collect_audit_findings() the `cx check audit --final` CLI uses) exists and passes; missing block, path-unsafe ref, nonexistent dir, or a receipt that itself fails all block (P1) (F1, v1.22 self-review — GATES.md: 'a build cannot reach final-ready while skipping Audit')"
+    source: "A-PROP-001 + PBAF-PROP-001 / GATES.md Audit Gate (F1 fix)"
+    bad:
+      args: ["tests/fixtures/state_final_ready_bad_no_audit_stage.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FINAL-READY-CHAIN"
     good:
       args: ["tests/fixtures/state_good_final_ready.yaml"]
 
@@ -1985,7 +1997,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state must declare CodeRabbit before self-review as yes; not_applicable/no is a planning-stage skip [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_coderabbit_na.yaml"]
       expect_severity: P1
@@ -1997,7 +2009,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state with self_review_boundary: final is rejected — module self-review is mandatory at the module acceptance gate; final Built-App Audit is additional, not a replacement [PROP-042 / v1.21]"
-    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project (v1.20) skip class"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project v1.20 skip class"
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_self_final.yaml"]
       expect_severity: P1
@@ -2711,7 +2723,7 @@ clauses:
   # ──────────────────────────────────────────────────────────────
   # v1.19 — P-PROP-006 whole-packet cross-family INTEGRATION review (G7 build-authorization, EVAL-036).
   # The cross-document coherence pass the per-card audit + the deterministic checker structurally cannot
-  # provide (a real project's TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
+  # provide (the a real project TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
   # WHOLE frozen packet, recorded as a hash-bound receipt OUTSIDE the packet, required before any module.
   # ──────────────────────────────────────────────────────────────
 
@@ -3264,7 +3276,7 @@ clauses:
   - id: RENDER-FIT-OVERFLOW
     check: render-fidelity
     kind: gate
-    clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production module)"
+    clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production money app m6 Meat)"
     source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_overflow.yaml", "--repo-head=aaaaaaaaaaaa"]
@@ -3780,6 +3792,18 @@ clauses:
       expect_contains: "FIX-STAGE-SEAT-PROFILE"
     good:
       args: ["tests/fixtures/state_fixing_stage.yaml", "--profiles", "tests/fixtures/profiles_test_with_fixing.yaml"]
+
+  - id: AUDIT-STAGE-SEAT-PROFILE
+    check: state
+    kind: gate
+    clause: "current_stage: AUDIT_STAGE with no audit_stage orchestrator seat in BUILD-ENGINE-PROFILES leaves the seat cap invisible (X4, v1.22 xfam fix; mirrors FIX-STAGE-SEAT-PROFILE / F-PROP-001 §6 state-layer for the Audit stage)"
+    source: "A-PROP-001 §3 / F-PROP-001 §6 pattern (X4 fix)"
+    bad:
+      args: ["tests/fixtures/state_audit_stage.yaml", "--profiles", "tests/fixtures/profiles_test.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-SEAT-PROFILE"
+    good:
+      args: ["tests/fixtures/state_audit_stage.yaml", "--profiles", "tests/fixtures/profiles_test_with_audit.yaml"]
 
   - id: FIX-STAGE-GUARDRAIL-PRESENCE
     check: consistency
@@ -4694,3 +4718,241 @@ clauses:
       expect_contains: "ship_timestamp_utc must be a timezone-aware ISO-8601 datetime"
     good:
       args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: audit / packet  (A-PROP-001 + PBAF-PROP-001 — the Audit stage + SOP bind)
+  # 12 clauses (9 original + 2 F2 hard-rule fixes + 1 F7 final-xfam-required, v1.22 self-review);
+  # each pinned BAD fixture fails closed at the stated severity (so green = enforcing). A 13th
+  # AUDIT-STAGE-* clause (AUDIT-STAGE-FINAL-READY-CHAIN, F1 fix) lives in the check: final-ready
+  # section above — it wires audit into the final-ready chain itself, not this checker's own
+  # report judgment.
+  # ──────────────────────────────────────────────────────────────
+
+  - id: AUDIT-STAGE-ENTRY-REQUIRED
+    check: audit
+    kind: gate
+    clause: "a build that reaches final-ready with no audit receipt for the Audit stage skipped the stage entirely (A-PROP-001 Lever A)"
+    source: A-PROP-001 §3 Lever A
+    bad:
+      args: ["tests/fixtures/as_no_audit_receipt", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-ENTRY-REQUIRED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-APPLICABILITY-DERIVED
+    check: audit
+    kind: gate
+    clause: "an audit whose angle-D scope names a layer N/A without the driving build-fact (A1-A9) recorded is asserting N/A by opinion, not derivation (PBAF-PROP-001 Rule 1)"
+    source: PBAF-PROP-001 §3 Lever B · Rule 1
+    bad:
+      args: ["tests/fixtures/as_na_no_fact", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-APPLICABILITY-DERIVED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-WHOLE-LAYER-NA-WITH-LIVE-SUBITEM
+    check: audit
+    kind: gate
+    clause: "a whole layer marked N/A while any of its sub-items is applicable under the recorded facts drops a mandatory sub-item (PBAF-PROP-001 Rule 2 — per sub-item, not per layer)"
+    source: PBAF-PROP-001 §3 Lever D · Rule 2
+    bad:
+      args: ["tests/fixtures/as_layer_na_live_subitem", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-WHOLE-LAYER-NA-WITH-LIVE-SUBITEM"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-SHIPGATE-DISPOSITION
+    check: audit
+    kind: gate
+    clause: "an applicable SOP ship-gate sub-item with no disposition (pass / fix / CEO-waive) leaves a live standard unproven (A-PROP-001 Lever C)"
+    source: A-PROP-001 §3 Lever C
+    bad:
+      args: ["tests/fixtures/as_undispositioned_item", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-SHIPGATE-DISPOSITION"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-XFAM-RECEIPT
+    check: audit
+    kind: gate
+    clause: "an audit receipt authored by the same model family as the builder is not a cross-family audit (A-PROP-001 Lever D)"
+    source: A-PROP-001 §3 Lever D
+    bad:
+      args: ["tests/fixtures/as_samefamily_receipt", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-XFAM-RECEIPT"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-REVIEW-LADDER
+    check: audit
+    kind: gate
+    clause: "a cross-family audit receipt not preceded, in order, by a CodeRabbit review receipt and a same-family self-review receipt skips the ratified review ladder — CodeRabbit -> self-review -> cross-family (A-PROP-001 Lever D · CEO 2026-06-28)"
+    source: A-PROP-001 §3 Lever D
+    bad:
+      args: ["tests/fixtures/as_ladder_skip", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-REVIEW-LADDER"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-FAILCLOSED-FINAL
+    check: audit
+    kind: gate
+    clause: "a final audit that reaches final-ready with an unresolved applicable ship-gate item is forward-shipping a known standard failure (A-PROP-001 Lever E)"
+    source: A-PROP-001 §3 Lever E
+    bad:
+      args: ["tests/fixtures/as_final_unresolved", "--state", "tests/fixtures/audit_state_good.yaml", "--final"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FAILCLOSED-FINAL"
+    good:
+      args: ["tests/fixtures/as_final_good", "--state", "tests/fixtures/audit_state_good.yaml", "--final"]
+
+  - id: AUDIT-STAGE-HTTPS-E2
+    check: audit
+    kind: gate
+    clause: "an app at exposure tier E2 or higher (reachable over any network) with the HTTPS ship-gate sub-item marked N/A violates the locked hard rule — HTTPS is mandatory at E2+ (PBAF-PROP-001 Lever E)"
+    source: PBAF-PROP-001 §3 Lever E
+    bad:
+      args: ["tests/fixtures/as_e2_no_https", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-HTTPS-E2"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-VERSION-CONTROL-ALWAYS
+    check: audit
+    kind: gate
+    clause: "the VERSION_CONTROL_ALWAYS hard rule always triggers — an audit report that OMITS the version_control ship-gate sub-item entirely is not compliance, it is an unproven hard rule (F2, v1.22 self-review: hard rules are now driven generically from sop_applicability.yaml's hard_rules table, and an omitted item bites at the same severity as an explicit N/A)"
+    source: PBAF-PROP-001 §3 Lever E (F2 fix)
+    bad:
+      args: ["tests/fixtures/as_version_control_omitted", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-VERSION-CONTROL-ALWAYS"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-BACKUPS-WHEN-SENSITIVE
+    check: audit
+    kind: gate
+    clause: "the BACKUPS_WHEN_SENSITIVE hard rule triggers whenever data is sensitive (A6) — an audit report that OMITS the backups_tested_restore ship-gate sub-item entirely is not compliance, it is an unproven hard rule (F2, v1.22 self-review)"
+    source: PBAF-PROP-001 §3 Lever E (F2 fix)
+    bad:
+      args: ["tests/fixtures/as_backups_omitted", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-BACKUPS-WHEN-SENSITIVE"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-FINAL-XFAM-REQUIRED
+    check: audit
+    kind: gate
+    clause: "a FINAL audit with ZERO cross_family receipts fails closed — the ladder clauses only fire ON a cross-family receipt, so its total absence sailed through (order-only enforcement, fail-open); the typed escapes mirror the BF-PROP-005 stage_1 discipline exactly: xfam_capability_evidence (repo-relative manual scrubbed cross-family paste evidence) or an explicit ceo_decision_ref risk waiver (F7, v1.22 self-review; CEO ruling 2026-07-02)"
+    source: "A-PROP-001 §3 Lever D / GATES.md BF-PROP-005 stage_1 (F7 fix, CEO ruling 2026-07-02)"
+    bad:
+      args: ["tests/fixtures/as_final_no_xfam", "--state", "tests/fixtures/audit_state_good.yaml", "--final"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FINAL-XFAM-REQUIRED"
+    good:
+      args: ["tests/fixtures/as_final_xfam_waiver", "--state", "tests/fixtures/audit_state_good.yaml", "--final",
+             "--decision-ledger", "tests/fixtures/as_final_xfam_waiver/CEO-DECISION-LEDGER.md"]
+
+  - id: AUDIT-STAGE-FACTS-MISSING
+    check: audit
+    kind: gate
+    clause: "a missing build-fact (A1-A9) must fail closed, never silently default to false/E0 (X2, v1.22 xfam fix — schema validated BEFORE any evaluation logic touches the facts)"
+    source: "PBAF-PROP-001 Rule 1 (X2 fix)"
+    bad:
+      args: ["tests/fixtures/as_facts_missing", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FACTS-MISSING"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-FACTS-TYPE
+    check: audit
+    kind: gate
+    clause: "a boolean build-fact recorded as the STRING \"false\" is truthy in Python and would silently pass checks it should fail — facts A1-A4/A6-A9 must be real YAML booleans (X2, v1.22 xfam fix)"
+    source: "PBAF-PROP-001 Rule 1 (X2 fix)"
+    bad:
+      args: ["tests/fixtures/as_facts_string_false", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FACTS-TYPE"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-FACTS-A5-INVALID
+    check: audit
+    kind: gate
+    clause: "an A5 exposure-tier value outside {E0,E1,E2,E3} must fail closed, never fall back to E0 (X2, v1.22 xfam fix)"
+    source: "PBAF-PROP-001 Rule 1 (X2 fix)"
+    bad:
+      args: ["tests/fixtures/as_facts_a5_invalid", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-FACTS-A5-INVALID"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-RECEIPT-EVIDENCE
+    check: audit
+    kind: gate
+    clause: "a review-ladder receipt with no bound artifact/sha256/verdict/reviewed_ref is a declaration, not evidence — a stub receipt is a P1 fail-closed finding (X1, v1.22 xfam fix)"
+    source: "A-PROP-001 §3 Lever D (X1 fix)"
+    bad:
+      args: ["tests/fixtures/as_receipt_stub", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-RECEIPT-EVIDENCE"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-BUILDER-FAMILY-FORGED
+    check: audit
+    kind: gate
+    clause: "review-ladder builder_family is DERIVED from the loaded state's active_build_engine, never trusted as a self-declaration — a forged value that contradicts the loaded state is a P1 finding (X1, v1.22 xfam fix)"
+    source: "A-PROP-001 §3 Lever D (X1 fix)"
+    bad:
+      args: ["tests/fixtures/as_builder_family_forged", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-BUILDER-FAMILY-FORGED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-EXPECTED-SET-OMITTED
+    check: audit
+    kind: gate
+    clause: "an expected-applicable SOP sub-item (derived from the validated facts against the full layer registry) that is never dispositioned in angle-D is the audit-dodging blind spot, not compliance (X3, v1.22 xfam fix — Rule 1 + Rule 2 made real via an expected-set the checker computes, not whatever angle-D happens to already list)"
+    source: "PBAF-PROP-001 Rule 2 (X3 fix)"
+    bad:
+      args: ["tests/fixtures/as_facts_missing_omit", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-OMITTED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-DUPLICATE-YAML-KEY
+    check: audit
+    kind: gate
+    clause: "a duplicate mapping key in a checker input (e.g. applicability.yaml facts) is a parse ERROR, never PyYAML's silent last-key-wins — the shared load_yaml() loader now rejects it at the source, closing a data-loss/spoofing hole across every checker input (X5, v1.22 xfam fix)"
+    source: "cx_common.load_yaml (X5 fix)"
+    bad:
+      args: ["tests/fixtures/as_dup_key_facts", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "duplicate key"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: SOP-BIND-COVERAGE-MAP
+    check: packet
+    kind: gate
+    clause: "a Planning packet with no SOP coverage map (all 13 layers, each APPLIES/PARTIAL/N/A + driving fact) has not scoped the standard (PBAF-PROP-001 Lever B)"
+    source: PBAF-PROP-001 §3 Lever B
+    bad:
+      args: ["tests/fixtures/packet_bad_no_sop_coverage_map"]
+      expect_severity: P1
+      expect_contains: "SOP-BIND-COVERAGE-MAP"
+    good:
+      args: ["tests/fixtures/packet_good"]

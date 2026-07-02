@@ -1,0 +1,7 @@
+# GOOD (F7): final audit ladder with ZERO cross_family receipts but a TYPED CEO risk-waiver
+# reference (the standard ceo_decision_ref field — BF-PROP-005 stage_1 escape) — must PASS.
+builder_family: claude
+receipts:
+  - {stage: coderabbit, family: coderabbit, order: 1, artifact: as_final_xfam_waiver/receipt.txt, sha256: 3a439016ac5fd88920f378839c87337dede6ee49bc493ea29cb1a8250c0c12c7, verdict: PASS, reviewed_ref: BUILD-001}
+  - {stage: self_review, family: claude, order: 2, artifact: as_final_xfam_waiver/receipt.txt, sha256: 3a439016ac5fd88920f378839c87337dede6ee49bc493ea29cb1a8250c0c12c7, verdict: PASS, reviewed_ref: BUILD-001}
+ceo_decision_ref: CEO-D-XFAM-WAIVER-2026-07-02

@@ -1,0 +1,5 @@
+builder_family: claude
+receipts:
+  - {stage: coderabbit, family: coderabbit, order: 1}
+  - {stage: self_review, family: claude, order: 2}
+  - {stage: cross_family, family: gpt, order: 3}

@@ -57,6 +57,11 @@ built_app_audit:
   report_ref: audit_reports/sample-2026-06-19
   findings_dispositioned: true
 
+# v1.22 (F1 self-review fix): the FINAL Audit-stage receipt (A-PROP-001) — judged live by
+# collect_audit_findings(..., final=True), not just presence-checked.
+audit_stage_final:
+  report_ref: audit_good
+
 # c6 sidecar (graduation-owned copy): attempt-1 first-attempt marker (R2.7). Lives alongside
 # the shared state_good_final_ready_with_audit.yaml (untouched, still backs the standalone
 # cx-check-final-ready contract tests) so final_cross_family_receipt.receipt still resolves

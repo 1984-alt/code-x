@@ -112,3 +112,14 @@
 | PBF-PROP-012 | PROP-042 |
 | PBF-PROP-013 | PROP-043 |
 | PBF-PROP-014 | PROP-044 |
+
+## New PROPs — no old id (post-v1.21, native stage-categorized ids)
+
+| new | title |
+|---|---|
+| A-PROP-001 | The Audit Stage (absorbs B-PROP-007) |
+| PBAF-PROP-001 | SOP asset bind + applicability model |
+
+Note: `B-PROP-007` (Built-App Audit, `PROP-030`) is **superseded/absorbed by `A-PROP-001`** —
+its angles A/B/C become the Audit stage's engine verbatim; `B-PROP-007`/`PROP-030` stays in
+the renames table above as historical record, not deleted.

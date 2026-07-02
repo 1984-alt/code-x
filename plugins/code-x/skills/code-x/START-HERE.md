@@ -6,9 +6,10 @@
 ## What Code-X V1 is (one line)
 A lean, file-based system that turns a non-coder CEO's intent into shipped, working software — by handing each AI **one small work-order at a time**, building **module-by-module with CEO approval**, and **reviewing only what changed**. Soul: you direct the engineering system; it directs the AI; you never debug.
 
-## The three stages
+## The four stages
 - **PLANNING STUDIO** (hands-on with CEO · top models) → product taste · decisions · architecture · security baseline · looks-first design · money-rule sign-off · then the work-order deck (G1 card-compilation gate).
 - **BUILD FACTORY** (hands-off except approvals · cost-effective models by default) → Mode A → module (deterministic checks on every card) → demo → **one model review per module** → CEO approve → capsule → next module → P3-zero → final-ready certificate.
+- **AUDIT STAGE** (A-PROP-001 + PBAF-PROP-001, v1.22 · posture = verify/read-only) → after Building's exit gate closes and before Fixing opens, the built app is judged against requirements coverage, the original CEO asks, shipped reality, and the SOP's 13 ship gates (scoped by the applicability model) — per-module light + one mandatory full final audit; never edits code, findings hand off to Fixing. See `AUDIT-STAGE.md` + `SOP/`.
 - **FIXING STAGE** (F-PROP-001 · preserve-posture) → repair an existing surface and **change only the defect**: each fix names ONE `fix_target`, everything else cross-locks; `cx check structure` freezes the file tree, the anti-amnesia gate forces a ledger search before re-asking the CEO. Drift = failure. See `FIXING-STAGE.md`.
 
 ## Read order
@@ -22,7 +23,9 @@ A lean, file-based system that turns a non-coder CEO's intent into shipped, work
 - `KERNEL.md` — house rules, read every session.
 - `VOICE.md` — plain-talk standard: how the AI talks to the CEO (plain, scannable, decisions decidable).
 - `GATES.md` — G1 card-compilation … G8 final-ready. Load-on-demand.
-- `FIXING-STAGE.md` — the 3rd stage (F-PROP-001): preserve-posture, the cross-lock, `fix_targets`, the five levers. Read when a session enters Fixing (`current_stage: FIXING_STAGE`).
+- `FIXING-STAGE.md` — the fix stage (F-PROP-001): preserve-posture, the cross-lock, `fix_targets`, the five levers. Read when a session enters Fixing (`current_stage: FIXING_STAGE`).
+- `AUDIT-STAGE.md` — the 4th stage (A-PROP-001 + PBAF-PROP-001): verify-posture, the four angles (A/B/C/D), the five levers. Read when a session enters Audit.
+- `SOP/` — the versioned Code-X SOP asset (13-layer full-stack standard + applicability model). Read when scoping a packet's SOP coverage map or running an Audit angle-D pass.
 - `SEVERITY.md` — the P0–P3 ladder.
 - `ROUTING.md` — model tiers + per-family notes.
 - `BUILD-ENGINE-PROFILES.yaml` — exact model+effort per role for BOTH engines (Claude Code / Codex App); the compiler injects per-card `execution` blocks; switching engines = one state line. Load-on-demand (compiler + session start only).

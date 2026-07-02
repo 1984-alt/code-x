@@ -51,7 +51,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
                         "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app", "module-demo",
-                        "blueprint", "whole-packet-review", "kaizen", "graduation"}
+                        "blueprint", "whole-packet-review", "kaizen", "graduation", "audit"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.

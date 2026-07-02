@@ -152,6 +152,67 @@ def _check_coverage_map(packet_dir: Path, findings: list) -> tuple[int, int]:
     return done, na
 
 
+# SOP coverage map (PBAF-PROP-001 Lever B): all 13 SOP layers, each with a
+# verdict (APPLIES/PARTIAL/N_A) + the driving build-fact (A1-A9) behind any N/A.
+SOP_COVERAGE_FILE = "sop-coverage-map.yaml"
+SOP_REQUIRED_LAYER_IDS = set(range(1, 14))
+SOP_VALID_VERDICTS = {"APPLIES", "PARTIAL", "N_A"}
+
+
+def _check_sop_coverage_map(packet_dir: Path, findings: list) -> None:
+    """Validate sop-coverage-map.yaml (PBAF-PROP-001 Lever B / SOP-BIND-COVERAGE-MAP)."""
+    cov_path = packet_dir / SOP_COVERAGE_FILE
+    loc = str(cov_path)
+
+    if not cov_path.is_file():
+        findings.append(("P1", loc,
+            f"SOP-BIND-COVERAGE-MAP: {SOP_COVERAGE_FILE} missing — a Planning packet with no SOP "
+            "coverage map (all 13 layers, each APPLIES/PARTIAL/N/A + driving fact) has not scoped "
+            "the standard (PBAF-PROP-001 Lever B)"))
+        return
+
+    data, err = load_yaml(str(cov_path))
+    if err or not isinstance(data, dict):
+        findings.append(("P1", loc,
+            f"SOP-BIND-COVERAGE-MAP: {SOP_COVERAGE_FILE} unreadable: {err or 'not a YAML mapping'}"))
+        return
+
+    rows = data.get("layers")
+    if not isinstance(rows, list) or not rows:
+        findings.append(("P1", loc,
+            "SOP-BIND-COVERAGE-MAP: coverage map missing non-empty 'layers' list"))
+        return
+
+    seen_ids: set[int] = set()
+    for i, row in enumerate(rows):
+        row_loc = f"{loc}#layers[{i}]"
+        if not isinstance(row, dict):
+            findings.append(("P1", row_loc, "SOP-BIND-COVERAGE-MAP: layer row is not a mapping"))
+            continue
+        try:
+            lid = int(row.get("id"))
+        except (TypeError, ValueError):
+            findings.append(("P1", row_loc,
+                f"SOP-BIND-COVERAGE-MAP: layer id '{row.get('id')}' is not an integer"))
+            continue
+        seen_ids.add(lid)
+        verdict = str(row.get("verdict", "")).strip()
+        if verdict not in SOP_VALID_VERDICTS:
+            findings.append(("P1", row_loc,
+                f"SOP-BIND-COVERAGE-MAP: layer {lid} verdict '{verdict}' — must be one of "
+                f"{sorted(SOP_VALID_VERDICTS)}"))
+        elif verdict == "N_A" and not str(row.get("driving_fact", "")).strip():
+            findings.append(("P1", row_loc,
+                f"SOP-BIND-COVERAGE-MAP: layer {lid} verdict N_A with no 'driving_fact' — N/A must be "
+                "derived from a named build-fact, never asserted by opinion (PBAF-PROP-001 Rule 1)"))
+
+    missing = SOP_REQUIRED_LAYER_IDS - seen_ids
+    if missing:
+        findings.append(("P1", loc,
+            f"SOP-BIND-COVERAGE-MAP: coverage map missing layer ids {sorted(missing)} — "
+            "all 13 SOP layers must be accounted for"))
+
+
 def _check_ledger(packet_dir: Path, findings: list) -> None:
     led_path = packet_dir / LEDGER_FILE
     loc = str(led_path)
@@ -710,6 +771,7 @@ def cmd_packet(args) -> int:
     _check_style_direction(packet_dir, findings)
     _check_visual_provenance(packet_dir, findings)
     _check_module_registry_coverage(packet_dir, findings)
+    _check_sop_coverage_map(packet_dir, findings)
 
     if findings:
         return findings_report(findings)

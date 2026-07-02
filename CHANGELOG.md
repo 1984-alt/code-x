@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.0]
+
+Syncs the public release up to protocol **v1.22**. It adds a 4th stage — Audit — inserted between Building and Fixing, plus a formal SOP (Standard of Practice) ship-readiness asset that the Audit stage checks the built app against.
+
+### Added
+- **The Audit stage (A-PROP-001) — a 4th stage, Planning → Building → Audit → Fixing.** Posture = *verify*, read-only: after a module (or the whole app) is built, the Audit stage judges it against the plan and against a standard before anything is repaired or shipped. It never edits code — findings hand off to the Fixing stage. It absorbs the former Built-App Audit as its first three angles — (A) requirements coverage, (B) original asks vs delivered, (C) shipped reality: is there a real production caller for every feature, not just a passing test — and adds a fourth: (D) SOP ship-gate conformance, tested against the applicability model below. Final-ready is now chained behind a completed Audit stage, and cross-family review is required at the final audit (with a typed escape hatch mirroring the existing stage-1 discipline).
+- **The SOP (Standard of Practice) — a 13-layer ship-readiness standard, sha-pinned.** A dedicated asset (`SOP/`) spelling out 13 ship gates a shipped app should meet, hashed so drift is detectable, with a companion applicability model.
+- **Applicability model — 9 observable build-facts, machine-enforced N/A rules.** Not every gate applies to every app; the model derives 9 build-facts from what was actually built and mechanically decides which of the 13 gates apply, so a gate can only be marked "not applicable" for a stated, checkable reason — never a silent skip.
+- **Counts: 396 self-tests (up from 375), 387 gate clauses proven to bite (up from 366).**
+
+---
+
 ## [1.21.0]
 
 Syncs the public release up to protocol **v1.21** (and its v1.21.1–v1.21.4 patch line). It folds in a review-routing + see-and-test upgrade (PROP-042), a no-ambiguity rule (PROP-044), a protocol-wide rename of the improvement proposals (PROP-043), and four follow-up patches. Each change was cross-family reviewed — several as both proposal and built code — and fixed-first before landing.

@@ -1,0 +1,29 @@
+# SOP-MANIFEST.yaml — the pointer Code-X reads.
+# The SOP is a standalone asset with its OWN version, upgraded independently of the protocol.
+# Code-X v1.22 pins a MINIMUM; a SOP upgrade bumps `current` here without forcing a protocol bump.
+
+asset: "Code-X SOP — Full-Stack Software Protocol"
+current: "v1.0"
+current_file: "code-x-sop-v1.0.html"
+# sha256 of current_file at bind time (F5, v1.22 self-review fix). A hash mismatch means the
+# asset was edited IN PLACE — this violates the never-overwrite upgrade protocol below; the fix
+# is a NEW version file (code-x-sop-v1.1.html etc), never a silent edit of this file's bytes.
+sha256: "95ea9a1b2152854cdfdb1af75f44f5a0c6ac2252c4bab27ae711485b0ac2eef7"
+
+# Minimum version the current protocol requires. Set by PBAF-PROP-001 at v1.22 fold.
+protocol_pins:
+  min_version: "v1.0"
+
+layers: 13          # frozen numbering #1..#13 — reordering = migration, not edit
+constitution: 9     # core principles #01..#09
+
+changelog:
+  - version: "v1.0"
+    date: "2026-07-01"
+    note: "Initial 13-layer full-stack SOP + 9-principle Constitution. Bound into Code-X v1.22 (A-PROP-001 + PBAF-PROP-001)."
+
+# Upgrade protocol (for future SOP versions):
+#   1. Add code-x-sop-v1.1.html BESIDE the old file (never overwrite).
+#   2. Bump `current` + `current_file` + append a changelog entry here.
+#   3. If the protocol should require it, bump protocol_pins.min_version via a new PROP.
+#   4. `cx check sop-pointer` (if enabled) confirms the protocol pin still resolves.

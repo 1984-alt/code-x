@@ -12,7 +12,7 @@ graduation_evidence_manifest:
     - path: graduation_receipts/clean/c5-incidents.yaml
       sha256: 7694895533f95511f60a185cfd7c4be0a03432016cc0beacf2778ada97fb7ddb
     - path: state_good_final_ready_attempt1.yaml
-      sha256: 62a8def8a43a7d8035037f555c9a73b24784d7bfd61462dfed5dfd9e36820620
+      sha256: 4223fdf5f2c02f7d104b8fd545dbda98744b860c29558e87f810802c480c1644
     - path: graduation_receipts/bad2/c7-empty-modules.yaml
       sha256: 67401ae3712836a714c2f146cc12f361ba41ec5f8b8974e0de282b37bbf2e915
     - path: dom_good.html

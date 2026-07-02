@@ -1,5 +1,25 @@
 # Built-App Audit — Procedure
 
+Status: SUPERSEDED — **ABSORBED BY THE AUDIT STAGE** (A-PROP-001, v1.22 fold, CEO-D-038)
+
+## ⚠️ v1.22 redirect — read this, then go
+
+The Audit stage (A-PROP-001 + PBAF-PROP-001) absorbs this Built-App Audit as its engine:
+angles **A/B/C below stay in place, verbatim, as the stage's engine** — this document is
+still the working procedure for those three angles. A 4th angle, **D — SOP ship-gate
+conformance**, is layered on top (scoped by the applicability model; PBAF-PROP-001), and
+the audit is now a full **stage** (posture = verify) with its own entry/exit gates,
+granularity (per-module + final), and enforcement (`cx check audit`, `AUDIT-STAGE-*`
+clauses) — not just a pre-G8 procedure bolted after Building.
+
+- **Read order:** `AUDIT-STAGE.md` first (the stage spine); this file for the A/B/C
+  procedure detail.
+- **Do NOT** treat this file as a standalone gate going forward — `GATES.md`'s Audit Gate
+  section is canon; this file's own "The gate" section below is historical (kept
+  byte-for-byte, superseded in practice by the Audit stage's entry/exit).
+
+---
+
 A final, read-only, whole-app audit run before certifying an app final-ready (at or before G8).
 **Read-only: the audit looks, never touches code.** It fills the gap the per-card gates cannot see:
 a feature can be built + tested + green and still never wired to run in production.

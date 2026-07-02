@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code-X SOP — Full-Stack Software Protocol</title>
+<style>
+  :root{
+    --paper:#F4F6F8; --surface:#FFFFFF;
+    --ink:#15171C; --ink-2:#565C66; --ink-3:#8A909A;
+    --line:#E2E6EB; --line-2:#EEF1F4;
+    --accent:#2C44D6; --accent-soft:#ECEFFE;
+    --ok:#15784B; --ok-soft:#E7F4EC;
+    --const:#14161D; --const-2:#9AA0AD; --const-line:#2A2D38;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --rail:248px; --measure:760px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.7;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  :focus-visible{outline:2.5px solid var(--accent); outline-offset:3px; border-radius:2px}
+
+  /* ---------- Layout ---------- */
+  .wrap{display:grid; grid-template-columns:var(--rail) minmax(0,1fr); align-items:start}
+
+  /* ---------- Rail (desktop nav) ---------- */
+  .rail{
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+    border-right:1px solid var(--line); background:var(--paper);
+    padding:30px 0 40px;
+  }
+  .brand{padding:0 26px 22px; margin-bottom:6px; border-bottom:1px solid var(--line)}
+  .brand .mark{font-family:var(--mono); font-weight:700; font-size:1.18rem; letter-spacing:.04em}
+  .brand .mark b{color:var(--accent)}
+  .brand .sub{font-family:var(--mono); font-size:.66rem; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); margin-top:6px}
+  nav.toc{padding:14px 14px 0}
+  nav.toc a{
+    display:flex; gap:12px; align-items:baseline; padding:7px 12px; border-radius:7px;
+    color:var(--ink-2); font-size:.86rem; line-height:1.35;
+  }
+  nav.toc a .n{font-family:var(--mono); font-size:.72rem; color:var(--ink-3); min-width:18px}
+  nav.toc a:hover{background:var(--line-2); text-decoration:none; color:var(--ink)}
+  nav.toc a.active{background:var(--accent-soft); color:var(--accent); font-weight:600}
+  nav.toc a.active .n{color:var(--accent)}
+
+  /* ---------- Main ---------- */
+  main{padding:0 clamp(24px,5vw,80px) 120px; min-width:0}
+  .inner{max-width:var(--measure); margin:0 auto}
+
+  /* ---------- Hero ---------- */
+  .hero{padding:clamp(56px,11vh,128px) 0 clamp(40px,7vh,72px); border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono); font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3)}
+  .hero h1{
+    font-size:clamp(2.1rem,5.2vw,3.5rem); line-height:1.04; letter-spacing:-.02em;
+    margin:.5em 0 .35em; font-weight:680;
+  }
+  .hero h1 em{font-style:normal; color:var(--accent)}
+  .hero .lede{font-size:clamp(1.05rem,2vw,1.22rem); color:var(--ink-2); max-width:60ch; margin:0}
+  .frozen{
+    margin-top:34px; padding:14px 18px; border:1px solid var(--line); border-left:3px solid var(--accent);
+    background:var(--surface); border-radius:0 8px 8px 0;
+    font-family:var(--mono); font-size:.82rem; line-height:1.6; color:var(--ink-2);
+  }
+  .frozen b{color:var(--ink)}
+
+  /* ---------- Constitution (dark) ---------- */
+  .const{
+    background:var(--const); color:#EFF1F5; border-radius:16px;
+    margin:48px 0 8px; padding:clamp(30px,4vw,52px) clamp(24px,4vw,52px);
+  }
+  .const .clabel{font-family:var(--mono); font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--const-2)}
+  .const h2{font-size:clamp(1.5rem,3vw,2rem); margin:.35em 0 .2em; letter-spacing:-.01em; font-weight:660}
+  .const .cnote{color:var(--const-2); font-size:.95rem; margin:0 0 26px; max-width:64ch}
+  .principles{display:grid; gap:2px; counter-reset:p}
+  .principle{padding:20px 0; border-top:1px solid var(--const-line); display:grid; grid-template-columns:48px 1fr; gap:6px 18px; align-items:start}
+  .principle:first-child{border-top:none}
+  .principle .pn{font-family:var(--mono); font-size:.95rem; color:var(--accent); font-weight:700; padding-top:2px}
+  .principle h3{margin:0; font-size:1rem; letter-spacing:.01em; font-weight:680}
+  .principle p{margin:7px 0 0; color:var(--const-2); font-size:.93rem; line-height:1.6; grid-column:2}
+  .principle .ref{color:#7E86F0}
+
+  /* ---------- Sections ---------- */
+  .sec{padding:62px 0 18px; border-bottom:1px solid var(--line)}
+  .sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:8px}
+  .sec-num{font-family:var(--mono); font-size:1rem; font-weight:700; color:var(--accent); letter-spacing:.02em}
+  .sec h2{font-size:clamp(1.5rem,3vw,1.95rem); margin:0; letter-spacing:-.015em; font-weight:660}
+  .sec-head::after{content:""; flex:1; height:1px; background:var(--line); align-self:center; margin-left:6px}
+
+  .block{margin:22px 0}
+  .block-label{
+    font-family:var(--mono); font-size:.71rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:7px; font-weight:600;
+  }
+  .block-label.muted{color:var(--ink-3)}
+  .block p{margin:.55em 0}
+  .block ul,.block ol{margin:.5em 0; padding-left:1.3em}
+  .block li{margin:.34em 0}
+  .block ul.tight li,.block ol.tight li{margin:.18em 0}
+
+  /* inline tokens */
+  code,.tok{font-family:var(--mono); font-size:.86em; background:var(--line-2); padding:.08em .42em; border-radius:5px; color:var(--ink); word-break:break-word}
+  .ref-link{font-family:var(--mono); font-size:.9em; color:var(--accent); white-space:nowrap}
+  .ref-link:hover{text-decoration:underline}
+
+  /* status code grid */
+  .codes{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:6px 22px; margin:.6em 0; font-size:.93rem}
+  .codes div{display:flex; gap:10px}
+  .codes b{font-family:var(--mono); color:var(--accent); min-width:34px; font-size:.9rem}
+
+  /* callout for the "owns" block */
+  .owns{background:var(--accent-soft); border-radius:10px; padding:16px 20px; margin:22px 0}
+  .owns .block-label{color:var(--accent)}
+  .owns p{margin:.35em 0; font-size:.96rem}
+
+  /* principle/definition mini-blocks */
+  .defs{display:grid; gap:4px; margin:.5em 0; font-size:.96rem}
+  .defs b{font-family:var(--mono); font-weight:600; color:var(--ink)}
+
+  /* ---------- Ship gate ---------- */
+  .gate{margin:26px 0 6px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface)}
+  .gate-head{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 18px; background:#fff; border-bottom:1px solid var(--line)}
+  .gate-head .gl{font-family:var(--mono); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink); font-weight:700}
+  .gate-head .gl small{display:block; font-weight:400; letter-spacing:.02em; text-transform:none; color:var(--ink-3); font-size:.74rem; margin-top:2px}
+  .gate-prog{font-family:var(--mono); font-size:.78rem; color:var(--ink-3); white-space:nowrap}
+  .gate ul{list-style:none; margin:0; padding:8px 6px}
+  .gate li{margin:0}
+  .gate-item{display:flex; gap:13px; align-items:flex-start; padding:9px 12px; border-radius:8px; cursor:pointer}
+  .gate-item:hover{background:var(--line-2)}
+  .gate-item input{
+    appearance:none; -webkit-appearance:none; margin:3px 0 0; flex:0 0 auto;
+    width:19px; height:19px; border:1.7px solid var(--ink-3); border-radius:5px; background:#fff;
+    cursor:pointer; display:grid; place-content:center; transition:background .12s,border-color .12s;
+  }
+  .gate-item input::after{content:""; width:10px; height:10px; transform:scale(0); transition:transform .12s;
+    box-shadow:inset 1em 1em #fff; clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0,43% 62%)}
+  .gate-item input:checked{background:var(--ok); border-color:var(--ok)}
+  .gate-item input:checked::after{transform:scale(1)}
+  .gate-item span{font-size:.95rem; line-height:1.55}
+  .gate-item input:checked + span{color:var(--ink-3); text-decoration:line-through; text-decoration-color:var(--line)}
+
+  /* final rule flourish (#8) */
+  .finalrule{font-family:var(--mono); font-size:1rem; letter-spacing:.02em; color:var(--accent); margin:20px 0 4px; font-weight:700}
+
+  /* debugging-aid note tone */
+  .aidnote{font-style:italic; color:var(--ink-2); font-size:.92rem}
+
+  /* ---------- Pre-Ship map ---------- */
+  .preship{margin:46px 0 8px; border:1px solid var(--line); border-radius:14px; background:var(--surface); overflow:hidden}
+  .preship-head{padding:20px 24px; border-bottom:1px solid var(--line)}
+  .preship-head .clabel{font-family:var(--mono); font-size:.71rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent)}
+  .preship-head h2{font-size:clamp(1.3rem,2.6vw,1.6rem); margin:.3em 0 .25em; letter-spacing:-.01em; font-weight:660}
+  .preship-head p{margin:0; color:var(--ink-2); font-size:.92rem}
+  .preship ol{list-style:none; margin:0; padding:6px}
+  .preship li a{display:flex; gap:15px; align-items:baseline; padding:11px 16px; border-radius:9px; color:var(--ink)}
+  .preship li a:hover{background:var(--line-2); text-decoration:none}
+  .preship .pn{font-family:var(--mono); color:var(--accent); min-width:26px; font-size:.78rem; font-weight:700}
+  .preship .pt{font-size:.95rem; line-height:1.5}
+  .preship .pt b{font-weight:660}
+
+  /* ---------- Footer ---------- */
+  footer{max-width:var(--measure); margin:0 auto; padding:46px 0 10px; color:var(--ink-3); font-size:.84rem; font-family:var(--mono); line-height:1.7}
+  footer b{color:var(--ink-2)}
+
+  /* ---------- Mobile nav ---------- */
+  .topbar{display:none}
+  @media (max-width:920px){
+    .wrap{grid-template-columns:1fr}
+    .rail{display:none}
+    .topbar{
+      display:flex; position:sticky; top:0; z-index:30; align-items:center; justify-content:space-between;
+      gap:12px; padding:12px 18px; background:rgba(244,246,248,.92); backdrop-filter:saturate(160%) blur(8px);
+      border-bottom:1px solid var(--line);
+    }
+    .topbar .mark{font-family:var(--mono); font-weight:700; letter-spacing:.04em}
+    .topbar .mark b{color:var(--accent)}
+    details.mobnav{position:relative}
+    details.mobnav>summary{
+      list-style:none; cursor:pointer; font-family:var(--mono); font-size:.8rem; color:var(--accent);
+      border:1px solid var(--line); border-radius:8px; padding:7px 13px; background:#fff;
+    }
+    details.mobnav>summary::-webkit-details-marker{display:none}
+    details.mobnav[open]>summary{background:var(--accent-soft)}
+    .mobnav-list{position:absolute; right:0; top:calc(100% + 8px); width:min(82vw,320px); max-height:70vh; overflow:auto;
+      background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; box-shadow:0 18px 40px -18px rgba(20,22,29,.35)}
+    .mobnav-list a{display:flex; gap:11px; padding:9px 12px; border-radius:8px; color:var(--ink-2); font-size:.9rem}
+    .mobnav-list a .n{font-family:var(--mono); font-size:.74rem; color:var(--ink-3); min-width:18px}
+    .mobnav-list a:hover{background:var(--line-2); text-decoration:none}
+    main{padding:0 22px 90px}
+  }
+
+  /* ---------- Reduced motion ---------- */
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *{transition:none !important}
+  }
+
+  /* ---------- Print ---------- */
+  @media print{
+    body{background:#fff; font-size:11pt}
+    .rail,.topbar{display:none}
+    .wrap{display:block}
+    main{padding:0}
+    .inner,footer{max-width:none}
+    .const{background:#fff; color:#000; border:1px solid #000; border-radius:0}
+    .const .clabel,.const .cnote,.principle p{color:#333}
+    .principle .pn{color:#000}
+    .const .principle .ref{color:#333}
+    .sec{break-inside:avoid; border-bottom:1px solid #ccc}
+    .gate,.owns,.frozen{break-inside:avoid}
+    a{color:#000; text-decoration:none}
+    .gate-item input{border:1.5px solid #000}
+  }
+</style>
+</head>
+<body>
+
+<!-- mobile top bar -->
+<div class="topbar">
+  <span class="mark">CODE<b>-</b>X</span>
+  <details class="mobnav">
+    <summary>Contents</summary>
+    <div class="mobnav-list" id="mobnav"></div>
+  </details>
+</div>
+
+<div class="wrap">
+
+  <!-- desktop rail -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">CODE<b>-</b>X</div>
+      <div class="sub">Full-Stack Protocol · v1.0</div>
+    </div>
+    <nav class="toc" id="toc" aria-label="Sections"></nav>
+  </aside>
+
+  <main>
+    <div class="inner">
+
+      <!-- HERO -->
+      <header class="hero">
+        <div class="eyebrow">Full-Stack Software Protocol · v1.0</div>
+        <h1>AI output is a draft,<br><em>never a result.</em></h1>
+        <p class="lede">Thirteen sections, one constitution. A standard operating procedure for supervising AI-assisted software: test it, inspect it, prove it — before it ships.</p>
+        <div class="frozen">
+          <b>Numbering is frozen.</b> Sections reference each other by number (#1–#13). Reordering breaks those references — treat renumbering as a migration, not an edit.
+        </div>
+      </header>
+
+      <!-- CONSTITUTION / CORE PRINCIPLES -->
+      <section id="s0" class="const" aria-labelledby="s0h">
+        <div class="clabel">00 · The Constitution</div>
+        <h2 id="s0h">Core Principles</h2>
+        <p class="cnote">Read once. These run through all 13 sections, stated here so the sections don't repeat them.</p>
+        <div class="principles">
+          <div class="principle"><div class="pn">01</div><h3>AI output is a draft, never a result.</h3><p>Nothing AI produces is done just because it runs. Test it, read what it actually did, check the edges, give specific feedback, iterate. This is the whole reason the protocol exists.</p></div>
+          <div class="principle"><div class="pn">02</div><h3>Commit before AI touches it; review the diff after.</h3><p>Git is the undo button. Small, reversible commits. Read every change AI makes; reject unrelated edits. <span class="ref">(#7)</span></p></div>
+          <div class="principle"><div class="pn">03</div><h3>Two locks on every path to private data.</h3><p>The backend checks access; the data layer (RLS and storage policies) blocks it too. Either one alone is a single lock, and a single lock is not enough. <span class="ref">(#2, #8)</span></p></div>
+          <div class="principle"><div class="pn">04</div><h3>Trust nothing from the client.</h3><p>The frontend is an interface, not a security layer. User IDs, roles, prices, ownership fields, hidden routes — none are protection. Enforce on the server. <span class="ref">(#1, #2, #8)</span></p></div>
+          <div class="principle"><div class="pn">05</div><h3>Deny by default; least privilege.</h3><p>Allow only what is explicitly permitted. Give every user, key, and service the least power it needs. <span class="ref">(#4, #8)</span></p></div>
+          <div class="principle"><div class="pn">06</div><h3>Fail closed, fail safe.</h3><p>When unsure, deny rather than expose — and never corrupt data, double-charge, lose user work, or show false success. A broken thing shows a clear error, never a blank screen. <span class="ref">(#4, #11, #13)</span></p></div>
+          <div class="principle"><div class="pn">07</div><h3>Nothing is proven until tested in anger.</h3><p>A backup never restored, a deploy never monitored, a limit never tested across machines, a recovery plan never rehearsed — all unproven. <span class="ref">(#3, #5, #9, #11, #12, #13)</span></p></div>
+          <div class="principle"><div class="pn">08</div><h3>State in one place breaks when there are two.</h3><p>Anything kept inside a single server — sessions, carts, rate-limit counts, job state, in-memory cache — breaks the moment a second instance exists, unless it moves to shared storage. <span class="ref">(#6, #9, #10, #11)</span></p></div>
+          <div class="principle"><div class="pn">09</div><h3>Deviation needs a human's sign-off.</h3><p>A rule may be set aside only when you decide it genuinely doesn't fit — never when the AI decides on its own. The AI may propose an exception and explain why, but it must stop and ask first; it may not deviate and justify after the fact. An approved exception is written down. An unapproved or undocumented deviation is a defect the checker must catch.</p></div>
+        </div>
+      </section>
+
+      <!-- PRE-SHIP MAP -->
+      <section id="preship" class="preship" aria-labelledby="psh">
+        <div class="preship-head">
+          <div class="clabel">Pre-Ship · all 13 in one breath</div>
+          <h2 id="psh">The whole protocol, scannable</h2>
+          <p>One line per section — the crux of each ship gate. The full gate lives in the section; tap a line to jump there.</p>
+        </div>
+        <ol>
+          <li><a href="#s1"><span class="pn">01</span><span class="pt"><b>Frontend —</b> matches the design, works to 375px, accessible, fails gracefully, no secrets in the client.</span></a></li>
+          <li><a href="#s2"><span class="pn">02</span><span class="pt"><b>Backend / API —</b> access enforced, input validated server-side, every failure case handled, no out-of-scope data leaks.</span></a></li>
+          <li><a href="#s3"><span class="pn">03</span><span class="pt"><b>Database &amp; Storage —</b> types correct, constraints enforced by the DB, queries scoped, a restore actually tested.</span></a></li>
+          <li><a href="#s4"><span class="pn">04</span><span class="pt"><b>Auth &amp; Permissions —</b> identity/permission/scope verified server-side, deny by default, access matrix passed with real users.</span></a></li>
+          <li><a href="#s5"><span class="pn">05</span><span class="pt"><b>Hosting &amp; Deployment —</b> environments separated, secrets out of code, HTTPS enforced, rollback ready, verified live.</span></a></li>
+          <li><a href="#s6"><span class="pn">06</span><span class="pt"><b>Cloud &amp; Compute —</b> cost and limits known with billing alerts, jobs safe to retry, pooler if serverless fronts a database.</span></a></li>
+          <li><a href="#s7"><span class="pn">07</span><span class="pt"><b>CI/CD &amp; Version Control —</b> small reviewed commits, main protected, CI blocks on failure, a tested way to undo.</span></a></li>
+          <li><a href="#s8"><span class="pn">08</span><span class="pt"><b>Security &amp; RLS —</b> two locks on every gate, RLS default-deny, input safe, dependencies scanned, attack matrix passed.</span></a></li>
+          <li><a href="#s9"><span class="pn">09</span><span class="pt"><b>Rate Limiting —</b> server-side limits with a shared store, login hardened, 429s clear, exemptions logged.</span></a></li>
+          <li><a href="#s10"><span class="pn">10</span><span class="pt"><b>Caching &amp; CDN —</b> private data never publicly cached, scoped keys, invalidation works, CDN treated as delivery not security.</span></a></li>
+          <li><a href="#s11"><span class="pn">11</span><span class="pt"><b>Load Balancing &amp; Scaling —</b> instances stateless, health checks deep, pooling set, graceful shutdown, no bypass under load.</span></a></li>
+          <li><a href="#s12"><span class="pn">12</span><span class="pt"><b>Error Tracking &amp; Logs —</b> failures captured, no blank screens, request IDs trace it, no secrets or PII in logs, humans alerted fast.</span></a></li>
+          <li><a href="#s13"><span class="pn">13</span><span class="pt"><b>Availability &amp; Recovery —</b> recovery targets set, external monitoring, restore proven, fails closed, runbooks tested.</span></a></li>
+        </ol>
+      </section>
+
+      <!-- 1. FRONTEND -->
+      <section id="s1" class="sec" aria-labelledby="s1h">
+        <div class="sec-head"><span class="sec-num">01</span><h2 id="s1h">Frontend</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Build a clean, calm, consistent, accessible, responsive UI that matches the approved design. No drift.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Product discipline in the Apple/Jobs tradition — simplicity, clarity, restraint, consistency, polish. Remove the unnecessary. Make what remains feel obvious and refined. Respect the user's attention.</p></div>
+        <div class="block"><div class="block-label">Source of truth</div><p>The approved design is the reference. Match it, or document why a difference is intentional.</p></div>
+        <div class="block"><div class="block-label">Consistency</div><p>Reuse existing components, tokens, and patterns. Don't invent one-off colors, fonts, spacing, buttons, shadows, radii, icons, or layouts when a standard exists. Interactive states stay consistent.</p></div>
+        <div class="block"><div class="block-label">Quality</div><p>Every screen must feel intentional. Alignment, spacing, hierarchy, contrast, typography, and motion must be clean — never random, crowded, or noisy.</p></div>
+        <div class="block"><div class="block-label">UX</div><p>Every screen makes the next step obvious. Flows are simple, complete, and free of dead ends. Use clear labels and human language; hide internal system terms. Primary actions are easy to find; secondary actions don't compete. Every action gives feedback — one of: loading, success, error, disabled, empty, permission-denied. Users always know where they are, what happened, what to do next, and how to go back. Destructive actions need confirmation, undo, or a clear recovery path. Never make users redo work after an error, refresh, or wrong turn. Cut unnecessary steps, fields, and clicks.</p></div>
+        <div class="block"><div class="block-label">Resilience</div><p>A single broken component must not crash the whole screen. Failures degrade gracefully into a recoverable state, never a blank page.</p></div>
+        <div class="block"><div class="block-label">Organization</div><p>Separate components into clear, well-named files. Keep shared components reusable; keep page-specific ones near their page. Avoid giant files, mixed responsibilities, and duplicates.</p></div>
+        <div class="block"><div class="block-label">Mobile</div><p>Every screen works at all supported sizes down to 375px. No unintended horizontal scroll. Text stays readable; targets stay tappable. Forms, modals, menus, tables, cards, and navigation stay usable.</p></div>
+        <div class="block"><div class="block-label">Accessibility</div><p>Buttons for actions, links for navigation. Clear page structure. Label meaningful images and all form fields. Support keyboard navigation with logical tab order and visible focus. Never rely on color alone.</p></div>
+        <div class="block"><div class="block-label">Forms</div><p>Show clear errors and how to fix them. Keep input after a failed submit. Handle its states (loading, success, empty, error). Prevent double submission.</p></div>
+        <div class="block"><div class="block-label">Speed</div><p>Optimize images. Load only the code needed now. Remove unused components, libraries, and dead code. Split large pages when it helps. Avoid unnecessary re-renders.</p></div>
+        <div class="block"><div class="block-label">Security boundary</div><p>The frontend renders the interface — it is not a security layer (Principle 4). Its checks may hide, disable, or guide, but must never be trusted as protection. Never expose secrets, keys, admin tokens, or credentials. Never treat hidden buttons, pages, or routes as secure. All protected actions and private data are enforced by Backend/API (#2), Auth &amp; Permissions (#4), and Security &amp; RLS (#8), reached only through approved access paths.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Matches the approved design; differences documented</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Reuses the design system; no unjustified one-offs</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Works to 375px with no unintended horizontal scroll</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Accessible: keyboard, focus, labels, structure, not color-alone</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Forms keep input on failure and block double-submit</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Broken components fail gracefully, not blank</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No secrets, keys, or credentials in the frontend</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Feels simple and polished (reviewed by an AI from a different model family than the one that built it, or by a person)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 2. BACKEND / API -->
+      <section id="s2" class="sec" aria-labelledby="s2h">
+        <div class="sec-head"><span class="sec-num">02</span><h2 id="s2h">Backend / API</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>The backend is the trusted control layer. It receives requests, verifies them, runs business rules, talks to database/storage, and returns safe responses.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Treat every request as untrusted until proven safe (Principle 4). No protected action runs until identity, permission, scope, input, and business rules are all verified. Identity itself is established by Auth &amp; Permissions (#4); this layer enforces what a verified identity may do.</p></div>
+        <div class="block"><div class="block-label">Endpoint contract — every endpoint declares</div>
+          <ul class="tight">
+            <li>Purpose (the one thing it does)</li><li>Method and path</li><li>Required input</li><li>Returned output</li>
+            <li>Access rule (who may call it, on which records)</li><li>Validation rule</li><li>Business rule</li><li>Failure behavior</li>
+          </ul>
+          <p>Keep each endpoint to one clear job. Use clean, predictable, resource-based paths. No catch-all endpoints like <code>/api/do-everything</code>. Naming stays consistent across the app.</p>
+        </div>
+        <div class="block"><div class="block-label">Request methods</div><p><code>GET</code> reads. <code>POST</code> creates or starts an action. <code>PUT</code> replaces a full record. <code>PATCH</code> updates part. <code>DELETE</code> removes. Never use GET for anything that changes data.</p></div>
+        <div class="block"><div class="block-label">Access control (first lock)</div><p>Every route, server action, webhook, file action, admin endpoint, and background trigger must check: who is calling, what they may do, and which user/team/project/account/record/file they may touch. Reject unauthorized requests before reading, changing, or exposing anything. Never trust frontend state, hidden routes, client checks, or user-submitted ownership fields. Backend checks AND database rules (#8) are both required — one lock is not enough (Principle 3).</p></div>
+        <div class="block"><div class="block-label">Input validation</div><p>Validate all input on the server before use — route values, query values, form fields, JSON bodies, file data, webhook payloads. Reject anything missing, malformed, oversized, unsafe, or out of scope. Never accept sensitive fields from the client: user ID, owner ID, team ID, role, permission level, price, status, payment state, admin flags. Frontend validation is for experience; server validation is the protection.</p></div>
+        <div class="block"><div class="block-label">Requests and responses</div><p>Clear, consistent JSON. Requests carry only the fields the endpoint needs. Responses return only the fields the requester is allowed to see. Never return secrets, passwords, tokens, keys, stack traces, internal details, or data outside the requester's scope.</p></div>
+        <div class="block"><div class="block-label">Business logic</div><p>Important rules live on the server, never the frontend — order limits, ownership of edits, payment steps, protected status changes. Keep rules centralized, reusable, testable. Use transactions when multiple changes must succeed or fail together. Repeated or retried requests must not double-create, double-charge, double-send, or corrupt data.</p></div>
+        <div class="block"><div class="block-label">Data access</div><p>Every query is scoped to the correct user/team/project/account/record/file. List, search, export, and reporting endpoints are high-risk — they can leak many records at once. Return the minimum data needed; paginate large lists; load only needed fields.</p></div>
+        <div class="block"><div class="block-label">Files</div><p>Uploads and downloads are protected actions. Check identity, permission, ownership, file type, file size, and destination before allowing access. Private files never sit behind public URLs unless intentionally public.</p></div>
+        <div class="block"><div class="block-label">External services</div><p>Keep keys, secrets, and credentials on the server only. Verify webhooks before trusting them. Time out external calls and handle their failures safely. Never let an outside service corrupt internal data.</p></div>
+        <div class="block"><div class="block-label">Status codes</div>
+          <div class="codes">
+            <div><b>200</b> succeeded</div><div><b>201</b> created</div><div><b>204</b> succeeded, no body</div>
+            <div><b>400</b> bad request</div><div><b>401</b> not logged in</div><div><b>403</b> logged in, not allowed</div>
+            <div><b>404</b> not found</div><div><b>409</b> conflict with state</div><div><b>422</b> valid shape, bad data</div>
+            <div><b>429</b> too many requests</div><div><b>500</b> server error</div>
+          </div>
+          <p>Never return 200 for a failed action. Never use 500 for an expected user mistake.</p>
+        </div>
+        <div class="block"><div class="block-label">Failure taxonomy — every endpoint must handle, and be tested against, each case</div>
+          <ol class="tight">
+            <li>Happy path (success)</li><li>Missing input</li><li>Invalid input or wrong type</li><li>Oversized input</li>
+            <li>Not logged in (401)</li><li>Logged in but forbidden / wrong owner (403)</li><li>Missing record (404)</li>
+            <li>Duplicate or retried request</li><li>Conflict with current state (409)</li><li>Third-party failure or timeout</li>
+            <li>Database failure</li><li>Unexpected server error</li>
+          </ol>
+          <p>Handle every case safely: clear, safe messages to the user; useful detail in logs. Never expose stack traces, secrets, or database errors to users — and never write secrets or sensitive personal data into logs either. No endpoint may work on the happy path alone.</p>
+        </div>
+        <div class="block"><div class="block-label">Performance</div><p>Avoid wasteful queries, repeated calls, and oversized responses. Move long-running work to background jobs. Rate limiting is #9; caching is #10.</p></div>
+        <div class="block"><div class="block-label">Testing</div><p>Test with an API tool, not only through the frontend. Run every case in the failure taxonomy, inspect the actual JSON, and confirm the data is correct, safe, and properly shaped. Use the browser network tab to trace a request from click to response.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Give the AI the full endpoint contract above, then iterate against the failure taxonomy — test it, read the JSON, check status codes, check denied access, check edge cases, give specific feedback, repeat until it is safe, correct, and predictable.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Access enforced on every route, action, webhook, and trigger</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>All input validated server-side; no sensitive fields trusted from client</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Business rules run server-side</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Responses leak no secrets or out-of-scope data</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Correct status codes; never 200 on failure</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Every failure-taxonomy case handled and tested</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No secrets in responses or logs</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Protected actions cannot bypass Backend/API (#2), Auth (#4), Database (#3), or RLS (#8)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 3. DATABASE & STORAGE -->
+      <section id="s3" class="sec" aria-labelledby="s3h">
+        <div class="sec-head"><span class="sec-num">03</span><h2 id="s3h">Database &amp; Storage</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>The data layer is the source of truth. It keeps data correct, protected, scoped, recoverable, and fast as the app grows.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>The backend can make mistakes. The data layer must still protect private data and prevent broken data. It is the second lock (Principle 3).</p></div>
+        <div class="block"><div class="block-label">Schema</div><p>Tables, columns, relationships, and storage buckets match the real app. Every table has a clear purpose. Every real object is represented — users, teams, orders, payments, files, memberships, permissions, whatever the app needs. Do not let AI create vague, missing, duplicate, or unnecessary tables.</p></div>
+        <div class="block"><div class="block-label">Data types</div>
+          <p>Use the right type for each field.</p>
+          <ul class="tight">
+            <li><b>Money:</b> stored as an exact value (integer minor units or fixed decimal), never floating point, never text.</li>
+            <li><b>Dates and times:</b> stored as timestamps in UTC, never plain strings. Convert at display.</li>
+            <li><b>True/false:</b> booleans.</li>
+            <li><b>Counts and quantities:</b> numbers.</li>
+            <li><b>Statuses:</b> a controlled set of allowed values, never free text.</li>
+            <li><b>IDs:</b> clearly point to the correct record.</li>
+          </ul>
+          <p>Wrong types become future bugs.</p>
+        </div>
+        <div class="block"><div class="block-label">Constraints</div>
+          <p>The database itself refuses broken data — never the frontend.</p>
+          <ul class="tight">
+            <li><b>Required fields are required:</b> a user needs an email, an order needs an owner, a payment needs an amount, a private file needs an access scope, a record needs a created timestamp. Allow empty only when the field is truly optional.</li>
+            <li><b>No duplicates where duplicates are impossible:</b> one account per email, one payment record per payment ID, one token per invite.</li>
+            <li><b>Relationships are enforced:</b> order items link to their order, files link to their owner or scope, team data links to the right team. No orphaned data unless intentional and documented.</li>
+            <li><b>No impossible states:</b> no record pointing to a missing parent, no status outside the approved set.</li>
+          </ul>
+          <p>Enforce with required rules, unique rules, relationship rules, safe defaults, and transactions where changes must succeed or fail together.</p>
+        </div>
+        <div class="block"><div class="block-label">Delete behavior</div><p>Every relationship defines what happens on delete. Choose intentionally: block deletion if related data exists, delete related data together, keep the data but remove the link, or archive instead of delete. Deleting a customer must never leave broken orders behind.</p></div>
+        <div class="block"><div class="block-label">Storage</div><p>Photos, PDFs, videos, and uploads live in file storage, not inside the database. The database stores metadata only: path, owner, scope, type, size, created time, access rule. Private files are never public unless intentionally public — use protected access, signed URLs, or storage policies.</p></div>
+        <div class="block"><div class="block-label">Queries &amp; scoping</div><p>Every private query is scoped to the correct user, team, project, account, record, or file. Never fetch all records and filter in the frontend. Return only the fields needed. Paginate large lists.</p></div>
+        <div class="block"><div class="block-label">Performance &amp; indexes</div><p>Design for real data, not test data. Add indexes on columns used for search, filtering, sorting, joining, and ownership or permission checks. Catch slow queries before production. If it works at 50 records but fails at 50,000, the design is not finished.</p></div>
+        <div class="block"><div class="block-label">Access control (second lock)</div><p>Database and storage are the second lock. Default to deny. Allow access only when identity, permission, and scope are valid. Protect every operation — reads, lists, searches, creates, updates, deletes, uploads, downloads, exports. Direct database and direct storage access are gates and must be locked. The detailed policies — RLS rules, storage policies, and their tests — are authored and verified in Security &amp; RLS (#8). This section requires that they exist and default to deny.</p></div>
+        <div class="block"><div class="block-label">Secrets at rest</div><p>Never store plaintext passwords or raw secrets in the database. Credentials are hashed and handled per Auth &amp; Permissions (#4).</p></div>
+        <div class="block"><div class="block-label">Migrations</div><p>All schema changes go through migrations — planned, reviewed, tested, reversible when possible. No casual manual edits in production. A schema change must also update its relationships, indexes, constraints, and the related RLS and storage policies (#8).</p></div>
+        <div class="block"><div class="block-label">Backups</div><p>Backups are required and restores must be tested. A backup that has never been restored is not proven. Recovery must cover schema, data, storage metadata, policies, and migrations. (Full recovery discipline in #13.)</p></div>
+        <div class="block"><div class="block-label">Inspection checklist</div><p>Open the database viewer and verify what AI built — never trust that the schema is right just because the app appears to work. Check: tables, columns, types, required fields, relationships, unique rules, delete behavior, sample records, indexes, and that RLS and storage policies exist and deny by default.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Describe the data structure to AI with: entities, fields, data types, required vs optional, relationships, unique rules, delete behavior, access rules, storage rules, indexes, example records, and expected queries. Then run the inspection checklist, test real queries, check the data, give specific corrections, and iterate until the schema is correct.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Schema is clear; data types correct (money exact, timestamps UTC)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Required fields, unique rules, and relationships enforced by the database</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Delete behavior defined for every relationship</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Files in storage; database holds metadata only; private files not public</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Queries scoped; large lists paginated; indexes in place</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Tested at realistic scale, not just sample data</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Backups taken and a restore actually tested</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Migrations controlled; rollback or recovery path exists</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No plaintext passwords or secrets at rest</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>RLS and storage policies exist and default to deny (authored in #8)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 4. AUTH & PERMISSIONS -->
+      <section id="s4" class="sec" aria-labelledby="s4h">
+        <div class="sec-head"><span class="sec-num">04</span><h2 id="s4h">Auth &amp; Permissions</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Auth proves who the user is. Permissions decide what they can do. Scope decides which data they can touch.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>No private page, endpoint, file, record, or action runs until identity, permission, and scope are verified server-side. Auth is the keymaker: it issues the verified identity that the two locks (#2, #8) check — it is not itself a lock.</p></div>
+        <div class="block"><div class="block-label">Definitions</div>
+          <div class="defs">
+            <div><b>Authentication</b> = who the user is.</div>
+            <div><b>Authorization</b> = what the user is allowed to do.</div>
+            <div><b>Scope</b> = which user, team, project, account, record, or file a permission applies to.</div>
+          </div>
+        </div>
+        <div class="block"><div class="block-label">Auth provider</div><p>Use a proven provider (Supabase Auth, Clerk, Auth0) unless there is a reviewed reason not to. Do not let AI invent custom auth unless hashing, sessions, token expiry, reset flows, rate limits, and recovery are all fully reviewed.</p></div>
+        <div class="block"><div class="block-label">Login</div><p>Verify credentials securely, create a valid session, handle wrong passwords safely. A failed login must not reveal whether the email exists. Repeated failures must be limited (mechanism in Rate Limiting #9).</p></div>
+        <div class="block"><div class="block-label">Signup</div><p>Validate email, password strength, and required fields. Prevent duplicate accounts. Require email verification when the app depends on a real email.</p></div>
+        <div class="block"><div class="block-label">Password security</div><p>Never store passwords in plain text — use a slow, salted, industry-standard hash (bcrypt/argon2), never a fast or plain hash. Reset links expire quickly, work once, and notify the owner. Reset, email change, and recovery are protected from abuse.</p></div>
+        <div class="block"><div class="block-label">Sessions &amp; revocation</div><p>Verify sessions and tokens server-side. Sessions expire after a reasonable time. Logout ends the session. Expired, missing, invalid, or unclear sessions fail closed. Tokens are stored securely and never exposed through unsafe frontend code. A password change or reset invalidates other active sessions. Removing a user or changing their role takes effect immediately, not at next login.</p></div>
+        <div class="block"><div class="block-label">SSO / social login</div><p>A third-party login (Google, etc.) proves identity only — the same permission and scope checks still apply. The provider grants identity, never authorization. Every external identity maps to one verified internal identity.</p></div>
+        <div class="block"><div class="block-label">Stronger auth (per-project)</div><p>Multi-factor auth is per-project, but strongly recommended for admin and other privileged roles.</p></div>
+        <div class="block"><div class="block-label">Protected routes</div><p>Protected pages and endpoints block logged-out users. A logged-in user does not automatically get all data — User A must never reach User B's private data. Direct URL visits, refreshes, API calls, and network requests all enforce the same rules.</p></div>
+        <div class="block"><div class="block-label">Roles &amp; permissions</div><p>Define each role clearly (Owner, Admin, Member, Viewer, Guest). For each, define what it can read, create, update, delete, invite, export, manage, and approve. Use least privilege. Deny by default — allow only what is explicitly permitted (Principle 5).</p></div>
+        <div class="block"><div class="block-label">Ownership &amp; scope</div><p>Every private record or file has clear ownership or scope (user, team, project, workspace, organization, account). Access must match the correct owner. The scope model is defined here; per-request enforcement and rejection of user-submitted IDs/roles/owner fields happen in Backend/API (#2).</p></div>
+        <div class="block"><div class="block-label">Data-layer enforcement</div><p>Permissions must also be enforced at the data layer, not just the app — backend is the first lock, database/storage rules are the second, both required (Principle 3). The actual RLS and storage policies, and their default-deny tests, are authored in Security &amp; RLS (#8).</p></div>
+        <div class="block"><div class="block-label">Admin access</div><p>Admin power is explicit, limited, protected, and logged (logging via #12). Admin tools still check identity, permission, and scope. Service-role keys, admin tokens, and privileged credentials stay server-side. User-facing actions never borrow admin power without an access check first.</p></div>
+        <div class="block"><div class="block-label">Access test matrix — verify with multiple real accounts</div>
+          <ol class="tight">
+            <li>Logged-out users are blocked from protected pages and endpoints</li>
+            <li>Wrong passwords fail safely; email existence not revealed</li>
+            <li>Sessions expire; logout ends access</li>
+            <li>Password reset links expire and work once</li>
+            <li>Password change/reset invalidates other sessions</li>
+            <li>Duplicate signup is blocked</li>
+            <li>User A cannot access User B's data</li>
+            <li>Wrong roles cannot perform restricted actions</li>
+            <li>Removed or role-changed users lose access immediately</li>
+            <li>RLS blocks direct data access (#8)</li>
+            <li>Private files cannot be accessed directly</li>
+          </ol>
+        </div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Describe the access rules to AI: who can sign up and log in, what roles exist, what each role can and cannot do, which data each user can access, which pages and endpoints require login, which records need ownership checks, which files are private, which RLS/storage rules are required, and which allowed/denied cases to test. Then run the access test matrix by logging in as different users.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Login verified; signup validated; passwords slow-salted-hashed</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Sessions expire; logout works; credential changes revoke other sessions</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Protected routes block logged-out and cross-user access</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Roles clear; permissions explicit; least privilege; deny by default</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Scope enforced; no user-submitted IDs/roles trusted (#2)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Data-layer rules exist and default to deny (#8)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Admin power limited, server-side, and logged</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Access test matrix passed with multiple real users</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 5. HOSTING & DEPLOYMENT -->
+      <section id="s5" class="sec" aria-labelledby="s5h">
+        <div class="sec-head"><span class="sec-num">05</span><h2 id="s5h">Hosting &amp; Deployment</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Hosting runs the app. Deployment controls what code, settings, domains, secrets, and releases reach users.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Production must be deliberate, tested, secure, monitored, and reversible.</p></div>
+        <div class="block"><div class="block-label">Environments</div><p>Separate local, preview, staging, and production. Never use production data, secrets, or services in unsafe non-production environments. Each environment has its own database, storage, auth settings, domain, webhook URLs, and environment variables.</p></div>
+        <div class="block"><div class="block-label">Release &amp; rollback</div><p>Deploy from version control, never random local changes. Test preview or staging before production. Every production deploy is tied to a commit, build, or release. Failed checks block the deploy. Every release has a rollback path, and a deploy that fails its post-deploy health check rolls back automatically where the platform supports it. (The automated pipeline that runs all this is CI/CD #7.)</p></div>
+        <div class="block"><div class="block-label">Migrations &amp; deploy order</div><p>Sequence schema migrations and code deploys so neither breaks the other: migrations stay backward-compatible, run in a safe order, and never strand a rollback. (Migrations themselves are controlled in Database &amp; Storage #3.)</p></div>
+        <div class="block"><div class="block-label">Reproducible builds</div><p>Commit the dependency lockfile so the build that passed staging is identical in production. No silent dependency drift between environments.</p></div>
+        <div class="block"><div class="block-label">Environment variables</div><p>Local <code>.env</code> files do not automatically exist on the live site. If production says "API key not found," add the key to the hosting platform's environment variables for the correct environment. Secrets live in private server-side variables. Only intentionally public frontend variables may reach the browser. Keep public and private clearly separated.</p></div>
+        <div class="block"><div class="block-label">Secrets</div><p>Never hardcode API keys, database passwords, private keys, service-role keys, admin tokens, or credentials in code. If a secret is committed to GitHub, treat it as leaked: immediately revoke it, replace it, remove it from code, update environment variables, and review access logs.</p></div>
+        <div class="block"><div class="block-label">Domain &amp; DNS</div><p>A custom domain points to the host through correct DNS records: A record for root domains, CNAME for subdomains, TXT for verification when required. DNS changes can take time to propagate.</p></div>
+        <div class="block"><div class="block-label">SSL / HTTPS</div><p>Production must use HTTPS. "Not Secure" means HTTPS is missing, broken, expired, misconfigured, or the page loads unsafe HTTP assets. Fix DNS, enable or renew SSL, force HTTPS, and remove mixed-content HTTP assets.</p></div>
+        <div class="block"><div class="block-label">Platform fit</div><p>Choose hosting by app need. A marketing site can use static hosting; a full web app may need backend compute, database, storage, auth, background jobs, scheduled tasks, and logs. Use one platform if it supports the app cleanly; split platforms when it improves security, reliability, cost, or maintainability.</p></div>
+        <div class="block"><div class="block-label">Configuration</div><p>Variables must match the target environment. Wrong config must fail safely — never connect to the wrong database, storage, auth provider, payment system, or webhook. Domains, redirects, callback URLs, auth URLs, webhook URLs, and allowed origins must all match the correct environment.</p></div>
+        <div class="block"><div class="block-label">Exposure</div><p>Never expose debug tools, test routes, admin panels, logs, internal dashboards, public source maps, stack traces, or development errors. Source maps may be uploaded privately to error tracking (#12). Preview and staging must never expose private production data.</p></div>
+        <div class="block"><div class="block-label">Monitoring</div><p>Deployment is not one-time. Uptime monitoring, deploy notifications, error alerts, and basic health checks must exist. A broken live site must be discovered by monitoring, not by users. (Error tracking detail in #12; uptime targets and recovery in #13.)</p></div>
+        <div class="block"><div class="block-label muted">Common deploy failures <span class="aidnote">— debugging aid, not law</span></div>
+          <ul class="tight">
+            <li><b>Blank page after deploy:</b> check build logs, env vars, browser console, network requests, routing, and missing assets.</li>
+            <li><b>404 in production but works locally:</b> route not deployed, wrong file path or route name, host not configured for client-side routing, wrong build output directory, domain points to the wrong project, or missing env vars/data.</li>
+            <li><b>"Module not found" at build:</b> package installed? file exists? import path correct? filename casing matches? file committed?</li>
+            <li><b>"API key not found":</b> the variable is missing on the host for that environment.</li>
+            <li><b>"Not Secure" or mixed content:</b> HTTPS missing/expired/misconfigured, or the page loads HTTP assets — fix DNS, enable/renew SSL, force HTTPS, remove mixed content.</li>
+          </ul>
+        </div>
+        <div class="block"><div class="block-label">Post-deploy verification</div><p>After deploy, confirm: the site loads, HTTPS works, the domain works, login works, protected routes are blocked, key pages do not 404, API calls work, env vars are present, forms submit correctly, private data is not exposed, and critical user flows work.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>When asking AI to set up hosting or deployment, specify: hosting platform, environment names, build command, start command, output directory, required env vars, public vs private variables, domain settings, DNS requirements, SSL requirement, auth callback URLs, webhook URLs, monitoring requirement, rollback plan, and post-deploy checks.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Environments separated; no prod data/secrets in non-prod</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Deploys come from version control; failed checks block release (#7)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Migrations sequenced with deploys; rollback stays safe (#3)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Builds reproducible; lockfile committed</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Secrets protected; none in code; leaked secrets rotated</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>DNS works; HTTPS enforced; no mixed content</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Config matches environment; wrong config fails safe</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Debug tools, admin panels, and public source maps hidden</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Monitoring and rollback exist; failed health checks trigger auto-rollback where supported, otherwise a documented manual rollback</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Post-deploy verification passed on the live site</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 6. CLOUD & COMPUTE -->
+      <section id="s6" class="sec" aria-labelledby="s6h">
+        <div class="sec-head"><span class="sec-num">06</span><h2 id="s6h">Cloud &amp; Compute</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Cloud &amp; Compute covers where backend work runs: serverless functions, workers, queues, cron jobs, containers, and scheduled or triggered tasks.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Cloud work must be secure, limited, observable, cost-aware, and safe to retry.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>Two things nothing else in the protocol owns: the cost and limits of running compute, and asynchronous execution (work that runs not in direct response to a user click). Security, secrets, auth, webhook verification, and public exposure are enforced here but defined in #2, #4, #5, and #8 — this section references them, it does not restate them.</p></div>
+        <div class="block"><div class="block-label">Compute model</div><p>After deployment the app runs on rented machines you do not own; code runs when triggered, and you pay per execution. Use serverless for small, variable, event-based work (APIs, webhooks, image resizing, emails, scheduled jobs). Use a dedicated or long-running server when the app needs constant compute, long tasks, special control, or predictable always-on capacity. Serverless functions sleep when idle and have a cold-start delay on the next call — latency-critical always-on paths favor a long-running server. Do not let AI choose a compute model without explaining cost, limits, scaling, and failure behavior.</p></div>
+        <div class="block"><div class="block-label">Cost &amp; limits (the core of this section)</div><p>Serverless does not mean free — cost grows with executions, runtime, memory, retries, and data transfer. Know the current limits of the hosting plan: invocations, runtime, bandwidth, build minutes, storage, image optimization, logs, and external API calls. Before launch, know what happens at the limit: throttling, failure, pause, overage billing, or forced upgrade. Set billing alerts on day one. Check the usage dashboard weekly; if the bill spikes, find which service grew first. Cache data that rarely changes. Do not call external APIs, AI models, or heavy functions on every page load unless necessary. Optimize images before delivery. Avoid runaway loops, unlimited retries, oversized files, and huge queries. Ask what the system costs at 1,000, 10,000, and 100,000 users.</p></div>
+        <div class="block"><div class="block-label">Async execution — jobs, queues, cron</div><p>Use background jobs for slow, heavy, delayed, scheduled, or retryable work. Every job must be safe to retry: repeated runs must not double-create, double-charge, double-send, or corrupt data (idempotency law in #2). Permanent failures must stop retrying and land in a dead-letter queue or failure log — never retry forever, never vanish silently. No task may leave data half-updated; use transactions or safe state changes when multiple steps must succeed together (#2, #3).</p></div>
+        <div class="block"><div class="block-label">Serverless + database</div><p>Serverless functions scale out horizontally and each instance opens its own database connections. In front of a traditional database, use a connection pooler — or high traffic will exhaust the database's connection limit and it will reject requests. This failure only appears under load, so design for it before launch.</p></div>
+        <div class="block"><div class="block-label">Reliability</div><p>Every external call has a timeout. Every important task logs start, success, failure, retry, and permission denial (logging detail in #12). A task with unclear identity, permission, config, or scope must stop, not guess.</p></div>
+        <div class="block"><div class="block-label">Access &amp; secrets (enforced here, defined elsewhere)</div><p>Every cloud task that touches private data is a protected gate and must respect Auth (#4), Backend/API (#2), Database (#3), and RLS (#8): it must know what triggered it, what it may do, and which user/team/project/account/record/file it may access. Store secrets only in secure environment settings; never hardcode keys, tokens, or credentials; never expose privileged cloud credentials to the frontend; give each service the smallest permission it needs (secret handling in #5). Verify and de-duplicate webhooks before trusting them (#2).</p></div>
+        <div class="block"><div class="block-label">Exposure</div><p>Expose only cloud endpoints that must be public. Never expose debug endpoints, internal jobs, admin functions, logs, or test tools (#5).</p></div>
+        <div class="block"><div class="block-label">Testing</div><p>Test cloud tasks directly, not only through the frontend: allowed access, denied access, missing secrets, wrong environment, invalid payloads, duplicate jobs, failed dependencies, timeouts, retries, large inputs, and production-like volume.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>When asking AI to build cloud work, specify: trigger, input, output, access rule, data scope, secrets, environment, timeout, retry behavior, duplicate prevention, failure destination, logs, cost limits, and test cases. Ask AI to explain the cost model and current platform limits. Working cloud code is not production-ready until usage, security, failure, and cost behavior are verified.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Compute model chosen with cost, limits, and failure behavior explained</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Free-tier limits known; billing alerts set; cost-at-scale estimated</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Jobs safe to retry; permanent failures dead-lettered, not lost</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Connection pooler in place if serverless fronts a traditional database</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>External calls time out; task lifecycle logged (#12)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Secrets server-side only; least-privilege per service (#5)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Webhooks verified and de-duplicated (#2)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No private data or task bypasses Auth (#4), Backend (#2), or RLS (#8)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 7. CI/CD & VERSION CONTROL -->
+      <section id="s7" class="sec" aria-labelledby="s7h">
+        <div class="sec-head"><span class="sec-num">07</span><h2 id="s7h">CI/CD &amp; Version Control</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Version control protects your code history. CI/CD tests, builds, and deploys changes safely.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>No production change should be untracked, untested, unclear, or hard to undo.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>Version-control discipline (Git as the undo button) and the CI pipeline mechanism (which checks run, and that they gate main). Environments, release, and deploy rollback are defined in Hosting &amp; Deployment (#5) — this section references them.</p></div>
+        <div class="block"><div class="block-label">Version control</div><p>Use Git from the start. Without version control, AI can overwrite working code with no clean way back. Every meaningful change becomes a commit — a save point. A push sends those save points to the remote (e.g. GitHub). If code only exists on your laptop, it is not backed up; push so the project is backed up, shareable, reviewable, and deployable.</p></div>
+        <div class="block"><div class="block-label">Commit practice</div>
+          <p>Commit early and often — never a whole day across many files with no commits. Each commit is small, focused, reversible, with a clear message of what changed and why.</p>
+          <div class="defs"><div><b>Good:</b> "Fixed login redirect bug"</div><div><b>Bad:</b> "Updated stuff"</div></div>
+        </div>
+        <div class="block"><div class="block-label">AI safety (the core habit — Principle 2)</div><p>Commit before asking AI to make large changes. Review the diff after AI changes code. Reject unrelated edits. Do not treat AI output as safe just because it runs.</p></div>
+        <div class="block"><div class="block-label">Branches &amp; protected main</div><p>Use branches for features, experiments, fixes, and risky changes. Keep main stable — never push unfinished or untested work to it. Merge only after the change is reviewed, tested, and safe. Protect main: required checks must pass before anything merges, so broken code cannot reach production by a quick push.</p></div>
+        <div class="block"><div class="block-label">Protect the history</div><p>Git history is your safety net — do not destroy it. Never force-push main or rewrite history that has already been pushed.</p></div>
+        <div class="block"><div class="block-label">Ignore file (secret prevention)</div><p>A <code>.gitignore</code> must exclude <code>.env</code> files, secret files, <code>node_modules</code>, and build output, so secrets and junk can never be committed in the first place. This is the preventive half; the cure is below.</p></div>
+        <div class="block"><div class="block-label">Secrets</div><p>Never commit API keys, tokens, service-role keys, private keys, passwords, or credentials. If a secret is committed, treat it as leaked and follow the rotation steps in #5 (revoke, replace, remove from code, move to env vars, check access logs).</p></div>
+        <div class="block"><div class="block-label">CI pipeline</div><p>CI/CD makes builds, checks, and deployments repeatable. Required checks run before production and a failure blocks the deploy: build, tests, linting, type checks, secret scanning, dependency-vulnerability scanning (#8), and migration checks when needed. The push-to-build-to-live flow itself is defined in #5; reproducible builds (committed lockfile) are too.</p></div>
+        <div class="block"><div class="block-label">Migrations in version control</div><p>Database migrations, RLS and storage policies, indexes, constraints, and permission changes are versioned in Git and reviewed like code. (Controlled and reversible per #3; sequenced with deploys per #5.)</p></div>
+        <div class="block"><div class="block-label">Undoing mistakes</div><p>If broken code reaches main or production, do not panic-edit. At the deploy level, roll back to the last good deployment (#5). At the git level, revert the bad commit, or branch and test a hotfix before merging. Disable the broken feature if needed. If security, data, login, payments, or core flows are broken, roll back the deploy first, then fix in Git. If a deploy fails or won't update, read the logs before re-pushing — never push the same broken code twice without understanding why (common errors listed in #5).</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Code committed in small, clear, reversible commits</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Pushed to a remote; not laptop-only</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Diff reviewed after AI changes; unrelated edits rejected</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>main protected; checks must pass before merge</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>History intact; no force-push or rewrite of pushed history</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>.gitignore excludes secrets and build junk; no secrets committed</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Required CI checks run and block on failure</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Migrations and policies versioned and reviewed (#3, #5)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>A clear, tested way to undo: revert, hotfix, or deploy rollback (#5)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 8. SECURITY & RLS -->
+      <section id="s8" class="sec" aria-labelledby="s8h">
+        <div class="sec-head"><span class="sec-num">08</span><h2 id="s8h">Security &amp; RLS</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Security protects private data, protected actions, secrets, user trust, and system integrity. RLS protects private data at the database layer.</p></div>
+        <div class="block"><div class="block-label">Principle — the two locks (Principle 3)</div>
+          <p>Every path to private data needs two locks.</p>
+          <ul class="tight">
+            <li><b>Lock 1 (backend):</b> check identity, permission, and scope before the action runs (#2, #4).</li>
+            <li><b>Lock 2 (data layer):</b> RLS and storage policies block unauthorized access even if the backend makes a mistake.</li>
+          </ul>
+          <p>This section is where every other section's "first lock / second lock" promise is defined and enforced.</p>
+        </div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>The two-locks doctrine, RLS and storage-policy authoring, data isolation, input safety, CORS, security headers, dependency security, and adversarial testing. Auth definitions (#4), secret rotation and HTTPS mechanics (#5), backend access checks (#2), brute-force limits (#9), and the logging mechanism (#12) live elsewhere and are referenced, not restated.</p></div>
+        <div class="block"><div class="block-label">Private data</div><p>Private data is user-, team-, or business-owned, sensitive, internal, paid, restricted, or non-public. Collect and retain the least sensitive data necessary — data you never store can't leak.</p></div>
+        <div class="block"><div class="block-label">Gate</div><p>A gate is any path that can read, list, search, create, update, delete, upload, download, export, process, or expose private data. Every gate must be locked.</p></div>
+        <div class="block"><div class="block-label">Data isolation (why two locks exist)</div><p>User A must never see User B's private data. When it happens, the cause is missing or bad RLS, a missing backend scope check, an unsafe query, or trusting a user-supplied ID from the frontend (#2). Enforce owner/team/project/workspace/organization scope in both backend queries and RLS — that overlap is the point.</p></div>
+        <div class="block"><div class="block-label">RLS</div><p>Every private table has RLS enabled (or equivalent) before any user touches it. RLS defaults to deny; it allows access only when identity, permission, and scope are valid. RLS must protect read, list, create, update, and delete.</p></div>
+        <div class="block"><div class="block-label">Storage policies</div><p>Storage policies must protect upload, download, update, delete, and public/private file access. Private files are not public by default. Use signed URLs, protected delivery, or storage policies; check owner, scope, permission, file type, file size, and path; never trust file names, paths, or upload metadata from the client.</p></div>
+        <div class="block"><div class="block-label">Input safety</div><p>Treat all user input as data, never code. Validate before processing. Escape user content before displaying it (prevents XSS). Use safe/parameterized queries — never build a query by joining user input into query text (prevents injection). If typing script into a field makes an alert pop up, that is a security bug — fix it before shipping.</p></div>
+        <div class="block"><div class="block-label">Dependency security</div><p>Your dependencies can be the vulnerability. Keep packages patched and scan them for known vulnerabilities; a known-vulnerable dependency is an unlocked gate. Run the scan as a required CI check (#7) alongside secret scanning.</p></div>
+        <div class="block"><div class="block-label">HTTPS</div><p>HTTPS is a security requirement for every page, API call, webhook, file, and redirect — not optional. Verify the live URL is https with no mixed HTTP assets. SSL setup and fixes are in #5.</p></div>
+        <div class="block"><div class="block-label">CORS</div><p>CORS controls which websites may call the API from a browser. Allow only approved domains; never use open CORS for private APIs. CORS is not a replacement for authentication, authorization, backend checks, or RLS.</p></div>
+        <div class="block"><div class="block-label">Security headers</div><p>Add headers so the browser helps block common attacks. At minimum review: <code>Content-Security-Policy</code>, <code>Strict-Transport-Security</code>, <code>X-Frame-Options</code> (or frame-ancestors), <code>X-Content-Type-Options</code>, <code>Referrer-Policy</code>, <code>Permissions-Policy</code>.</p></div>
+        <div class="block"><div class="block-label">Secrets</div><p>Never put keys, passwords, service-role keys, private keys, tokens, or credentials in code — they belong in secure environment variables. A secret found in code is leaked; follow the rotation steps in #5.</p></div>
+        <div class="block"><div class="block-label">Admin &amp; RLS bypass</div><p>Admin actions still check identity, role, permission, and scope, and are logged (policy in #4, logging in #12). Service-role keys and privileged credentials never reach the frontend. Bypassing RLS is high-risk: it must be deliberate, limited, reviewed, and logged.</p></div>
+        <div class="block"><div class="block-label">Security event logging</div><p>Log security-significant events (mechanism in #12): login failure, permission denied, role change, member added/removed, admin action, export, delete, webhook rejected, RLS failure, suspicious repeated access. Logs must never contain passwords, tokens, keys, secrets, or sensitive private content.</p></div>
+        <div class="block"><div class="block-label">Attack test matrix — try to break it, then confirm denial is real</div><p>Test as: logged-out user, correct user, wrong user, wrong team, wrong role, removed member, expired session. Via: direct API request, direct database access, direct file URL, admin-only action, background job, webhook, export/bulk access. With: script input, SQL-like input, unapproved website origin. Verify every denied case is actually blocked. Never test only the happy path.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Specify to AI: private data, roles, ownership rules, team/project scope, allowed vs denied actions, protected pages and endpoints, RLS rules, storage rules, backend checks, admin rules, service-key limits, CORS rules, HTTPS requirement, security headers, dependency-scan requirement, and the allowed/denied test cases. Then run the attack test matrix with multiple users, direct calls, direct file access, strange input, and unapproved origins.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Every private-data gate has both locks: backend check (#2) and data-layer rule</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>RLS enabled and default-deny on every private table</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Storage policies protect every file operation; private files not public</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Input validated, escaped, and queried safely (no XSS, no injection)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Dependencies patched and scanned for known vulnerabilities (#7)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>HTTPS enforced (#5); CORS locked to approved domains; security headers set</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Secrets out of code and out of logs; rotated if leaked (#5)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>RLS bypass and admin actions limited, reviewed, and logged (#4, #12)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Attack test matrix passed; denied access confirmed blocked</span></label></li>
+          </ul>
+        </div>
+        <div class="finalrule">Final rule — Lock every gate.</div>
+      </section>
+
+      <!-- 9. RATE LIMITING -->
+      <section id="s9" class="sec" aria-labelledby="s9h">
+        <div class="sec-head"><span class="sec-num">09</span><h2 id="s9h">Rate Limiting</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Rate limiting protects the app from abuse, brute-force attacks, spam, scraping, runaway costs, broken loops, and overload.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Every expensive, sensitive, public, or abuse-prone action must have a server-side limit on how often it can fire.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>The request-frequency limit itself — the mechanism that caps how often an action runs. The cost ceiling it protects (billing alerts, usage caps, spend-at-scale) is owned by Cloud &amp; Compute (#6); rate limiting is one tool that defends that ceiling, not the place it is defined.</p></div>
+        <div class="block"><div class="block-label">Enforce server-side</div><p>Rate limits are enforced server-side. Frontend delays, disabled buttons, and hidden UI are not protection — users must not bypass a limit by calling the API directly (Principle 4).</p></div>
+        <div class="block"><div class="block-label">Shared limit store (the rule that silently fails — Principle 8)</div><p>On serverless, workers, multiple regions, or multiple servers, requests hit different machines. A limit kept in one machine's local memory counts each machine separately and protects nothing. Use a shared limit store so the count is global. This failure is invisible in testing and only appears under real traffic — design for it before launch.</p></div>
+        <div class="block"><div class="block-label">Actions to limit</div><p>Login, signup, password reset, email verification, search, autocomplete, uploads, downloads, exports, form submissions, payment actions, AI calls, paid API calls, email and SMS sending, public APIs, webhooks, admin actions, background-job triggers.</p></div>
+        <div class="block"><div class="block-label">Limit key — match the key to the risk</div><p>Key by user ID, IP, session, API key, email, device, route, action type, or team/workspace. Use several keys together when one is not enough (e.g. login limited by IP and email and account).</p></div>
+        <div class="block"><div class="block-label">Runaway-call protection</div><p>Never call paid APIs on every keystroke, page load, render, or refresh unless necessary. For search, autocomplete, AI, and external APIs, use debouncing, caching (#10), request limits, and a minimum input length. A 20-character search should not create 20 paid API calls. (The spend ceiling and billing alerts behind this are #6.)</p></div>
+        <div class="block"><div class="block-label">Login protection</div><p>Login must be rate-limited — by IP, email, device, and account where possible — with stricter limits after repeated failures, so attackers cannot try unlimited passwords. (Failed login must not reveal whether the email exists — that rule is #4.)</p></div>
+        <div class="block"><div class="block-label">Throttle vs block</div><p>Throttle when a normal user may briefly exceed a limit — slow them, don't cut them off. Block when the action is sensitive, abusive, expensive, or clearly unsafe. Either way, return a clear 429.</p></div>
+        <div class="block"><div class="block-label">429 response &amp; user experience</div><p>429 means "Too Many Requests." Return a clear message: what happened and, when possible, when to retry. Never fail silently.</p></div>
+        <div class="block"><div class="block-label">Retry with backoff</div><p>When a call returns 429, wait before retrying and use backoff. Never retry in a tight loop — instant retries make the problem worse and can raise cost.</p></div>
+        <div class="block"><div class="block-label">Exemptions</div><p>Any bypass (internal jobs, trusted webhooks, admin tools) must be explicit, scoped, and logged — never a blanket "skip limits if internal," which becomes an attack path.</p></div>
+        <div class="block"><div class="block-label">Monitoring &amp; diagnosis</div><p>After launch, track: request volume, 429 count, blocked users, top routes, top users/IPs/keys, paid-API usage, cost per route, retry count, failed logins, and spike or abuse patterns. When legitimate users hit 429, check the same signals — route, user, IP, time window, count, frontend duplicate calls, retry loops, shared-IP issues, bots — and adjust the limit only after confirming the traffic is genuine.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Specify to AI: routes to limit, limit key, request limit, time window, cost risk, whether a paid API is involved, debouncing and caching needs, retry behavior, 429 response, exemptions, logging, and test cases. Test that limits actually trigger, across machines, and that normal use is not blocked.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Every expensive/sensitive/public/abuse-prone action limited server-side</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Limits use a shared store across serverless/workers/regions</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Right key(s) chosen per risk; multiple keys where one is weak</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Login limited and hardened against brute force</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Paid calls debounced/cached; no per-keystroke spend (ceiling in #6)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>429s return a clear message; retries use backoff</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Exemptions explicit, scoped, and logged</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Monitoring in place; normal users not blocked by over-strict limits</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 10. CACHING & CDN -->
+      <section id="s10" class="sec" aria-labelledby="s10h">
+        <div class="sec-head"><span class="sec-num">10</span><h2 id="s10h">Caching &amp; CDN</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Caching makes repeat visits faster and cheaper. CDN serves public files from locations closer to users.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Cache only what is safe to reuse. Never let caching expose private data or serve dangerously stale data. When unsure, do not cache.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>Caching (reuse, invalidation, scoping), CDN/edge delivery, and measuring real-world load performance. Frontend code-level performance is #1; private-file security and signed URLs are #2/#3/#8; the cost ceiling caching defends is #6.</p></div>
+        <div class="block"><div class="block-label">Static vs dynamic</div><p>Static content is the same for everyone and is usually safe to cache aggressively: public images, CSS, JavaScript, fonts, icons, marketing pages, public catalog pages. Dynamic content changes by user, role, permission, or account and must not be publicly shared: dashboards, account pages, private files, admin pages, payment data, permission-based API responses. If data depends on who the user is, cache it carefully or not at all.</p></div>
+        <div class="block"><div class="block-label">Private cache safety (the security crown jewel — Principle 3)</div><p>User A must never receive User B's cached data; Team A must never receive Team B's. If cached data depends on user, team, project, role, plan, or permission, the cache key must include that scope. Never mark a user-specific response as publicly cacheable — a shared cache or CDN will then serve one user's private page to everyone. Never cache auth responses, permission checks, account data, or sensitive records publicly. This is the caching half of the two-locks doctrine (#8).</p></div>
+        <div class="block"><div class="block-label">Static asset caching</div><p>Static assets must not be re-downloaded on every visit. Give CSS, JavaScript, fonts, and images hashed/versioned filenames and a long immutable cache: <code>Cache-Control: public, max-age=31536000, immutable</code>. Give HTML and the app shell short caching or revalidation, so a new deploy reaches users instead of stale files. Verify in the browser Network tab: Cache-Control headers, 304 responses, "from memory/disk cache," and smaller repeat-load downloads. Repeat visits should be faster.</p></div>
+        <div class="block"><div class="block-label">Invalidation</div><p>Cached data must refresh when its source changes: records, files, permissions, roles, memberships, prices, availability, publishing status, security settings. Caching without invalidation serves stale or wrong data. If a public asset changes at the same URL (not a new hashed name), purge the CDN so the edge stops serving the old one.</p></div>
+        <div class="block"><div class="block-label">Cache stampede (invisible until load)</div><p>When a popular cached item expires, many requests can miss at once and hit the database or origin together — the spike can overload the very thing caching was protecting. Coordinate the refresh: one request rebuilds the value while others wait or serve the last good value. Design for this before launch; it only appears under real traffic.</p></div>
+        <div class="block"><div class="block-label">Images &amp; delivery</div><p>Optimize images before delivery (also a frontend rule, #1): resize to the size actually shown, convert large PNG/JPEG to WebP or AVIF when suitable, use responsive sizes, lazy-load below-the-fold images, preload only the critical hero. Never serve a full-size image where a thumbnail works. Images are usually the biggest cause of a slow first load — fix size, format, and lazy-loading first.</p></div>
+        <div class="block"><div class="block-label">CDN</div><p>Use a CDN for public assets and public pages that benefit from global delivery. Verify it is active via response headers, hosting/CDN analytics, and load times from different regions. If a distant user reports slowness, check whether files come from a nearby edge or fall back to origin. CDN is not security — private files need signed URLs, protected delivery, or storage policies (#2/#3/#8).</p></div>
+        <div class="block"><div class="block-label">Measure performance</div>
+          <p>Never judge performance from a fast laptop on local internet — test the real deployed app. Run Lighthouse on the deployed URL and check:</p>
+          <ul class="tight">
+            <li><b>LCP:</b> how long the main visible content takes to load.</li>
+            <li><b>TBT:</b> how much JavaScript blocks the page from responding.</li>
+            <li><b>CLS:</b> whether the page jumps while loading.</li>
+          </ul>
+          <p>Also use the Network tab, hosting analytics, CDN analytics, and real-user monitoring when available.</p>
+        </div>
+        <div class="block"><div class="block-label">Cost benefit</div><p>Caching should reduce repeated database calls, paid API calls, AI calls, image processing, and slow computations — don't re-call an expensive service when recent safe data exists. (The spend ceiling this protects is #6; runaway-call protection is #9.)</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Specify to AI: what can be cached, what must never be cached, who the data belongs to, how long the cache lasts, what clears it, public vs private, whether permissions affect the response, which images need optimization, which assets need cache headers, how cache-busting works, how to verify CDN delivery, and how to test for stale data and private-data leaks. Test for stale data and cross-user leaks directly.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Static vs dynamic decided; private data never publicly cached</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Cache keys include user/team/role scope where responses differ</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No user-specific response marked publicly cacheable (CDN fan-out)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Static assets hashed + long-cached; HTML revalidates on new deploy</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Invalidation exists; CDN purged when same-URL assets change</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Cache-stampede refresh coordinated</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Images optimized; first load not image-bound (#1)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>CDN delivery verified; CDN treated as delivery, not security (#8)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Lighthouse checked on the deployed app; repeat visits faster</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Caching cannot bypass Security &amp; RLS (#8)</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 11. LOAD BALANCING & SCALING -->
+      <section id="s11" class="sec" aria-labelledby="s11h">
+        <div class="sec-head"><span class="sec-num">11</span><h2 id="s11h">Load Balancing &amp; Scaling</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Load balancing spreads traffic across healthy app instances. Scaling keeps the app fast, stable, and safe as usage grows.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>More traffic must not break performance, sessions, data, security, or cost control.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>Distributing traffic across instances, and the statefulness problems that only appear once more than one instance exists. The tools scaling leans on are defined elsewhere — caching/CDN (#10), rate limits (#9), background jobs and cost ceiling (#6), deploy/rollout (#5) — and referenced here, not restated.</p></div>
+        <div class="block"><div class="block-label">The stateless rule (the heart of this section — Principle 8)</div><p>App instances must be stateless and interchangeable: any instance can handle any request, because nothing important lives only inside one copy. The moment a second copy exists, anything stored inside a single server — sessions, carts, uploads, locks, rate-limit counts, job state, in-memory cache — is broken unless it moves to shared storage. If a user logs in, moves to another server, and loses their cart, state is in the wrong place. (Shared rate-limit store is #9; connection pooling is below.)</p></div>
+        <div class="block"><div class="block-label">Load balancer &amp; health checks</div><p>A load balancer sends each request to an available healthy instance. If one server is overloaded while another sits idle, distribution is missing or misconfigured. The balancer must know which instances are healthy — and the health check must confirm the app can truly serve (e.g. its database is reachable), not merely that the process is alive. A shallow check that returns 200 while the app is actually broken is worse than none. Health checks must not expose secrets, logs, private data, or internals.</p></div>
+        <div class="block"><div class="block-label">Scaling direction</div><p>Vertical = a bigger server. Horizontal = more app copies. Use vertical when one simple app just needs more CPU or memory. Use horizontal to spread traffic across instances — the safer path for real production growth, but only once sessions, files, rate limits, jobs, and database connections are shared correctly (see the stateless rule).</p></div>
+        <div class="block"><div class="block-label">Autoscaling</div><p>Autoscaling adds or removes capacity on real signals: response time, CPU, memory, request volume, queue depth, error rate, function duration, database load. It must have a minimum, a maximum, and a cost cap. If the app scales to twenty copies with zero users, a trigger, minimum count, background job, or health check is wrong. Never assume it works because AI configured it — load-test it, watch instances rise, watch them fall after traffic drops, and check logs, cost, and stability.</p></div>
+        <div class="block"><div class="block-label">Graceful shutdown</div><p>When autoscaling removes an instance, or a deploy replaces one, it must stop accepting new requests and finish in-flight ones before exiting (connection draining). Without this, scaling down and routine deploys drop live users mid-action. (Deploy rollout is #5; uptime is #13.)</p></div>
+        <div class="block"><div class="block-label">Database limits</div><p>Scaling app servers does not scale the database. Watch its CPU, memory, slow queries, indexes, locks, and especially connection count against the connection limit. Use connection pooling — twenty app copies each opening their own connections can exhaust the limit and crash the database (the failure first flagged in #6).</p></div>
+        <div class="block"><div class="block-label">Background work</div><p>Move slow, heavy, retryable, or scheduled work out of the user-facing request path so it doesn't block under load — emails, file/image processing, imports, exports, reports, AI, webhooks. (Jobs, queues, retry-safety, and dead-lettering are defined in #6.)</p></div>
+        <div class="block"><div class="block-label">Performance targets</div><p>Define acceptable limits for key flows, or scaling cannot be judged. Track page load, API response, search speed, upload time, job time, error rate, concurrent users, server CPU/memory, and database load.</p></div>
+        <div class="block"><div class="block-label">Cost of scale</div><p>Scaling increases cost. Never autoscale without a maximum. Set alerts for instance count, queue growth, and total spend (full cost ceiling and billing alerts in #6).</p></div>
+        <div class="block"><div class="block-label">Reliability</div><p>Scaling must preserve auth, permissions, sessions, rate limits, logs, and data consistency. No scaled path may bypass Backend/API (#2), Auth (#4), Database (#3), Rate Limiting (#9), or Security &amp; RLS (#8).</p></div>
+        <div class="block"><div class="block-label">Platform fit</div><p>Prefer a managed platform that handles load balancing, scaling, SSL, and deploys automatically; don't run servers yourself unless the app truly needs that control (#5).</p></div>
+        <div class="block"><div class="block-label">Testing</div><p>Load-test with realistic traffic before launch: many users, large lists, search, uploads, background jobs, database load, session behavior across instances, permission checks, rate limits, health checks, autoscaling up and down, overload behavior, and recovery after traffic drops.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Specify to AI: expected and peak traffic, current bottleneck, performance targets, load-balancer behavior, health-check depth, session storage, database connection limits, caching, queues, rate limits, autoscaling triggers, min/max instances, cost cap, graceful shutdown, monitoring, and load-test cases. Load-test the config.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>App instances stateless; all shared state in shared storage</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Health checks deep enough to catch a broken-but-alive app</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Sessions, carts, locks, and rate-limit counts survive instance switches</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Database connection limits handled; pooling in place (#6)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Autoscaling load-tested up and down; min, max, and cost cap set</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Graceful shutdown drains in-flight requests on scale-down and deploy</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Heavy work moved off the request path (#6)</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Performance targets defined and met under realistic load</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No scaled path bypasses Auth, Backend, DB, Rate Limiting, or RLS</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 12. ERROR TRACKING & LOGS -->
+      <section id="s12" class="sec" aria-labelledby="s12h">
+        <div class="sec-head"><span class="sec-num">12</span><h2 id="s12h">Error Tracking &amp; Logs</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Error tracking shows what broke. Logs explain what happened before, during, and after. Alerts tell a human in time to act.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>Production failures must be visible, searchable, safe, grouped, prioritized, and actionable. No error reports does not mean no bugs — it may mean no tracking, no alerts, or broken reporting.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>Capturing failures, recording what happened, and alerting when it's serious. Other sections name which events matter (security events in #8, deploy failures in #5, cost signals in #6); the logging and alerting mechanism is defined here.</p></div>
+        <div class="block"><div class="block-label">Tooling</div><p>Use a real error-tracking tool (Sentry or equivalent) across frontend, backend, API, and background jobs. Console logs are not enough — real logs persist, have severity levels, and are searchable.</p></div>
+        <div class="block"><div class="block-label">User-facing errors</div><p>Users must never see a blank white screen. Use error boundaries, fallback screens, and clear messages so users know something went wrong and what to do next. Never show stack traces, secrets, database errors, or internal details to users. (This is the resilience promise from #1, kept here.)</p></div>
+        <div class="block"><div class="block-label">The failure signal set</div>
+          <p>One list of failures that matter, used three ways below: frontend crashes, backend/API errors, database errors, auth failures, permission-denied and RLS failures, payment and checkout failures, webhook failures, background-job failures, file upload/download failures, deployment failures, third-party API failures, slow requests, rate-limit events, security-sensitive events.</p>
+          <ul class="tight">
+            <li><b>Track:</b> capture all of them.</li>
+            <li><b>Alert:</b> only the ones that need immediate human action (below).</li>
+            <li><b>Dashboard:</b> watch their rates and trends (below).</li>
+          </ul>
+        </div>
+        <div class="block"><div class="block-label">Severity</div>
+          <div class="defs">
+            <div><b>Critical</b> = outage, data loss, payment failure, login failure, security issue, or broken core flow.</div>
+            <div><b>Error</b> = failed feature or broken request.</div>
+            <div><b>Warning</b> = suspicious or recoverable.</div>
+            <div><b>Info</b> = important normal event.</div>
+          </div>
+          <p>Do not alert on everything — alert only when action is needed.</p>
+        </div>
+        <div class="block"><div class="block-label">The log record</div><p>A useful log answers: who was affected, what action failed, when, where, which route or job ran, what status code returned, which service failed, whether the user was allowed, whether data changed, and what changed recently. To answer those, include: timestamp, environment, request ID, user ID (when safe), team/project/account ID (when relevant), route or action, status code, error type, duration, input shape (never sensitive input), external service, and job/webhook ID. Without this, "checkout crashed" is a complaint, not a diagnosis.</p></div>
+        <div class="block"><div class="block-label">Request ID</div><p>Every important request carries a request ID that links the frontend error, API log, database action, background job, and external call into one traceable story.</p></div>
+        <div class="block"><div class="block-label">Source maps</div><p>Configure source maps so production reports point to real files and lines, not minified gibberish.</p></div>
+        <div class="block"><div class="block-label">Error grouping &amp; priority</div><p>Group repeated errors by root cause — 500 reports may be only 3 real bugs. Prioritize by impact, affected users, affected flow, severity, and frequency.</p></div>
+        <div class="block"><div class="block-label">Sensitive data &amp; personal data</div><p>Never log passwords, tokens, API keys, private keys, session tokens, full payment details, or sensitive private content — redact them (echoing #8). Minimize and redact personal data (emails, IPs, names) too; logging it carries legal as well as security weight. Logs are not a dumping ground.</p></div>
+        <div class="block"><div class="block-label">Retention &amp; volume</div><p>Logs cost money and have limits. Set a retention period that matches both incident need and budget — long enough to investigate a real failure, not so verbose that logging itself becomes a cost or noise problem (cost ceiling in #6).</p></div>
+        <div class="block"><div class="block-label">Alerts</div><p>Serious failures must reach a human fast — aim to know within ~5 minutes via error tracking, uptime monitoring, alert rules, and a real delivery channel (email, Slack, SMS, incident tool). Alert on the critical slice of the failure signal set: outage, error/500 spikes, payment and checkout failures, login failures, permission-denied spikes, webhook and job failures, database failures, high latency, security events. Avoid alert fatigue — if everything is urgent, nothing is.</p></div>
+        <div class="block"><div class="block-label">Dashboards</div><p>Watch production health: error rate, response time, request volume, failed requests, slow and top-failing routes, affected users, job and webhook failures, login failures, database health, external-API failures.</p></div>
+        <div class="block"><div class="block-label">Debugging flow</div><p>When something breaks, ask: what changed recently, which users are affected, which route or action failed, what status code returned, what the logs say, which layer it's in (frontend, backend, database, auth, storage, third-party, deploy), and whether it's isolated or system-wide.</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>To add tracking and logs, specify: tracking tool, frontend error handling, backend/API/job/webhook logging, request-ID behavior, source-map setup, error-boundary behavior, user-facing messages, log fields, what must never be logged, retention, severity levels, alert rules, dashboard metrics, and test cases. To fix an error, give AI: error message, stack trace, user action, expected vs actual behavior, affected page or endpoint, relevant logs, and recent code changes. (A "TypeError: cannot read properties of undefined" usually means data was missing, not yet loaded, or shaped differently than expected.)</p></div>
+        <div class="block"><div class="block-label">Testing</div><p>Before launch, verify: frontend errors report, backend/API errors log, error boundaries show friendly messages, source maps make reports readable, permission-denied/webhook/job failures are logged, alerts fire for serious failures, logs are searchable by user/action/request ID/time, and logs expose no secrets or personal data.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Production errors captured across frontend, backend, API, and jobs</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Blank screens handled; users never see stack traces or internals</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Source maps make reports readable</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Logs searchable by user, action, request ID, and time</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Request IDs link a failure across every layer</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Errors grouped by root cause; severity clear</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Serious failures alert a human fast; no alert fatigue</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>No secrets or personal data in logs; retention set to need and budget</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>A user-facing failure can be traced to its real cause</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 13. AVAILABILITY & RECOVERY -->
+      <section id="s13" class="sec" aria-labelledby="s13h">
+        <div class="sec-head"><span class="sec-num">13</span><h2 id="s13h">Availability &amp; Recovery</h2></div>
+
+        <div class="block"><div class="block-label">Purpose</div><p>Availability keeps the app usable. Recovery brings it back safely after failure.</p></div>
+        <div class="block"><div class="block-label">Principle</div><p>The app must fail safely, alert quickly, recover predictably, and protect data during outages.</p></div>
+        <div class="owns"><div class="block-label">What this section owns</div><p>What happens after something breaks: backups and restore, rollback (the first move when core flows break, otherwise a fallback to a forward fix), the incident process, failing safe, and surviving a dependency outage. Failure capture and alerting are #12; health-check depth and graceful shutdown under load are #11; the deploy rollback mechanism is #5/#7 — all referenced here, used in anger.</p></div>
+        <div class="block"><div class="block-label">Recovery targets (define these first, or recovery can't be judged)</div>
+          <p>Two numbers drive every choice below:</p>
+          <ul class="tight">
+            <li>How long can the app be down? (recovery time)</li>
+            <li>How much recent data can it afford to lose? (recovery point)</li>
+          </ul>
+          <p>If the newest backup is 23 hours old, up to 23 hours of data may be lost. State both targets, then make backups, restore, and rollback actually meet them — more frequent backups or point-in-time recovery shrink data loss; a tested fast restore shrinks downtime.</p>
+        </div>
+        <div class="block"><div class="block-label">External monitoring</div><p>Don't wait for users to report outages — and don't rely only on monitoring that runs inside your own app, since a dead server can't report that it's dead. Use external uptime monitoring that checks the live app every 1–2 minutes from outside and alerts a responsible human within minutes via email, SMS, Slack, or an incident tool. (Error capture and alert fatigue are handled in #12.)</p></div>
+        <div class="block"><div class="block-label">Health checks</div><p>A health check must prove more than "the server responds": critical pages load, the API responds, the database connects, auth works, storage is reachable, core flows aren't broken. A shallow check can say "up" while users can't use the app. Health checks must not expose secrets, private data, logs, or internals. (Depth shared with #11.)</p></div>
+        <div class="block"><div class="block-label">Critical flows to watch</div><p>Login, signup, dashboard load, checkout/payments, database access, storage access, API health, background jobs, webhooks, deployments, third-party services.</p></div>
+        <div class="block"><div class="block-label">Backups</div><p>Automated backups are required, covering database data and schema, storage metadata, migrations, RLS and storage policies, and critical configuration. Store them away from the live system — a separate region or provider — because a backup on the same server or region can fail with the thing it was meant to save.</p></div>
+        <div class="block"><div class="block-label">Restore is the real test</div><p>A backup is not proven until it has been restored successfully. Test restores before an emergency. Backups that have run for six months but were never restored tell you nothing about whether recovery works.</p></div>
+        <div class="block"><div class="block-label">Rollback decision</div><p>When login, payments, private data, database integrity, or core flows are broken, the fastest safe move is to restore the previous working deployment — roll back first, get users safe, then fix the bad release. (Rollback mechanism in #5/#7.)</p></div>
+        <div class="block"><div class="block-label">Fail safe (Principle 6)</div><p>When the system is unsure, fail closed. Do not expose private data, skip permission checks, process payments twice, corrupt records, silently lose user work, or show false success. A broken feature shows a clear error, never a blank screen (#1).</p></div>
+        <div class="block"><div class="block-label">Dependency outage plan</div><p>Know what the app depends on: hosting, database, storage, auth, payment, email, AI, DNS, and external APIs. For each, decide its failure behavior so one vendor's outage doesn't become yours: degrade gracefully where safe (email provider down → queue and retry, don't crash signup), and fail closed where safety demands it (payment result uncertain → never assume success). Every external call times out (#6); permanent failures dead-letter, not vanish (#6).</p></div>
+        <div class="block"><div class="block-label">Incident process</div><p>A simple flow: detect, stop the damage, restore service, check data integrity, communicate with affected users, document the cause, prevent recurrence.</p></div>
+        <div class="block"><div class="block-label">User communication</div><p>In a serious outage, silence damages trust. Have a status page, email, or support message ready that tells users what's broken, what's being done, and when the next update comes.</p></div>
+        <div class="block"><div class="block-label">Runbooks</div><p>Keep short, tested recovery steps for common failures: bad deployment / rollback, database restore, storage restore, failed migration, deleted data, secret leak (#5), payment outage, auth outage, high traffic (#11), provider outage. For deleted data with no backup, recovery is limited — check database logs, provider recovery tools, replicas, cached exports, or support; if none exist, the data may be gone for good. Prevent it with automated backups, tested restores, migration review, restricted production access, and deletion safeguards (#3).</p></div>
+        <div class="block"><div class="block-label">AI workflow</div><p>Specify to AI: critical flows, external uptime monitoring, alert target, health-check depth, recovery-time and recovery-point targets, backup schedule and off-site location, restore-test requirement, rollback decision rule, dependency failure behavior, user-communication plan, and recovery test cases. Security and RLS must remain enforced after recovery.</p></div>
+
+        <div class="gate" data-gate>
+          <div class="gate-head"><div class="gl">Ship Gate <small>do not ship unless all are true</small></div><div class="gate-prog" data-prog></div></div>
+          <ul>
+            <li><label class="gate-item"><input type="checkbox"><span>Recovery-time and recovery-point targets stated, and the plan meets them</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>External uptime monitoring alerts a human within minutes</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Health checks test real app function, not just "server responds"</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Backups automated, complete, and stored off-site</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>A restore has actually been performed and verified</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Rollback is fast; the rollback-first rule is clear</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>System fails closed when unsure; no blank screens, no false success</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Each dependency has a defined failure behavior</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Written incident process and tested runbooks exist</span></label></li>
+            <li><label class="gate-item"><input type="checkbox"><span>Security &amp; RLS still enforced after any recovery</span></label></li>
+          </ul>
+        </div>
+      </section>
+
+      <footer>
+        CODE-X SOP · Full-Stack Software Protocol · v1.0<br>
+        <b>Numbering is frozen.</b> Every cross-reference contains a bare #N (1–13); the index maps number to name.<br>
+        Per-task loading: Core Principles + active section + its referenced sections + ship gate.<br>
+        Pre-Ship map is a scannable overview; the binding checklist is each section's own ship gate.<br>
+        Checkbox state is for this session only and is not saved.
+      </footer>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- Section index (build nav from sections) ----
+  var sections = [
+    {id:"s0",  n:"00", t:"Core Principles"},
+    {id:"preship", n:"✓", t:"Pre-Ship Map"},
+    {id:"s1",  n:"01", t:"Frontend"},
+    {id:"s2",  n:"02", t:"Backend / API"},
+    {id:"s3",  n:"03", t:"Database & Storage"},
+    {id:"s4",  n:"04", t:"Auth & Permissions"},
+    {id:"s5",  n:"05", t:"Hosting & Deployment"},
+    {id:"s6",  n:"06", t:"Cloud & Compute"},
+    {id:"s7",  n:"07", t:"CI/CD & Version Control"},
+    {id:"s8",  n:"08", t:"Security & RLS"},
+    {id:"s9",  n:"09", t:"Rate Limiting"},
+    {id:"s10", n:"10", t:"Caching & CDN"},
+    {id:"s11", n:"11", t:"Load Balancing & Scaling"},
+    {id:"s12", n:"12", t:"Error Tracking & Logs"},
+    {id:"s13", n:"13", t:"Availability & Recovery"}
+  ];
+
+  function buildNav(container, isMobile){
+    if(!container) return;
+    sections.forEach(function(s){
+      var a = document.createElement("a");
+      a.href = "#"+s.id;
+      a.setAttribute("data-target", s.id);
+      a.innerHTML = '<span class="n">'+s.n+'</span><span class="tt">'+s.t+'</span>';
+      if(isMobile){
+        a.addEventListener("click", function(){
+          var d = container.closest("details"); if(d) d.open = false;
+        });
+      }
+      container.appendChild(a);
+    });
+  }
+  var toc = document.getElementById("toc");
+  var mobnav = document.getElementById("mobnav");
+  buildNav(toc, false);
+  buildNav(mobnav, true);
+
+  // ---- Active-section highlight on scroll ----
+  var links = toc ? toc.querySelectorAll("a") : [];
+  function setActive(id){
+    links.forEach(function(a){
+      var on = a.getAttribute("data-target") === id;
+      a.classList.toggle("active", on);
+      if(on) a.setAttribute("aria-current","true"); else a.removeAttribute("aria-current");
+    });
+  }
+  if("IntersectionObserver" in window){
+    var seen = {};
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ seen[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+      var best=null, bestR=0;
+      Object.keys(seen).forEach(function(k){ if(seen[k] > bestR){ bestR = seen[k]; best = k; } });
+      if(best) setActive(best);
+    }, {rootMargin:"-15% 0px -70% 0px", threshold:[0,.25,.5,1]});
+    sections.forEach(function(s){ var el=document.getElementById(s.id); if(el) io.observe(el); });
+  }
+
+  // ---- Ship-gate progress counters ----
+  document.querySelectorAll("[data-gate]").forEach(function(gate){
+    var boxes = gate.querySelectorAll('input[type="checkbox"]');
+    var prog  = gate.querySelector("[data-prog]");
+    function update(){
+      var done=0; boxes.forEach(function(b){ if(b.checked) done++; });
+      if(prog) prog.textContent = done + " / " + boxes.length;
+    }
+    boxes.forEach(function(b){ b.addEventListener("change", update); });
+    update();
+  });
+
+  // ---- Linkify cross-references (#1..#13) as a progressive enhancement ----
+  var idForNum = {};
+  sections.forEach(function(s){ if(s.id!=="s0"){ idForNum[parseInt(s.n,10)] = s.id; } });
+  var refRe = /#(1[0-3]|[1-9])\b/g;
+  var skip = {A:1, CODE:1, SCRIPT:1, STYLE:1, INPUT:1, BUTTON:1, SUMMARY:1};
+
+  function linkify(root){
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode:function(node){
+        if(!node.nodeValue || node.nodeValue.indexOf("#") === -1) return NodeFilter.FILTER_REJECT;
+        var p = node.parentNode;
+        while(p && p !== root){
+          if(skip[p.nodeName]) return NodeFilter.FILTER_REJECT;
+          p = p.parentNode;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var targets = [], n;
+    while((n = walker.nextNode())){ if(refRe.test(n.nodeValue)){ refRe.lastIndex=0; targets.push(n); } }
+    targets.forEach(function(node){
+      var frag = document.createDocumentFragment();
+      var text = node.nodeValue, last = 0, m;
+      refRe.lastIndex = 0;
+      while((m = refRe.exec(text))){
+        var num = parseInt(m[1],10), tid = idForNum[num];
+        if(!tid) continue;
+        if(m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        var a = document.createElement("a");
+        a.href = "#"+tid; a.className = "ref-link"; a.textContent = m[0];
+        frag.appendChild(a);
+        last = m.index + m[0].length;
+      }
+      if(last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+  document.querySelectorAll("main .block, .owns, .principle p, .finalrule, .frozen, footer").forEach(linkify);
+})();
+</script>
+</body>
+</html>

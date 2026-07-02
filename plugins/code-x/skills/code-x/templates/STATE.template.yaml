@@ -4,7 +4,7 @@
 project:              # project slug (e.g. sample)
 protocol_stamp:       # Code-X V1   (must match this protocol — NEVER mix with v0.13 in one project)
 
-current_stage:        # PLANNING_STUDIO | BUILD_FACTORY | FIXING_STAGE  (FIXING_STAGE = F-PROP-001 preserve-posture repair; needs a fixing_stage seat in BUILD-ENGINE-PROFILES)
+current_stage:        # PLANNING_STUDIO | BUILD_FACTORY | FIXING_STAGE | AUDIT_STAGE  (FIXING_STAGE = F-PROP-001 preserve-posture repair, needs a fixing_stage seat in BUILD-ENGINE-PROFILES; AUDIT_STAGE = A-PROP-001 verify-the-build-against-the-SOP stage, needs an audit_stage seat)
 current_mode:         # MODE_A_UI | MODULE_BUILD | REVIEW | FIX | FINAL_READY | PROOF
 current_card:         # id of the ONE work-order in play (e.g. BUILD-003) — or null
 current_module:       # (V1.10) module_id in play — or null

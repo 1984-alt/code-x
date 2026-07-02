@@ -72,7 +72,7 @@ never a capture. (The lock-side binding + the side-by-side CEO ACCEPT receipt li
 ## Piece 2 — Completeness-audit gate (fresh cold reader)
 
 **When:** after all packet docs are drafted, **BEFORE** CEO business-logic validation and
-BEFORE the packet freezes / the Card Compiler cuts the deck. Origin scar: a live-production build —
+BEFORE the packet freezes / the Card Compiler cuts the deck. Origin scar: a live-production money app v2 —
 completeness gaps surfaced only during CEO validation; "looks done but isn't" wasted the
 CEO's time.
 
@@ -192,6 +192,17 @@ rejects a build-mode session without it (P2) and flags a hash that no longer mat
 live standard (drift). Honest scope: proves WHICH version was acknowledged, not that it
 was internalized. Packet coverage-map row 20 names the standard + any project deltas.
 [RULE:builder-standard-session-read]
+
+## Piece 6 — SOP coverage map (v1.22, PBAF-PROP-001)
+
+`sop-coverage-map.yaml` lives **INSIDE the frozen packet dir** (same inside-the-hash pattern
+as Piece 1's `coverage-map.yaml`). Schema per row: `id` (1–13, the SOP's frozen layer
+numbering) · `verdict: APPLIES | PARTIAL | N_A` · `driving_fact:` (required when verdict is
+`N_A` — the named build-fact A1–A9 that drives the N/A; PBAF-PROP-001 Rule 1, zero-ambiguity).
+All 13 layers must be present. The map is derived from the 9 build-facts per
+`SOP/APPLICABILITY-MODEL.md` — a lookup, not a debate; the Audit stage independently
+re-derives it (A-PROP-001 Lever B) so mislabeling a fact is a checkable defect, not a valid
+N/A. Enforced by `cx check packet` (`SOP-BIND-COVERAGE-MAP`).
 
 ## Enforcement (BUILT 2026-06-10 — binds BY CHECKER)
 

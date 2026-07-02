@@ -1,0 +1,5 @@
+builder_family: claude
+receipts:
+  - {stage: coderabbit, family: coderabbit, order: 1, artifact: as_e2_no_https/receipt.txt, sha256: 46bcccae4055e792bd0cd086995f6ecce9ae16803a90375595bdc9be0da54a98, verdict: PASS, reviewed_ref: BUILD-001}
+  - {stage: self_review, family: claude, order: 2, artifact: as_e2_no_https/receipt.txt, sha256: 46bcccae4055e792bd0cd086995f6ecce9ae16803a90375595bdc9be0da54a98, verdict: PASS, reviewed_ref: BUILD-001}
+  - {stage: cross_family, family: gpt, order: 3, artifact: as_e2_no_https/receipt.txt, sha256: 46bcccae4055e792bd0cd086995f6ecce9ae16803a90375595bdc9be0da54a98, verdict: PASS, reviewed_ref: BUILD-001}

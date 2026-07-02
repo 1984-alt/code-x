@@ -2,7 +2,7 @@ id: BUILD-W1-001
 mode: MODULE_BUILD
 actor: codex
 source_map:
-  locked_packet_hash: 0700ed8913e9444a22fe038b465dc03f174529e3e906c11a4741e3e9b679015a
+  locked_packet_hash: b5b51f62e4b2ab17a857eed37c494178ff4701be4a0e9a3f3f80cb870f0aed8b
   source_sections:
     - file: requirements-manifest.yaml
       section: REQ-001

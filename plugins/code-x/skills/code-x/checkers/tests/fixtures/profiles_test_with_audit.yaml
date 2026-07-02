@@ -1,0 +1,21 @@
+# Test profiles WITH an audit_stage seat — the GOOD fixture for AUDIT-STAGE-SEAT-PROFILE. A separate
+# file (NOT profiles_test.yaml) so the seatless BAD case keeps biting and the pinned profiles_hash in
+# card fixtures stays stable.
+version: 1.0
+status: TEST_PIN
+
+limits:
+  max_parallel_subagents: 4
+  max_depth: 1
+  recursive_fanout: forbidden
+
+orchestrator:
+  planning_studio:
+    claude_code: { model: opus, effort: max }
+    codex_app:   { model: gpt-5.5, effort: high }
+  build_factory:
+    claude_code: { model: opus, effort: max }
+    codex_app:   { model: gpt-5.5, effort: medium }
+  audit_stage:
+    claude_code: { model: fable, effort: high }
+    codex_app:   { model: gpt-5.5, effort: high }

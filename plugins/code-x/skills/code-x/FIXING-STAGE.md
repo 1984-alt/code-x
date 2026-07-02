@@ -1,20 +1,27 @@
-# Code-X V1 — FIXING-STAGE.md (the 3rd stage)
+# Code-X V1 — FIXING-STAGE.md (the fix stage)
 
-> Added by F-PROP-001 (fold v1.16). Code-X had two stages — **Planning** → **Building**. Fixing is
-> the third. It exists because **fixing the app drifts the app**: agents treat "fix X" as licence
+> Added by F-PROP-001 (fold v1.16). Code-X had two stages — **Planning** → **Building**. Fixing was
+> the third (v1.22 inserted Audit between Building and Fixing — A-PROP-001 — so the flow is now
+> Planning → Building → Audit → Fixing, four stages; see `START-HERE.md`). Fixing exists because
+> **fixing the app drifts the app**: agents treat "fix X" as licence
 > to "improve X" (over-edit), and the AI forgets a decision the CEO already made and re-asks it
 > (decision-amnesia). Building CREATES; Fixing **PRESERVES — change only the defect.**
 > Siblings: P-PROP-004 (visual reference) · B-PROP-009 (render-fidelity) · BF-PROP-007 (lock-fidelity
 > continuity). Fixing is the STAGE those locks live in; it EXTENDS BF-PROP-007's `mode: FIX`, it does
 > not parallel it. [RULE:fixing-stage-preserve-posture]
+>
+> **v1.22 update (A-PROP-001):** a 4th stage, **Audit**, was inserted between Building and Fixing
+> (posture = verify/read-only). Fixing now **receives from Audit**: an Audit `fix` disposition on a
+> ship-gate sub-item becomes a fix card here, same preserve-posture rules below. See `AUDIT-STAGE.md`.
 
-## The three stages
+## The four stages
 
 | Stage | Posture | Drift |
 |---|---|---|
 | 1 · Planning *(unchanged)* | decide + freeze | n/a |
 | 2 · Building *(unchanged)* | **CREATE** | some drift normal |
-| 3 · **Fixing** | **PRESERVE** — change only the defect | **drift = failure** |
+| 3 · **Audit** *(v1.22, A-PROP-001)* | **VERIFY** — judge, never edit | n/a (read-only) |
+| 4 · **Fixing** | **PRESERVE** — change only the defect | **drift = failure** |
 
 Two CEO design decisions (locked 2026-06-23):
 - **CEO-D-FIX-A — "every fix is Fixing."** The preserve-posture turns on for ANY fix, even mid-build
@@ -105,7 +112,7 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
   surface — not to build new locked scope. State carries `current_stage: FIXING_STAGE`; the seat cap is
   read from the `fixing_stage` profile in `BUILD-ENGINE-PROFILES.yaml`.
 - **Step 0 — freeze-baseline (forward-scope).** A lock can only be protected if it exists. For an
-  already-drifted app (live-production, Sample) the stage opens with a one-time freeze-baseline: accept current-good,
+  already-drifted app (a live-production money app, Sample) the stage opens with a one-time freeze-baseline: accept current-good,
   capture the `structure_lock` manifest, confirm the ledger. F-PROP-001 does **not** retroactively
   un-drift already-built screens — it freezes current-good and protects forward (exactly like its
   siblings).

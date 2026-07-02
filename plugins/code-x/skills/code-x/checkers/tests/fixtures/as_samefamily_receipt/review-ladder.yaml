@@ -1,0 +1,23 @@
+builder_family: claude
+receipts:
+- family: coderabbit
+  order: 1
+  stage: coderabbit
+  artifact: as_samefamily_receipt/receipt.txt
+  sha256: b19b96fd316056c434318e3717d56bfa6538bcaed5749390fec49194f35edbe6
+  verdict: PASS
+  reviewed_ref: BUILD-001
+- family: claude
+  order: 2
+  stage: self_review
+  artifact: as_samefamily_receipt/receipt.txt
+  sha256: b19b96fd316056c434318e3717d56bfa6538bcaed5749390fec49194f35edbe6
+  verdict: PASS
+  reviewed_ref: BUILD-001
+- family: claude
+  order: 3
+  stage: cross_family
+  artifact: as_samefamily_receipt/receipt.txt
+  sha256: b19b96fd316056c434318e3717d56bfa6538bcaed5749390fec49194f35edbe6
+  verdict: PASS
+  reviewed_ref: BUILD-001

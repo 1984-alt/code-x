@@ -1,0 +1,60 @@
+# GOOD state for final-ready — all findings zero, no card in flight
+
+project: sample
+protocol_stamp: Code-X V1
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card:   # null — no card in flight
+current_actor: claude-opus
+next_actor: CEO
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  items: []
+
+last_commit: deadbeef1234
+next_action: CEO review final-ready certificate
+stop_status: NONE
+
+# P1-02 gate fields — all must be explicit PASS
+module_capsules_current: PASS
+module_regressions_pass: PASS
+ceo_module_approvals_complete: PASS
+security_closeout: PASS
+recovery_proof: PASS
+
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
+
+active_build_engine: CLAUDE_CODE
+orchestrator_model: opus max
+
+# V1.10: the final cross-family review IS the ship gate (opposite family of the builder).
+# receipt = typed YAML artifact; receipt_hash = its sha12 (final-ready opens, rehashes, AND
+# cross-checks the artifact's fields against this state claim).
+final_cross_family_receipt:
+  receipt: final_cross_family_receipt_good.yaml
+  receipt_hash: 33381f508a87
+  builder_family: gpt
+  reviewer_family: claude
+  verdict: PASS
+
+# v1.12: Built-App Audit required before final-ready (BUILT-APP-AUDIT.md)
+built_app_audit:
+  status: run
+  report_ref: audit_reports/sample-2026-06-19
+  findings_dispositioned: true
+

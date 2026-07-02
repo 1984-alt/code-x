@@ -1,0 +1,1 @@
+audit receipt for as_version_control_omitted

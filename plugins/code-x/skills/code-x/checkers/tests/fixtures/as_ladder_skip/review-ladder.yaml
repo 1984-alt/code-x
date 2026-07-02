@@ -1,0 +1,9 @@
+builder_family: claude
+receipts:
+- family: gpt
+  order: 1
+  stage: cross_family
+  artifact: as_ladder_skip/receipt.txt
+  sha256: 1e9fd8e4814a8d367dd954ded4dd708775371697b7032a39cc389df9dfe59144
+  verdict: PASS
+  reviewed_ref: BUILD-001

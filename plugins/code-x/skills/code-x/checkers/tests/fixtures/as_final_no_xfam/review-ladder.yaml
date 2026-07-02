@@ -1,0 +1,6 @@
+# BAD (F7): final audit ladder with ZERO cross_family receipts and NO typed escape
+# (no xfam_capability_evidence, no ceo_decision_ref) — must bite AUDIT-STAGE-FINAL-XFAM-REQUIRED.
+builder_family: claude
+receipts:
+  - {stage: coderabbit, family: coderabbit, order: 1, artifact: as_final_no_xfam/receipt.txt, sha256: d2c8032c4f0bc2a549b352b1bd68bc6c73f5c0a0eb1c8de3d237855eb462632e, verdict: PASS, reviewed_ref: BUILD-001}
+  - {stage: self_review, family: claude, order: 2, artifact: as_final_no_xfam/receipt.txt, sha256: d2c8032c4f0bc2a549b352b1bd68bc6c73f5c0a0eb1c8de3d237855eb462632e, verdict: PASS, reviewed_ref: BUILD-001}
