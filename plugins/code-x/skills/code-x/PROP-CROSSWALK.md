@@ -55,6 +55,7 @@
 | PROP-046 | PBF-PROP-016 | Public CI runs the full eval gate (run.py-only scar) |
 | PROP-047 | P-PROP-007 | Blueprint visual parity (storyboard + prototype tab + anchor ids) |
 | PROP-048 | PBF-PROP-017 | One-line installer, dependencies pulled from official sources |
+| PROP-049 | PBF-PROP-018 | Stage routing recognized + preserve posture on accepted surfaces |
 
 ## Retired (no new id)
 

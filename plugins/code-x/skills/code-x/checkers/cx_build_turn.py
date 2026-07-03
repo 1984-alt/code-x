@@ -311,6 +311,29 @@ def cmd_build_turn(args) -> int:
     else:
         print("  [INFO] NOT_APPLICABLE structure (non-FIX card)")
 
+    # 10b. accepted-surface — the PRESERVE-POSTURE gate (PBF-PROP-018). Wired unconditionally (not
+    #      opt-in) so a card whose allowed_files touch a CEO-accepted module's files cannot skip the
+    #      gate by omitting --repo-root the way a standalone `cx check card` call could.
+    #      Built-code xfam P1-5: when ANY accepted_surface_manifest is discoverable (state-declared
+    #      rows or <repo-root>/accepted-surface-manifests), a MISSING state.wave_pre_build_baseline_sha
+    #      FAILS CLOSED — without the wave baseline the actual-diff bite (ACCEPTED-SURFACE-DIFF-
+    #      UNDECLARED) can never run, which was exactly the optional-rail hole.
+    from cx_accepted_surface import repo_has_manifests
+    baseline_sha = str(state.get("wave_pre_build_baseline_sha", "") or "").strip() if isinstance(state, dict) else ""
+    if repo_has_manifests(repo_root, state if isinstance(state, dict) else None) and not baseline_sha:
+        findings.append(("P1", "accepted-surface",
+            "accepted_surface_manifests exist but state carries no wave_pre_build_baseline_sha — "
+            "declare the wave baseline in state; without it the actual-diff bite "
+            "(ACCEPTED-SURFACE-DIFF-UNDECLARED) can never run and a broad-glob write on an accepted "
+            "surface goes unchecked (PBF-PROP-018 P1-5, fail closed)"))
+    else:
+        as_args = ["check", "accepted-surface", card_path, "--repo-root", repo_root,
+                   "--state", state_path]
+        if baseline_sha:
+            as_args += ["--baseline", baseline_sha]
+        rc, out = _run_cx(*as_args)
+        _sub("accepted-surface", rc, out, findings)
+
     # 11. verify-app — the runtime-behavior gate (B-PROP-010). The MECHANICAL guarantee ("every live_slice,
     #     once, before the CEO live-drive") is the module-acceptance PRECONDITION (validate_verify_app
     #     inside validate_live_slice_accept) — NOT this step. This build-turn step is an OPT-IN EARLY-CATCH:

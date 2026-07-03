@@ -2814,20 +2814,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_2_locked(self):
-        """The checker reports v1.22.2 as the locked canonical protocol version (CEO-D-040, P-PROP-007 patch)."""
+    def test_protocol_version_constant_marks_1_22_4_locked(self):
+        """The checker reports v1.22.4 as the locked canonical protocol version (CEO-D-042, PBF-PROP-017 patch)."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.2")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.4")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_2_locked(self):
-        """`cx --version` reports the locked v1.22.2 canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_4_locked(self):
+        """`cx --version` reports the locked v1.22.4 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.2(?!\d)")
+        self.assertRegex(out, r"V1\.22\.4(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -4674,6 +4674,158 @@ class TestCheckPacketSopCoverageMap(unittest.TestCase):
         rc, out = run_cx("check", "packet", fix("packet_bad_no_sop_coverage_map"))
         self.assertEqual(rc, 1)
         self.assertIn("SOP-BIND-COVERAGE-MAP", out)
+
+
+class TestAcceptedSurface(unittest.TestCase):
+    """PBF-PROP-018: the preserve-posture gate. In-process unit tests of the pure validators
+    (extractor + shape/coverage logic) — the full git-recompute path is exercised by the
+    contract-bite fixtures (run_contracts.py, ACCEPTED-SURFACE-* clauses)."""
+
+    def setUp(self):
+        import cx_accepted_surface as cas
+        self.cas = cas
+
+    def test_extract_capabilities_finds_every_kind(self):
+        text = (
+            '{% extends "base.html" %}\n'
+            '{% include "cowork/_ask_pane.html" %}\n'
+            '<script src="app.js"></script>\n'
+            '<script>function navSwipe() { return 1; }</script>\n'
+            '<link rel="stylesheet" href="trans.css">\n'
+            '<div data-fn="submit"></div>\n'
+            '<button onclick="doThing()">x</button>\n'
+            '<a href="/trans?lang=en">EN</a>\n'
+        )
+        caps = self.cas.extract_capabilities(text)
+        self.assertIn("extends:base.html", caps)
+        self.assertIn("include:cowork/_ask_pane.html", caps)
+        self.assertIn("script:app.js", caps)
+        self.assertIn("script-fn:navSwipe", caps)
+        self.assertIn("stylesheet:trans.css", caps)
+        self.assertIn("data-fn:submit", caps)
+        self.assertIn("handler:onclick", caps)
+        self.assertIn("link-query:/trans?lang=en", caps)
+
+    def test_manifest_required_bites_with_no_contract_or_anchor(self):
+        card = {"mode": "MODULE_BUILD", "allowed_files": ["a.html"],
+                "allowed_operations": ["delete-killed-partials"]}
+        manifest = {"module_id": "m1", "owned_files": ["a.html"], "shared_files": []}
+        findings = self.cas.validate_manifest_required(card, [(manifest, "m1.yaml")], "card.yaml")
+        self.assertTrue(any("ACCEPTED-SURFACE-MANIFEST-REQUIRED" in msg for _, _, msg in findings))
+
+    def test_manifest_required_passes_with_defect_repair_fix_anchor(self):
+        # built-code xfam P2-1: the anchor alone is enough ONLY for repair-shaped deviation classes
+        card = {"mode": "FIX", "deviation_class": "RESTORE", "allowed_files": ["a.html"],
+                "allowed_operations": ["delete-killed-partials"],
+                "lock_anchor_ref": {"card_id": "BUILD-001"}}
+        manifest = {"module_id": "m1", "owned_files": ["a.html"], "shared_files": []}
+        findings = self.cas.validate_manifest_required(card, [(manifest, "m1.yaml")], "card.yaml")
+        self.assertEqual(findings, [])
+
+    def test_manifest_required_fix_anchor_insufficient_for_new_locked_scope(self):
+        card = {"mode": "FIX", "deviation_class": "RESTORE", "new_locked_scope": True,
+                "allowed_files": ["a.html"],
+                "allowed_operations": ["delete-killed-partials"],
+                "lock_anchor_ref": {"card_id": "BUILD-001"}}
+        manifest = {"module_id": "m1", "owned_files": ["a.html"], "shared_files": []}
+        findings = self.cas.validate_manifest_required(card, [(manifest, "m1.yaml")], "card.yaml")
+        self.assertTrue(any("ACCEPTED-SURFACE-MANIFEST-REQUIRED" in msg for _, _, msg in findings))
+
+    def test_manifest_required_fix_scope_change_needs_contract(self):
+        # built-code xfam P2-1: SCOPE_CHANGE (or a missing deviation_class) is new scope on the
+        # surface — the anchor alone must NOT satisfy the gate.
+        for dc in ("SCOPE_CHANGE", ""):
+            card = {"mode": "FIX", "deviation_class": dc, "allowed_files": ["a.html"],
+                    "allowed_operations": ["delete-killed-partials"],
+                    "lock_anchor_ref": {"card_id": "BUILD-001"}}
+            manifest = {"module_id": "m1", "owned_files": ["a.html"], "shared_files": []}
+            findings = self.cas.validate_manifest_required(card, [(manifest, "m1.yaml")], "card.yaml")
+            self.assertTrue(any("ACCEPTED-SURFACE-MANIFEST-REQUIRED" in msg for _, _, msg in findings),
+                            f"deviation_class={dc!r} must not ride the anchor alone")
+
+    def test_legacy_fails_closed_on_unmanifested_screen_file(self):
+        card = {"allowed_files": ["orphan_shell.html"],
+                "allowed_operations": ["delete-killed-partials"]}
+        findings = self.cas.validate_legacy_fails_closed(card, [], "card.yaml")
+        self.assertTrue(any("ACCEPTED-SURFACE-LEGACY-FAILS-CLOSED" in msg for _, _, msg in findings))
+
+    def test_regression_receipt_honesty_bound_bites(self):
+        card = {"preserve_contract": {"accepted_surface_regression_receipt": {
+            "baseline_sha": "a" * 40, "full_suite_command": "pytest", "baseline_log_hash": "x",
+            "post_change_log_hash": "x", "diff_summary": "none", "generated_by": "test",
+            "declared_regressions": ["something broke"]}}}
+        findings = self.cas.validate_regression_receipt(card, [], "card.yaml")
+        self.assertTrue(any("contradicts itself" in msg for _, _, msg in findings))
+
+    def test_regression_receipt_narrow_command_bites(self):
+        # built-code xfam P1-3: the receipt's command must equal the CONFIGURED full-suite command
+        card = {"full_suite_command": "pytest tests/",
+                "preserve_contract": {"accepted_surface_regression_receipt": {
+                    "baseline_sha": "a" * 40,
+                    "full_suite_command": "pytest tests/nav/test_one.py",
+                    "baseline_log_hash": "x", "post_change_log_hash": "y",
+                    "baseline_log_ref": "logs/b.log", "post_change_log_ref": "logs/p.log",
+                    "diff_summary": "none", "generated_by": "test"}}}
+        findings = self.cas.validate_regression_receipt(card, [], "card.yaml")
+        self.assertTrue(any("does not match the configured full-suite command" in msg
+                            for _, _, msg in findings))
+
+    def test_regression_receipt_no_configured_command_fails_closed(self):
+        card = {"preserve_contract": {"accepted_surface_regression_receipt": {
+            "baseline_sha": "a" * 40, "full_suite_command": "pytest tests/",
+            "baseline_log_hash": "x", "post_change_log_hash": "y",
+            "baseline_log_ref": "logs/b.log", "post_change_log_ref": "logs/p.log",
+            "diff_summary": "none", "generated_by": "test"}}}
+        findings = self.cas.validate_regression_receipt(card, [], "card.yaml")
+        self.assertTrue(any("no configured full-suite command" in msg for _, _, msg in findings))
+
+    def test_extract_capabilities_variant_forms(self):
+        # built-code xfam P1-1: attr order, spaced attributes, class/window dispatchers,
+        # addEventListener — all must extract.
+        text = (
+            '<link href="trans.css" rel="stylesheet">\n'
+            '<div data-fn = "submit"></div>\n'
+            '<script>\n'
+            'class NavSwipe { constructor() {} }\n'
+            'window.NavSwipe = new NavSwipe();\n'
+            'document.addEventListener("touchstart", h);\n'
+            '</script>\n'
+        )
+        caps = self.cas.extract_capabilities(text)
+        self.assertIn("stylesheet:trans.css", caps)
+        self.assertIn("data-fn:submit", caps)
+        self.assertIn("js-class:NavSwipe", caps)
+        self.assertIn("js-global:NavSwipe", caps)
+        self.assertIn("js-listener:addEventListener", caps)
+
+    def test_drop_ref_fails_closed_without_ledger(self):
+        # built-code xfam P1-2: no readable ledger → a drop ref fails CLOSED, never open
+        card = {"allowed_files": [], "preserve_contract": {"inventory": [
+            {"capability": "x", "extracted_from": {"commit": "a" * 40, "path": "a.html"},
+             "dropped_ceo_decision_ref": "CEO-D-001"}]}}
+        findings = self.cas.validate_inventory_extracted(
+            card, [], "card.yaml", ledger_ids=None, ledger_available=False)
+        self.assertTrue(any("fails CLOSED" in msg for _, _, msg in findings))
+
+    def test_drop_ref_dangling_bites_resolved_passes(self):
+        card = {"allowed_files": [], "preserve_contract": {"inventory": [
+            {"capability": "x", "extracted_from": {"commit": "a" * 40, "path": "a.html"},
+             "dropped_ceo_decision_ref": "CEO-D-999"}]}}
+        findings = self.cas.validate_inventory_extracted(
+            card, [], "card.yaml", ledger_ids={"CEO-D-001"}, ledger_available=True)
+        self.assertTrue(any("not found in the decision ledger" in msg for _, _, msg in findings))
+        findings_ok = self.cas.validate_inventory_extracted(
+            card, [], "card.yaml", ledger_ids={"CEO-D-999"}, ledger_available=True)
+        self.assertEqual(findings_ok, [])
+
+    def test_shared_coverage_bites_when_one_owner_omitted(self):
+        card = {"allowed_files": ["shared.html"],
+                "preserve_contract": {"accepted_surfaces": ["m1"]}}
+        m1 = {"module_id": "m1", "owned_files": [], "shared_files": ["shared.html"]}
+        m2 = {"module_id": "m2", "owned_files": [], "shared_files": ["shared.html"]}
+        findings = self.cas.validate_shared_surface_coverage(
+            card, [(m1, "m1.yaml"), (m2, "m2.yaml")], "card.yaml")
+        self.assertTrue(any("SHARED accepted-surface file" in msg for _, _, msg in findings))
 
 
 if __name__ == "__main__":

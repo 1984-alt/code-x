@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Fake `claude` CLI for offline installer tests (PBF-PROP-017).
+# Understands just enough of `claude plugin ...` to exercise install.sh's
+# marketplace/plugin logic without touching the real network or a real
+# Claude Code install. State lives under $FAKE_CLAUDE_HOME.
+set -u
+STATE="${FAKE_CLAUDE_HOME:?FAKE_CLAUDE_HOME must be set}"
+MARKETPLACES_DIR="$STATE/marketplaces"
+INSTALLED_FILE="$STATE/installed.json"
+mkdir -p "$MARKETPLACES_DIR"
+[ -f "$INSTALLED_FILE" ] || echo "[]" > "$INSTALLED_FILE"
+
+marketplace_name_from_source() {
+  # owner/repo -> repo
+  basename "$1"
+}
+
+cmd="${1:-}"; shift || true
+sub="${1:-}"; shift || true
+
+case "$cmd $sub" in
+  "plugin marketplace")
+    action="${1:-}"; shift || true
+    case "$action" in
+      add)
+        source="${1:-}"
+        name="$(marketplace_name_from_source "$source")"
+        dir="$MARKETPLACES_DIR/$name"
+        if [ ! -d "$dir/.git" ]; then
+          mkdir -p "$dir"
+          git -C "$dir" init -q
+          git -C "$dir" -c user.email=test@test -c user.name=test commit -q --allow-empty -m "init $name"
+        fi
+        exit 0
+        ;;
+      list)
+        printf '['
+        first=1
+        for d in "$MARKETPLACES_DIR"/*/; do
+          [ -d "$d" ] || continue
+          n="$(basename "$d")"
+          [ "$first" -eq 1 ] || printf ','
+          first=0
+          printf '{"name": "%s", "source": "github", "installLocation": "%s"}' "$n" "${d%/}"
+        done
+        printf ']\n'
+        ;;
+      update)
+        exit 0
+        ;;
+      remove)
+        name="${1:-}"
+        rm -rf "${MARKETPLACES_DIR:?}/$name"
+        exit 0
+        ;;
+    esac
+    ;;
+  "plugin list")
+    cat "$INSTALLED_FILE"
+    ;;
+  "plugin install")
+    id="${1:-}"
+    tmp="$(mktemp)"
+    python3 - "$INSTALLED_FILE" "$id" > "$tmp" <<'EOF'
+import json, sys
+path, plugin_id = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+if not any(p.get("id") == plugin_id for p in data):
+    data.append({"id": plugin_id, "version": "0.0.0-test"})
+print(json.dumps(data))
+EOF
+    mv "$tmp" "$INSTALLED_FILE"
+    exit 0
+    ;;
+  "plugin details")
+    echo "version: 0.0.0-test"
+    ;;
+  *)
+    echo "fake-claude: unhandled command: $cmd $sub $*" >&2
+    exit 1
+    ;;
+esac

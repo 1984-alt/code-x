@@ -1,0 +1,35 @@
+# ACCEPTED-SURFACE-MANIFEST — the receipt naming ONE accepted module's file surface (PBF-PROP-018).
+#
+# RECEIPT-CLASS artifact (mirrors MODULE-ACCEPTANCE.template.yaml / the receipt-not-flag pattern
+# LESSON-GATE-RECEIPT-NOT-FLAG-001 canonizes): lives OUTSIDE the frozen packet, in a project's
+# <repo-root>/accepted-surface-manifests/
+# directory (one file per accepted module/surface, named <module_id>.yaml), and is
+# STATE-REFERENCED, never re-authored inline.
+#
+# Generated at ONE of two moments:
+#   1. Module acceptance — the SAME turn a MODULE-ACCEPTANCE receipt is written for a user-facing
+#      module, so `acceptance_ref` points at that receipt.
+#   2. A one-time LEGACY FREEZE-BASELINE — for pre-V1 accepted surfaces that carry no
+#      MODULE-ACCEPTANCE receipt at all (most of a pre-V1 project). `acceptance_ref` is the literal
+#      string `legacy_freeze_baseline` and `accepted_commit` is the commit the project froze at.
+#
+# `cx check accepted-surface` reads every manifest in the directory and fails closed (P1) on any
+# card whose allowed_files touch a listed owned_files/shared_files entry without a covering
+# mode: FIX anchor (defect repair only) or a typed preserve_contract (new scope) — see
+# checkers/cx_accepted_surface.py header for the full clause list.
+
+accepted_surface_manifest:
+  module_id:                # the accepted module/surface this manifest names (e.g. "trans-shell")
+  accepted_commit:           # 40-hex commit — the state this module/surface was accepted AT (extraction baseline).
+                             # BOUND, never self-declared (built-code xfam P1-4): a non-legacy manifest's commit must
+                             # AGREE with a commit field in its acceptance_ref receipt; a legacy manifest's commit must
+                             # equal its freeze receipt's frozen_commit. Extraction runs against the UNION of this
+                             # commit and the wave pre-build baseline — the richer capability set governs.
+  acceptance_ref:             # path to the MODULE-ACCEPTANCE receipt, OR the literal string "legacy_freeze_baseline"
+  legacy_freeze_ref:          # (legacy only) path to the typed legacy-freeze receipt {legacy_freeze_baseline: {frozen_commit, generated_by}}
+  legacy_freeze_hash:         # (legacy only) sha256-12 of the freeze receipt file — hash-bound, a swapped receipt is rejected
+  owned_files: []             # files this module exclusively owns (a delete/rewrite here is unambiguous)
+  shared_files: []            # files this module shares with other accepted modules (e.g. a common shell/partial)
+  routes_screens: []          # user-facing routes/screens this surface serves (informational, for the CEO-facing inventory)
+  full_suite_command:          # the project's FULL-suite regression command — the regression receipt's command must equal it (built-code xfam P1-3)
+  generated_by:                # the machine generator that wrote this manifest (/cx-accept, or the legacy-freeze-baseline runner)

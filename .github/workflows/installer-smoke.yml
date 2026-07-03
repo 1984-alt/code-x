@@ -1,0 +1,140 @@
+# Code-X installer smoke test (PBF-PROP-017).
+#
+# PORT NOTE: this workflow is authored for the PUBLIC code-x repo. It is NOT
+# wired into this private canon's CI — the public-port session places this
+# file at .github/workflows/installer-smoke.yml in the public repo and wires
+# it there. Path assumptions below (installer/ at repo root) match the public
+# repo layout after the port.
+#
+# What it proves, in plain English:
+#   - The installer works on a clean machine (no prior Code-X install) on both
+#     macOS and Linux.
+#   - Running it twice is safe (the second run does not break or duplicate
+#     anything) — the idempotency promise in install.sh.
+#   - It correctly REFUSES to proceed when something is wrong: a corrupted
+#     checksum, a missing Python, or the user saying no to CodeRabbit — the
+#     first two must fail with a plain message, the third must NOT fail the run.
+
+name: installer-smoke
+
+on:
+  push:
+    paths:
+      - "installer/**"
+      - ".github/workflows/installer-smoke.yml"
+  pull_request:
+    paths:
+      - "installer/**"
+      - ".github/workflows/installer-smoke.yml"
+  workflow_dispatch: {}
+
+jobs:
+  clean-install-twice:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use a clean HOME (simulate a fresh machine)
+        run: |
+          CLEAN_HOME="${RUNNER_TEMP}/clean-home"
+          mkdir -p "$CLEAN_HOME"
+          echo "HOME=$CLEAN_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the Claude Code CLI (native installer, required prerequisite this smoke test does not itself install)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: First install run (must succeed on a clean machine)
+        run: |
+          chmod +x installer/install.sh
+          ./installer/install.sh
+
+      - name: Second install run (idempotency proof — must also succeed, no duplication)
+        run: |
+          ./installer/install.sh
+
+      - name: Assert no duplicate marketplace entries after two runs
+        run: |
+          claude plugin marketplace list --json | \
+            python3 -c "
+import json, sys, collections
+data = json.load(sys.stdin)
+names = [m['name'] for m in data]
+dupes = [n for n, c in collections.Counter(names).items() if c > 1]
+assert not dupes, f'duplicate marketplace entries after 2 runs: {dupes}'
+print('no duplicate marketplaces — idempotency holds')
+"
+
+  negative-checksum-mismatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the Claude Code CLI (native installer)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Corrupt the pinned commit and expect a fail-closed exit
+        run: |
+          chmod +x installer/install.sh
+          cp installer/installer-manifest.yaml /tmp/installer-manifest.yaml.bak
+          sed -i 's/commit_sha: "cdae8b866a21e78339cfb2d2e34c40f94eed95a6"/commit_sha: "0000000000000000000000000000000000000000"/' installer/installer-manifest.yaml
+          set +e
+          ./installer/install.sh
+          status=$?
+          set -e
+          cp /tmp/installer-manifest.yaml.bak installer/installer-manifest.yaml
+          if [ "$status" -eq 0 ]; then
+            echo "installer should have FAILED on a checksum/commit mismatch but exited 0"
+            exit 1
+          fi
+          echo "confirmed: mismatched pin fails closed (exit $status)"
+
+  negative-missing-python:
+    runs-on: ubuntu-latest
+    container: debian:bookworm-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run installer with no python3 on PATH — expect nonzero exit + plain-English failure
+        run: |
+          apt-get update -qq && apt-get install -y -qq git bash >/dev/null
+          chmod +x installer/install.sh
+          set +e
+          PATH="/usr/bin:/bin" ./installer/install.sh > /tmp/out.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/out.log
+          if [ "$status" -eq 0 ]; then
+            echo "installer should have FAILED with no python3 on PATH but exited 0"
+            exit 1
+          fi
+          grep -qi "python3.*not found" /tmp/out.log
+          echo "confirmed: missing python3 fails closed (exit $status) with a plain-English message"
+
+  negative-declined-coderabbit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the Claude Code CLI (native installer)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run installer with no CodeRabbit interaction — run must still pass
+        run: |
+          chmod +x installer/install.sh
+          ./installer/install.sh
+          echo "confirmed: declining/ignoring CodeRabbit does not fail the run"

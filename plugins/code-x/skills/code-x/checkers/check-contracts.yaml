@@ -5022,3 +5022,175 @@ clauses:
       expect_contains: "SOP-BIND-COVERAGE-MAP"
     good:
       args: ["tests/fixtures/packet_good"]
+
+  # ──────────────────────────────────────────────────────────────
+  # check: accepted-surface (PBF-PROP-018: the preserve-posture gate)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: ACCEPTED-SURFACE-LEGACY-FAILS-CLOSED
+    check: accepted-surface
+    kind: gate
+    clause: "a destructive card touching a user-facing screen file with NO accepted-surface manifest at all fails closed"
+    source: PBF-PROP-018 xfam P1-1
+    git_fixture: as_legacy_no_manifest
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-LEGACY-FAILS-CLOSED"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-INVENTORY-INCOMPLETE
+    check: accepted-surface
+    kind: gate
+    clause: "a non-empty preserve_contract.inventory that OMITS an extracted capability (recomputed from git) fails — the inventory is extractor-backed, never card-authored"
+    source: PBF-PROP-018 xfam P1-2
+    git_fixture: as_incomplete_inventory
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "missing extracted capability row(s)"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-FAKE-DROP-REF
+    check: accepted-surface
+    kind: gate
+    clause: "a format-valid but DANGLING dropped_ceo_decision_ref (CEO-D-999 with no matching ledger row) fails — the ref must RESOLVE against the decision ledger, and no ledger = fail closed (built-code xfam P1-2)"
+    source: PBF-PROP-018 built-code xfam P1-2
+    git_fixture: as_fake_ceo_ref
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "not found in the decision ledger"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-REGRESSION-RECEIPT
+    check: accepted-surface
+    kind: gate
+    clause: "a card touching an accepted surface with no typed accepted_surface_regression_receipt (card-scoped-only tests) fails"
+    source: PBF-PROP-018 xfam P1-3
+    git_fixture: as_missing_regression
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-REGRESSION-RECEIPT"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-SHARED-COVERAGE
+    check: accepted-surface
+    kind: gate
+    clause: "a file shared across multiple accepted modules requires preserve_contract.accepted_surfaces to cover ALL owning modules, not just one"
+    source: PBF-PROP-018 design-history §Fold notes
+    git_fixture: as_missing_shared_coverage
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "SHARED accepted-surface file"
+    good:
+      git_fixture: as_good_shared
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-DIFF-UNDECLARED
+    check: accepted-surface
+    kind: gate
+    clause: "the ACTUAL git diff vs the pre-build baseline touches an accepted-surface file the card never declared in allowed_files (broad-glob write) — build-turn-only bite via --baseline"
+    source: PBF-PROP-018 proposed_change Lever B
+    git_fixture: as_diff_undeclared
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}", "--baseline", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-DIFF-UNDECLARED"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-EXTRACTOR-VARIANTS
+    check: accepted-surface
+    kind: gate
+    clause: "the extractor catches valid HTML/JS variants (swapped link attr order, spaced data-fn, class-based dispatcher, window-global assignment, addEventListener) — a thin inventory omitting them fails (built-code xfam P1-1)"
+    source: PBF-PROP-018 built-code xfam P1-1
+    git_fixture: as_extractor_variants
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "missing extracted capability row(s)"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-REGRESSION-NARROW-COMMAND
+    check: accepted-surface
+    kind: gate
+    clause: "a regression receipt with a card-scoped test command (not the configured full-suite command) + arbitrary hashes + no log files on disk fails — the receipt is evidence-bound (built-code xfam P1-3)"
+    source: PBF-PROP-018 built-code xfam P1-3
+    git_fixture: as_narrow_regression
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "does not match the configured full-suite command"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-STALE-ACCEPTED-COMMIT
+    check: accepted-surface
+    kind: gate
+    clause: "extraction runs against the UNION of the manifest's accepted_commit and the wave baseline — a manifest bound to an older, thinner version of the file cannot shrink the must-keep set (built-code xfam P1-4)"
+    source: PBF-PROP-018 built-code xfam P1-4
+    git_fixture: as_stale_accepted_commit
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}", "--baseline", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "missing extracted capability row(s)"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-BASELINE-REQUIRED
+    check: build-turn
+    kind: gate
+    clause: "at build-turn, accepted_surface_manifests existing with NO state.wave_pre_build_baseline_sha fails closed — without the wave baseline the actual-diff bite can never run (built-code xfam P1-5)"
+    source: PBF-PROP-018 built-code xfam P1-5
+    git_fixture: build_turn_as_no_baseline
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "declare the wave baseline in state"
+    good:
+      git_fixture: build_turn_ok
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-FIX-SCOPE-CHANGE
+    check: accepted-surface
+    kind: gate
+    clause: "a mode: FIX card with deviation_class SCOPE_CHANGE (or missing) touching accepted files may NOT ride the lock anchor alone — only RESTORE/AMBIGUITY_RESOLVED defect repair does; new scope needs the preserve_contract (built-code xfam P2-1)"
+    source: PBF-PROP-018 built-code xfam P2-1
+    git_fixture: as_fix_scope_change
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-MANIFEST-REQUIRED"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-MANIFEST-REQUIRED
+    check: accepted-surface
+    kind: gate
+    clause: "a card whose allowed_files touch a manifest-listed accepted file with NO FIX anchor and NO preserve_contract fails (built-code xfam P2-2 — the direct bad fixture)"
+    source: PBF-PROP-018 built-code xfam P2-2
+    git_fixture: as_no_contract
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-MANIFEST-REQUIRED"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]

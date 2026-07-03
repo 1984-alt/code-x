@@ -10,6 +10,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.4]
+
+Syncs the public release up to protocol **v1.22.4** — a patch fold, adoption-surface class (no new private-checker gate/clause/subcommand beyond the installer itself).
+
+### Added
+- **One-line installer** (PBF-PROP-017): a pinned trust-root shell installer (`installer/install.sh` + `installer/installer-manifest.yaml`) that pulls every dependency straight from its official GitHub source at an immutable coordinate (release tag + commit sha; checksum-verified bootstrap manifest for the pipe-to-bash path) and fails closed on any pin/checksum mismatch — never a vendored copy, never a mutable-ref fetch. CodeRabbit stays offer-and-explain, never auto-installed. Release-cut self-pins are re-stamped together by `installer/restamp-release.sh` (manifest code-x pin == `checkers/cx --version`, enforced by a pinned parity test). 13 pinned installer tests (offline, fake-`claude`-CLI stub) — a design-review-closed vulnerability class (curl-pipe-bash from a mutable ref) that re-entered one layer up at the top-level one-liner was caught and pinned at built-code review, now the enforcement floor. New `.github/workflows/installer-smoke.yml` — clean-HOME macOS+Linux matrix, run-twice idempotency, negative checksum/missing-python/declined-CodeRabbit cases. EVAL-048 registered.
+- **README "Install Code-X" section rewritten** around the new installer: recommended download-verify-run path, a convenience one-liner, and the previous manual/prerequisites steps preserved as a collapsible fallback for Codex users or anyone who wants to see each step.
+
+---
+
+## [1.22.3]
+
+Syncs the public release up to protocol **v1.22.3** — a patch fold, new gate family (`cx check accepted-surface`).
+
+### Added
+- **Accepted-surface preserve posture** (PBF-PROP-018): build-vs-fix becomes a checker-recomputed property of the touched surface instead of model judgment. New `cx check accepted-surface` (`cx_accepted_surface.py`, stdlib-only), wired into `cx check card` and `cx check build-turn`: a card whose write-set touches a file named in a CEO-accepted-surface manifest must carry either an anchored `mode: FIX` (defect repair, no new scope) or a typed `preserve_contract` — an extractor-backed inventory (includes · scripts · stylesheets · `data-fn` · JS class/global/listener · locale links) mapping every capability to `re_homed_to` / `superseded_by_lock_ref` / `dropped_ceo_decision_ref`, receipt-bound to the accepted commit, backed by a full-suite regression receipt. `build-turn` also diffs the actual `git diff` against every manifest so an undeclared broad-glob write is caught even when the card's own `allowed_files` looked clean. 12 new gate clauses (`ACCEPTED-SURFACE-*`, 404 gate clauses now bite; 424 self-tests). New `templates/ACCEPTED-SURFACE-MANIFEST.template.yaml`. EVAL-047 registered.
+
+---
+
 ## [1.22.2]
 
 Syncs the public release up to protocol **v1.22.2** — a patch fold, no gate-logic change to existing checks.

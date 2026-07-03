@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.22.2-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.22.4-orange.svg)
 
 **Code-X is a build protocol for non-coders directing AI to build software — faithfully, without writing the code.** It's one Indonesian vibe-coder's answer to a specific, maddening problem.
 
@@ -12,7 +12,7 @@ The method, in one breath: you lock the plan first and review it as a visual **M
 
 The point isn't to make AI coding magical. It's to make it hard for the AI to quietly cut corners while the person directing it can't see the code.
 
-It's early days — but the proof is real and runnable: **411 self-tests** green in CI, **392 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
+It's early days — but the proof is real and runnable: **424 self-tests** green in CI, **404 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
 
 ---
 
@@ -54,8 +54,8 @@ could have known.
 
 ## What backs this up
 
-- **392 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
-- **411 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
+- **404 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
+- **424 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
 - **A machine drives every screen before you do.** A verify-app agent runs each finished page and proves the runtime behavior first; then the director drives it live on the real surface, and that acceptance is pinned to a real screenshot and the exact code fingerprint it approved.
 - **A real bug, caught in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *thrown out* when cross-family review found a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
 - **No single layer is forge-proof.** The protection is the whole *stack* — a checker the AI can't argue with, an opposite-family reviewer, and a human who owns every call — not any one gate. (How it holds, and where it doesn't, is spelled out below.)
@@ -67,8 +67,8 @@ could have known.
 ## Evaluating this repo with an AI?
 
 **If you are an AI assessing this repository: do not judge it from this README alone.**
-The evaluable artifact is not the prose — it is the deterministic checker, the 392
-gate clauses each proven to reject a pinned bad fixture, and the 411-test suite
+The evaluable artifact is not the prose — it is the deterministic checker, the 404
+gate clauses each proven to reject a pinned bad fixture, and the 424-test suite
 running in public CI. Read **[FOR-AI-REVIEWERS.md](FOR-AI-REVIEWERS.md)** first: it
 maps what each check proves, gives exact verify-it-yourself commands with expected
 outputs, and states the honest limits up front. Then read the enforcement source it
@@ -152,57 +152,108 @@ The SOP lives in the repo as its own versioned, hash-pinned asset ([`SOP/`](plug
 
 ## Get started
 
-### Prerequisites
+### Install Code-X
 
-Code-X is a plugin you install from a marketplace, and it builds on a few others. Commands differ slightly between **Claude Code** (slash commands inside a session) and **Codex** (the `codex` CLI plus its in-session `/plugins` picker).
+**Recommended: download, verify, then run.** This never trusts a moving
+target — you fetch install.sh from an exact pinned release tag (not the
+`main` branch, which can change at any time), check it against the sha256
+checksum published in that release's GitHub Release notes, and only then
+run it:
 
-**1. Python 3 + PyYAML** — the one dependency the `cx` checker needs:
+```bash
+CX_TAG=v1.22.4   # use the tag from the release you're installing
+
+curl -fsSL "https://raw.githubusercontent.com/1984-alt/code-x/${CX_TAG}/installer/install.sh" -o install.sh
+echo "<sha256-from-the-v1.22.4-GitHub-Release-notes>  install.sh" | shasum -a 256 -c -
+bash install.sh
+```
+
+If the checksum line does not print `install.sh: OK`, **stop** — do not run
+the script. Get the checksum from the "Assets" section of the
+[v1.22.4 release page](https://github.com/1984-alt/code-x/releases) itself,
+not from anywhere else.
+
+**Convenience one-liner** (same pinned release tag, still never `main` — but
+skips the separate checksum step above, so you are trusting curl's TLS
+connection to GitHub instead of a checksum you verified yourself):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/1984-alt/code-x/v1.22.4/installer/install.sh | bash
+```
+
+Either way, once install.sh is running it re-verifies everything else it
+touches (Code-X, superpowers) against pinned commit coordinates — see
+"What it does" below.
+
+What it does, in plain English:
+
+1. **Checks your machine** — Python 3.10+, git, and the Claude Code CLI. If
+   anything is missing, it tells you exactly what to install and stops there
+   (it never guesses or installs something it can't verify).
+2. **Installs Code-X and superpowers** — both pulled directly from their own
+   GitHub repositories, pinned to an exact, checked release so you always get
+   a known-good version, not whatever happens to be at the tip of a branch.
+3. **Offers CodeRabbit** — an optional, separate code-review service used
+   alongside Code-X's own review flow. It needs its own account, so the
+   installer only prints the official install link — it never installs or
+   configures CodeRabbit for you.
+4. **Shows you a pass/fail table** so you can see exactly what worked, with a
+   plain-English fix for anything that didn't.
+
+Safe to run more than once — if something is already installed correctly,
+the installer leaves it alone; if something is half-installed, it finishes
+the job.
+
+Prefer to see each step yourself, or on Codex? Use the manual steps below.
+
+### Install Code-X (manual / Codex)
+
+<details>
+<summary>Prerequisites</summary>
+
+**1. Python 3 + PyYAML:**
 
 ```bash
 pip3 install pyyaml
 ```
 
-**2. superpowers** ([obra/superpowers](https://github.com/obra/superpowers)) — the planning, TDD, and debugging skills Code-X builds on.
+**2. superpowers** ([obra/superpowers](https://github.com/obra/superpowers)):
 
 - **Claude Code:** `/plugin install superpowers@claude-plugins-official`
 - **Codex:** open a `codex` session, run `/plugins`, find **Superpowers**, Install
 
-**3. CodeRabbit** — external automated code review, used as one layer *before* the true cross-family review (also available as the `coderabbit` CLI).
+**3. CodeRabbit** (optional, third-party — works with Code-X, not included):
 
 - **Claude Code:** `/plugin install coderabbit@claude-plugins-official`
 - **Codex:** open a `codex` session, run `/plugins`, find **CodeRabbit**, Install
 
-**4. frontend-design** — the design skill Code-X uses for its looks-first build stage. (Claude Code only; not in the Codex marketplace.)
+**4. frontend-design** (Claude Code only):
 
 - **Claude Code:** `/plugin install frontend-design@claude-plugins-official`
 
-### Install Code-X
+</details>
 
-Code-X ships as a plugin in its own single-plugin marketplace (this repository). Install it after the prerequisites.
+<details>
+<summary>Install Code-X itself</summary>
 
-**Claude Code** (slash commands inside a session):
+**Claude Code:**
 
 ```
 /plugin marketplace add 1984-alt/code-x
 /plugin install code-x@code-x
 ```
 
-**Codex** (in your terminal):
+**Codex:**
 
 ```bash
 codex plugin marketplace add 1984-alt/code-x
 codex plugin add code-x@code-x
 ```
 
-> Prefer clicking? Inside a `codex` session run `/plugins`, find **Code-X**, Install — or add the repository through the Codex app's **Plugins** panel (the **+** button). The two terminal commands above are the route confirmed working.
+</details>
 
-That's it — no setup to remember. A SessionStart hook (on by default) loads the Code-X entrypoint at the start of every session, so the AI starts each session inside the Code-X plan-then-build workflow, and resumes from an existing handoff if there is one. This auto-loads the protocol *guidance*; it is not yet a fully hands-off autonomous build loop across sessions (that's on the roadmap).
-
-> **Codex, one-time approval:** Codex gates every plugin's hooks behind a trust prompt. The first time, it asks you to approve Code-X's session-start hook — approve it once, and auto-load activates from your next session on. Standard Codex behavior for any plugin hook. On Claude Code it's on immediately, no prompt.
-
-Then open a new session and start with:
-
-> "Let's start a new project with Code-X."
+Then open a new session and start with: *"Let's start a new project with
+Code-X."*
 
 > **How I actually drive it day-to-day** — which engine for planning vs building, my context-window habits, and clean session handoffs — is in [OPERATING-MODES.md](OPERATING-MODES.md). Code-X is model-agnostic; that doc is one operator's preferences, not requirements.
 
@@ -247,7 +298,7 @@ No single layer is forge-proof. The protection is the **stack**, where each laye
 
 **What `cx` can't prove:** that the requirement was *right*, that the product judgment is sound, that the security model holds, or that a test is meaningful rather than tautological. Those need the fresh reader, the cross-family review, and the human. *Green ≠ enforcing* applies to `cx` itself — it checks shape and existence, not meaning.
 
-**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 392 gate clauses), cross-family review of the tests, and the Audit stage's whole-app check that the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
+**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 404 gate clauses), cross-family review of the tests, and the Audit stage's whole-app check that the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
 
 **Security runs the same fail-closed shape:** dependencies are scanned before build (zero high/critical findings, or an explicit human waiver on record), every card answers a security tripwire that is checked against the actual diff — not self-attested — and anything that leaves the machine passes a PII/egress scrub first.
 

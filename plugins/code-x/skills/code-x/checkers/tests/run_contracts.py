@@ -51,7 +51,7 @@ os.environ["CODE_X_TEST_MODE"] = "1"
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
                         "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
                         "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app", "module-demo",
-                        "blueprint", "whole-packet-review", "kaizen", "graduation", "audit"}
+                        "blueprint", "whole-packet-review", "kaizen", "graduation", "audit", "accepted-surface"}
 FIXTURES = THIS_DIR / "fixtures"
 
 # Minimal state template that passes all normal cx check state checks.
@@ -2209,6 +2209,308 @@ def _recipe_build_turn_blueprint_approval_symlink(tmp: str) -> tuple[str, str]:
     return repo, state
 
 
+# ── PBF-PROP-018 accepted-surface recipes (xfam-fold 2026-07-03: binding, ledger, evidence) ─────
+_AS_MODULE_ID = "trans-shell"
+_AS_SHARED_MODULE_ID = "cowork-pane"
+_AS_FILE = "templates/trans/_shell.html"
+_AS_SHARED_FILE = "templates/trans/other_accepted.html"
+_AS_FULL_SUITE_CMD = "pytest tests/"
+_AS_SHELL_CONTENT = (
+    '{% extends "base.html" %}\n'
+    '{% include "cowork/_ask_pane.html" %}\n'
+    '<script src="app.js"></script>\n'
+    '<script>function navSwipe() { return 1; }</script>\n'
+    '<link rel="stylesheet" href="trans.css">\n'
+    '<div data-fn="submit"></div>\n'
+    '<button onclick="doThing()">x</button>\n'
+    '<a href="/trans?lang=en">EN</a>\n'
+)
+# Built-code xfam P1-1: valid HTML/JS variants the old regexes missed — attr order swapped on
+# <link>, spaces around = on data-fn, a class-based dispatcher, a window-global assignment,
+# and an addEventListener wire-up.
+_AS_VARIANT_CONTENT = (
+    '{% include "cowork/_ask_pane.html" %}\n'
+    '<link href="trans.css" rel="stylesheet">\n'
+    '<div data-fn = "submit"></div>\n'
+    '<script>\n'
+    'class NavSwipe { constructor() {} }\n'
+    'window.NavSwipe = new NavSwipe();\n'
+    'document.addEventListener("touchstart", h);\n'
+    '</script>\n'
+)
+
+
+def _as_full_inventory(accepted_commit: str, dangling_ceo_ref=False, drop_last=False) -> list:
+    def row(cap, **disp):
+        r = {"capability": cap, "extracted_from": {"commit": accepted_commit, "path": _AS_FILE}}
+        r.update(disp or {"re_homed_to": "templates/trans/new_shell.html"})
+        return r
+    rows = [
+        row("extends:base.html", re_homed_to="templates/trans/new_shell.html"),
+        row("include:cowork/_ask_pane.html", re_homed_to="templates/trans/new_shell.html"),
+        row("script:app.js", re_homed_to="templates/trans/new_shell.html"),
+        row("script-fn:navSwipe", re_homed_to="static/swipe.js"),
+        row("stylesheet:trans.css", re_homed_to="templates/trans/new_shell.html"),
+        row("data-fn:submit", re_homed_to="templates/trans/new_shell.html"),
+        row("handler:onclick", re_homed_to="templates/trans/new_shell.html"),
+        row("link-query:/trans?lang=en",
+            dropped_ceo_decision_ref="CEO-D-999" if dangling_ceo_ref else "CEO-D-099"),
+    ]
+    if drop_last:
+        rows = rows[:-1]
+    return rows
+
+
+def _as_write_manifest(repo: str, name: str, module_id: str, accepted_commit: str,
+                       owned: list, shared: list) -> None:
+    """Write one legacy manifest + its typed, HASH-BOUND legacy-freeze receipt (P1-4 binding)."""
+    os.makedirs(os.path.join(repo, "receipts"), exist_ok=True)
+    freeze_rel = f"receipts/{name}-freeze.yaml"
+    freeze_path = os.path.join(repo, freeze_rel)
+    with open(freeze_path, "w") as f:
+        yaml.safe_dump({"legacy_freeze_baseline": {
+            "frozen_commit": accepted_commit, "generated_by": "cx-test-legacy-freeze"}}, f)
+    freeze_hash = _hashlib.sha256(open(freeze_path, "rb").read()).hexdigest()[:12]
+    manifest = {"accepted_surface_manifest": {
+        "module_id": module_id, "accepted_commit": accepted_commit,
+        "acceptance_ref": "legacy_freeze_baseline",
+        "legacy_freeze_ref": freeze_rel, "legacy_freeze_hash": freeze_hash,
+        "owned_files": owned, "shared_files": shared,
+        "routes_screens": ["/trans"], "full_suite_command": _AS_FULL_SUITE_CMD,
+        "generated_by": "cx-test-legacy-freeze"}}
+    with open(os.path.join(repo, "accepted-surface-manifests", f"{name}.yaml"), "w") as f:
+        yaml.safe_dump(manifest, f)
+
+
+def _as_regression_receipt(repo: str, baseline_sha: str, *, narrow=False) -> dict:
+    """Evidence-bound regression receipt (P1-3): real log files, recomputed sha256, configured
+    full-suite command. narrow=True forges the bad case (card-scoped command, arbitrary hashes,
+    NO log files on disk)."""
+    if narrow:
+        return {"baseline_sha": baseline_sha,
+                "full_suite_command": "pytest tests/nav/test_trans_shell.py",
+                "baseline_log_hash": "aaa111", "post_change_log_hash": "bbb222",
+                "baseline_log_ref": "logs/baseline.log", "post_change_log_ref": "logs/post.log",
+                "diff_summary": "no regressions", "generated_by": "cx-test-regression-runner"}
+    os.makedirs(os.path.join(repo, "logs"), exist_ok=True)
+    b_path = os.path.join(repo, "logs", "baseline.log")
+    p_path = os.path.join(repo, "logs", "post.log")
+    with open(b_path, "w") as f:
+        f.write("== full suite @ baseline: 120 passed ==\n")
+    with open(p_path, "w") as f:
+        f.write("== full suite @ post-change: 120 passed ==\n")
+    return {"baseline_sha": baseline_sha, "full_suite_command": _AS_FULL_SUITE_CMD,
+            "baseline_log_hash": _hashlib.sha256(open(b_path, "rb").read()).hexdigest(),
+            "post_change_log_hash": _hashlib.sha256(open(p_path, "rb").read()).hexdigest(),
+            "baseline_log_ref": "logs/baseline.log", "post_change_log_ref": "logs/post.log",
+            "diff_summary": "no regressions", "generated_by": "cx-test-regression-runner"}
+
+
+def _as_repo(tmp, *, with_manifest=True, incomplete_inventory=False, dangling_ceo_ref=False,
+            missing_regression=False, narrow_regression=False, missing_shared_coverage=False,
+            add_shared_manifest=False, diff_undeclared=False, keep_narrow=False,
+            fix_scope_change=False, no_contract=False, shell_content=_AS_SHELL_CONTENT,
+            with_ledger=True) -> tuple:
+    """Base recipe for every PBF-PROP-018 accepted-surface clause. Returns (repo, extra) where
+    extra is either the repo again (unused-state convention) or, for diff_undeclared, the
+    pre-build baseline sha (substituted via the harness's {STATE} token — the ONLY value that
+    token carries here, not a state-file path)."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "templates", "trans"))
+    os.makedirs(os.path.join(repo, "accepted-surface-manifests"))
+    with open(os.path.join(repo, _AS_FILE), "w") as f:
+        f.write(shell_content)
+    with open(os.path.join(repo, _AS_SHARED_FILE), "w") as f:
+        f.write("<p>shared partial</p>\n")
+    _git_init(repo)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "accept trans-shell"], check=True)
+    accepted_commit = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+
+    # Decision ledger (P1-2): drop refs resolve against real CEO-D rows, fail closed without it.
+    if with_ledger:
+        with open(os.path.join(repo, "CEO-DECISION-LEDGER.md"), "w") as f:
+            f.write("# CEO Decision Ledger (fixture)\n\n"
+                    "- id: CEO-D-099 — drop the ?lang= switcher from the killed shell\n")
+
+    if with_manifest:
+        _as_write_manifest(repo, "trans-shell", _AS_MODULE_ID, accepted_commit,
+                           owned=[_AS_FILE],
+                           shared=[_AS_SHARED_FILE] if add_shared_manifest else [])
+    if add_shared_manifest:
+        _as_write_manifest(repo, "cowork-pane", _AS_SHARED_MODULE_ID, accepted_commit,
+                           owned=[], shared=[_AS_SHARED_FILE])
+
+    pc = {
+        "accepted_surfaces": [_AS_MODULE_ID],
+        "inventory": _as_full_inventory(accepted_commit, dangling_ceo_ref=dangling_ceo_ref,
+                                        drop_last=incomplete_inventory),
+        "accepted_surface_regression_receipt": _as_regression_receipt(
+            repo, accepted_commit, narrow=narrow_regression),
+    }
+    if missing_regression:
+        pc.pop("accepted_surface_regression_receipt")
+
+    allowed_files = [_AS_FILE]
+    if add_shared_manifest and not keep_narrow:
+        # card also touches the shared file — accepted_surfaces must cover BOTH owning modules
+        # unless missing_shared_coverage deliberately omits the second (the bad-fixture case).
+        allowed_files = [_AS_FILE, _AS_SHARED_FILE]
+        if not missing_shared_coverage:
+            pc["accepted_surfaces"] = [_AS_MODULE_ID, _AS_SHARED_MODULE_ID]
+
+    if fix_scope_change:
+        # Built-code xfam P2-1: a FIX card with SCOPE_CHANGE touching an accepted file may NOT
+        # ride the lock anchor alone — new scope needs the preserve_contract.
+        card = {"id": "CARD-NS-TRANS", "mode": "FIX", "deviation_class": "SCOPE_CHANGE",
+                "lock_anchor_ref": {"card_id": "BUILD-001", "requirement_id": "REQ-001"},
+                "allowed_files": allowed_files,
+                "allowed_operations": ["delete-killed-partials"]}
+    elif no_contract:
+        # Built-code xfam P2-2: the direct MANIFEST-REQUIRED bad case — a MODULE_BUILD card
+        # touching an owned accepted file with no FIX anchor and no preserve_contract.
+        card = {"id": "CARD-NS-TRANS", "mode": "MODULE_BUILD", "new_locked_scope": True,
+                "allowed_files": allowed_files,
+                "allowed_operations": ["delete-killed-partials"]}
+    else:
+        card = {"id": "CARD-NS-TRANS", "mode": "MODULE_BUILD", "new_locked_scope": True,
+                "allowed_files": allowed_files, "allowed_operations": ["delete-killed-partials"],
+                "preserve_contract": pc}
+    with open(os.path.join(repo, "card.yaml"), "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "wave card"], check=True)
+
+    if diff_undeclared:
+        baseline_sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                      capture_output=True, text=True).stdout.strip()
+        # the ACTUAL build touches the shared file too, without declaring it in allowed_files
+        with open(os.path.join(repo, _AS_SHARED_FILE), "a") as f:
+            f.write("<p>silently rewritten</p>\n")
+        subprocess.run(["git", "-C", repo, "commit", "-aq", "-m", "undeclared touch"], check=True)
+        return repo, baseline_sha
+
+    return repo, repo
+
+
+def _recipe_as_legacy_no_manifest(tmp):
+    return _as_repo(tmp, with_manifest=False)
+
+
+def _recipe_as_incomplete_inventory(tmp):
+    return _as_repo(tmp, incomplete_inventory=True)
+
+
+def _recipe_as_fake_ceo_ref(tmp):
+    # P1-2: CEO-D-999 is format-valid but has no matching ledger row → dangling, must FAIL.
+    return _as_repo(tmp, dangling_ceo_ref=True)
+
+
+def _recipe_as_missing_regression(tmp):
+    return _as_repo(tmp, missing_regression=True)
+
+
+def _recipe_as_narrow_regression(tmp):
+    # P1-3: card-scoped command + arbitrary hashes + no log files on disk → must FAIL.
+    return _as_repo(tmp, narrow_regression=True)
+
+
+def _recipe_as_missing_shared_coverage(tmp):
+    return _as_repo(tmp, add_shared_manifest=True, missing_shared_coverage=True)
+
+
+def _recipe_as_diff_undeclared(tmp):
+    return _as_repo(tmp, add_shared_manifest=True, keep_narrow=True, diff_undeclared=True)
+
+
+def _recipe_as_fix_scope_change(tmp):
+    return _as_repo(tmp, fix_scope_change=True)
+
+
+def _recipe_as_no_contract(tmp):
+    return _as_repo(tmp, no_contract=True)
+
+
+def _recipe_as_extractor_variants(tmp):
+    # P1-1: baseline file uses valid HTML/JS variants (attr order, spaced data-fn, class/window
+    # dispatcher, addEventListener); the inventory covers only the include row → the recomputed
+    # extraction must surface the omitted variants as missing rows.
+    repo, extra = _as_repo(tmp, shell_content=_AS_VARIANT_CONTENT)
+    accepted_commit = None
+    # rewrite the card's inventory down to the single include row (the forgeable-thin inventory)
+    card_path = os.path.join(repo, "card.yaml")
+    with open(card_path) as f:
+        card = yaml.safe_load(f)
+    full = card["preserve_contract"]["inventory"]
+    accepted_commit = full[0]["extracted_from"]["commit"]
+    card["preserve_contract"]["inventory"] = [
+        {"capability": "include:cowork/_ask_pane.html",
+         "extracted_from": {"commit": accepted_commit, "path": _AS_FILE},
+         "re_homed_to": "templates/trans/new_shell.html"}]
+    with open(card_path, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "commit", "-aq", "-m", "thin inventory"], check=True)
+    return repo, extra
+
+
+def _recipe_as_stale_accepted_commit(tmp):
+    # P1-4: the manifest (and its freeze receipt) bind to an OLDER commit where the file was
+    # THIN; the wave baseline (HEAD) carries the rich file. Extraction must run against the
+    # union — the richer set governs — so an inventory covering only the thin version FAILS.
+    # Returns (repo, baseline_sha): the harness's {STATE} token carries the baseline sha.
+    repo, _ = _as_repo(tmp, shell_content="<p>thin placeholder</p>\n")
+    # enrich the file AFTER the freeze; that commit is the wave baseline
+    with open(os.path.join(repo, _AS_FILE), "w") as f:
+        f.write(_AS_SHELL_CONTENT)
+    subprocess.run(["git", "-C", repo, "commit", "-aq", "-m", "screen grew after freeze"], check=True)
+    # thin the inventory to what the OLD commit justified (nothing but a placeholder row shape)
+    card_path = os.path.join(repo, "card.yaml")
+    with open(card_path) as f:
+        card = yaml.safe_load(f)
+    old_commit = card["preserve_contract"]["inventory"][0]["extracted_from"]["commit"]
+    card["preserve_contract"]["inventory"] = [
+        {"capability": "placeholder:none",
+         "extracted_from": {"commit": old_commit, "path": _AS_FILE},
+         "re_homed_to": "templates/trans/new_shell.html"}]
+    with open(card_path, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "commit", "-aq", "-m", "thin inventory"], check=True)
+    baseline_sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD~1"],
+                                  capture_output=True, text=True).stdout.strip()
+    return repo, baseline_sha
+
+
+def _recipe_build_turn_as_no_baseline(tmp):
+    # P1-5: manifests exist in the repo but state carries NO wave_pre_build_baseline_sha →
+    # build-turn's accepted-surface step must FAIL CLOSED (the actual-diff bite can never run).
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    os.makedirs(os.path.join(repo, "accepted-surface-manifests"), exist_ok=True)
+    head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    _as_write_manifest(repo, "legacy-home", "legacy-home", head,
+                       owned=["templates/home.html"], shared=[])
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "register legacy surface\n\nCode-X-Provenance: cx-test"], check=True)
+    # refresh state.last_commit to the new HEAD so the boot/lineage legs stay green
+    with open(state) as f:
+        sdata = yaml.safe_load(f)
+    sdata["last_commit"] = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                          capture_output=True, text=True).stdout.strip()
+    with open(state, "w") as f:
+        yaml.dump(sdata, f)
+    return repo, state
+
+
+def _recipe_as_good(tmp):
+    return _as_repo(tmp)
+
+
+def _recipe_as_good_shared(tmp):
+    return _as_repo(tmp, add_shared_manifest=True)
+
+
 _RECIPES = {
     "build_turn_blueprint_not_ready": _recipe_build_turn_blueprint_not_ready,
     "build_turn_blueprint_ready": _recipe_build_turn_blueprint_ready,
@@ -2326,6 +2628,20 @@ _RECIPES = {
     "close_turn_no_delta": _recipe_close_turn_no_delta,
     "close_turn_delta_mismatch": _recipe_close_turn_delta_mismatch,
     "close_turn_vault_skip_no_reason": _recipe_close_turn_vault_skip_no_reason,
+    "as_legacy_no_manifest": _recipe_as_legacy_no_manifest,
+    "as_incomplete_inventory": _recipe_as_incomplete_inventory,
+    "as_fake_ceo_ref": _recipe_as_fake_ceo_ref,
+    "as_missing_regression": _recipe_as_missing_regression,
+    "as_narrow_regression": _recipe_as_narrow_regression,
+    "as_missing_shared_coverage": _recipe_as_missing_shared_coverage,
+    "as_diff_undeclared": _recipe_as_diff_undeclared,
+    "as_fix_scope_change": _recipe_as_fix_scope_change,
+    "as_no_contract": _recipe_as_no_contract,
+    "as_extractor_variants": _recipe_as_extractor_variants,
+    "as_stale_accepted_commit": _recipe_as_stale_accepted_commit,
+    "build_turn_as_no_baseline": _recipe_build_turn_as_no_baseline,
+    "as_good": _recipe_as_good,
+    "as_good_shared": _recipe_as_good_shared,
 }
 
 

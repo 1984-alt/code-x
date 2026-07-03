@@ -44,6 +44,17 @@ handover. If you cannot tell how to implement the card without guessing, write t
 or blocker and STOP — never invent product, data, UX, security, privacy, money, legal,
 release, or architecture decisions.
 
+**Touching an approved screen? The extracted inventory is your must-keep list (PBF-PROP-018).**
+Before you delete, re-parent, or rewrite any file, check whether it belongs to a CEO-accepted
+surface (an `accepted_surface_manifest` receipt names it). If it does, your card's
+`preserve_contract.inventory` is not something you author from memory — it is
+extractor-recomputed from the file's real committed contents, and `cx check accepted-surface`
+re-runs that extraction itself. Every row must map to exactly one of `re_homed_to` /
+`superseded_by_lock_ref` / `dropped_ceo_decision_ref`; a capability you silently drop (an
+include, a script, a stylesheet, a handler, a locale link) is a P1, not a detail. A pure defect
+repair with no new scope may rely on an anchored `mode: FIX` instead — but new locked scope on
+an accepted surface always needs the preserve_contract, `mode: FIX` alone is not enough.
+
 ## The do-less ladder (B-PROP-005 — prevention, not review) [RULE:builder-prevention-preamble]
 
 > **Orchestrator injection (PBF-PROP-012 Part C):** this ladder is the canonical builder prevention preamble — the orchestrator MUST inject it as the prevention preamble into the builder subagent's prompt before every builder dispatch on every engine. The Card Compiler records the injection in `execution.prevention_preamble`; `cx check card` bites if absent.

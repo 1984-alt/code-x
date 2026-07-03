@@ -1189,4 +1189,13 @@ def cmd_card(args) -> int:
     except Exception:
         pass
 
+    # --- PBF-PROP-018: preserve-posture gate (compile-time bite) ---
+    # Opt-in on --repo-root (a card check with no repo context cannot resolve the accepted-surface
+    # manifests directory); the build-turn rail runs it unconditionally so the gate is never
+    # skippable on the normal build path.
+    repo_root = getattr(args, "repo_root", None)
+    if repo_root:
+        from cx_accepted_surface import run_accepted_surface_checks
+        findings.extend(run_accepted_surface_checks(data, loc, repo_root=repo_root))
+
     return findings_report(findings)

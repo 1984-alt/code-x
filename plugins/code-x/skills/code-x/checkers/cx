@@ -52,6 +52,7 @@ from cx_whole_packet_review import cmd_whole_packet_review
 from cx_kaizen import cmd_kaizen
 from cx_graduation import cmd_graduation
 from cx_audit import cmd_audit
+from cx_accepted_surface import cmd_accepted_surface
 
 # ---------------------------------------------------------------------------
 # CLI surface
@@ -77,6 +78,8 @@ def main():
     p_card.add_argument("file", help="Path to WORK-ORDER YAML file")
     p_card.add_argument("--state", help="Optional: path to CODE-X-STATE.yaml (enables substitution + foundation checks)", default=None)
     p_card.add_argument("--profiles", help="Path to BUILD-ENGINE-PROFILES.yaml (default: canonical file; CX_PROFILES env overrides for test pinning)", default=None)
+    p_card.add_argument("--repo-root", dest="repo_root", default=None,
+                        help="Path to the git repo root — enables the compile-time PBF-PROP-018 accepted-surface bite (reads <repo-root>/accepted-surface-manifests if present)")
 
     # state
     p_state = check_sub.add_parser("state", help="Validate a CODE-X-STATE.yaml file")
@@ -353,6 +356,34 @@ def main():
                       help="Path to CEO-DECISION-LEDGER.md a ladder ceo_decision_ref resolves against "
                            "(default: <repo-root>/CEO-DECISION-LEDGER.md; mirrors cx check deck/graduation)")
 
+    # accepted-surface (PBF-PROP-018: the preserve-posture gate — a card touching an accepted
+    # module's files must carry either an anchored mode: FIX or a typed preserve_contract)
+    p_as = check_sub.add_parser(
+        "accepted-surface",
+        help="Preserve-posture gate: a card whose allowed_files touch a CEO-accepted module's "
+             "files must carry an anchored mode: FIX (defect repair only) or a typed "
+             "preserve_contract (extractor-backed inventory + regression receipt) (PBF-PROP-018)")
+    p_as.add_argument("card", help="Path to the WORK-ORDER YAML")
+    p_as.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="Path to the git repo root (enables manifest auto-discovery + "
+                           "extractor recompute + baseline-ancestor checks)")
+    p_as.add_argument("--manifests-dir", dest="manifests_dir", default=None,
+                      help="Directory of accepted_surface_manifest receipts "
+                           "(default: <repo-root>/accepted-surface-manifests)")
+    p_as.add_argument("--baseline", dest="baseline", default=None,
+                      help="Baseline commit sha — activates the build-turn-only actual-diff bite "
+                           "(ACCEPTED-SURFACE-DIFF-UNDECLARED)")
+    p_as.add_argument("--screen-globs", dest="screen_globs", default=None,
+                      help="Comma-separated fnmatch globs for user-facing screen/template files "
+                           "(default: *.html, *_shell.html, */templates/*, */screens/*)")
+    p_as.add_argument("--state", dest="state", default=None,
+                      help="Path to CODE-X-STATE.yaml — enables state-declared manifest discovery "
+                           "(accepted_surface_manifests [{ref, hash}] rows, sha12-verified)")
+    p_as.add_argument("--ledger", dest="ledger", default=None,
+                      help="Path to CEO-DECISION-LEDGER.md for resolving dropped_ceo_decision_ref "
+                           "rows (default: <repo-root>/CEO-DECISION-LEDGER.md; drop refs fail "
+                           "CLOSED when no ledger is readable)")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -387,6 +418,7 @@ def main():
         "kaizen": cmd_kaizen,
         "graduation": cmd_graduation,
         "audit": cmd_audit,
+        "accepted-surface": cmd_accepted_surface,
     }
 
     fn = dispatch.get(args.check_cmd)

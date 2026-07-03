@@ -111,6 +111,17 @@ crossed surface is a danger class (money · auth · secrets · shared-data-shape
 - **Enter Fixing** when the work is to repair an existing, already-built (and usually already-accepted)
   surface — not to build new locked scope. State carries `current_stage: FIXING_STAGE`; the seat cap is
   read from the `fixing_stage` profile in `BUILD-ENGINE-PROFILES.yaml`.
+- **Posture follows the surface, not the front door (PBF-PROP-018).** Work that modifies, deletes, or
+  re-parents an already-CEO-accepted surface takes PRESERVE posture even when it ships NEW locked
+  scope — that work stays routed through Building (packet → G1 → G7/G8), but Building runs it as
+  **"Building with preserve rails"**: full Building machinery PLUS Lever C's per-target cross-lock and
+  Lever D's SCREEN_CONTRACT (Must-preserve inventory), imported per accepted surface touched. This is a
+  hybrid posture, NOT a new stage — Fixing itself stays reserved for defect-driven repair with no new
+  scope. Resolves the Lever D "redesign only, no logic changes" collision: a redesign of an accepted
+  surface is preserve-rails work regardless of which stage's machinery is driving, so the entry clause
+  above ("not to build new locked scope") never has to stretch to cover it. `cx check accepted-surface`
+  (wired into `cx check card` + `cx check build-turn`) recomputes the exposure from
+  `accepted_surface_manifest` receipts — the orchestrator never classifies this by judgment alone.
 - **Step 0 — freeze-baseline (forward-scope).** A lock can only be protected if it exists. For an
   already-drifted app (a live-production money app, Sample) the stage opens with a one-time freeze-baseline: accept current-good,
   capture the `structure_lock` manifest, confirm the ledger. F-PROP-001 does **not** retroactively

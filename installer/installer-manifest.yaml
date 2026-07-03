@@ -1,0 +1,107 @@
+# Code-X installer manifest (PBF-PROP-017) — PINNED trust root.
+#
+# Every dependency below is bound to an IMMUTABLE coordinate: a release tag, the
+# commit sha that tag points at, and (where the source is fetchable as a single
+# archive) a sha256 checksum of that archive. install.sh refuses to proceed if a
+# live fetch does not match this file byte-for-byte — fail-closed, not a warning.
+#
+# WHY PINNING EXISTS (xfam P0, PBF-PROP-017 design review): pulling straight from
+# each project's official source solves LICENSING/VENDORING exposure (no
+# third-party code ships inside Code-X). It does NOT by itself protect against
+# upstream drift or a compromised/moved release — that protection comes from
+# this file. Any mismatch, disappearance, or unpinned coordinate is a fail-closed
+# condition in install.sh, never a soft warning.
+#
+# UPDATE PROCEDURE (manual, deliberate — no auto-pin-bump):
+#   1. Decide to move the pin (new upstream release, security fix, etc).
+#   2. Re-fetch the release's tag->commit mapping from the GitHub API
+#      (`/repos/<owner>/<repo>/tags`) and the tarball, recompute sha256 locally.
+#   3. Edit the three fields below (tag, commit, sha256) together — never one
+#      alone. Record the change in VERSION-HISTORY.md / a design-history note.
+#   4. Re-run installer tests (tests/run-installer-tests.sh) before shipping.
+
+schema_version: 1
+generated: "2026-07-03"
+generated_by: "PBF-PROP-017 builder seat (Sonnet), worktree cx-v1-prop017"
+
+dependencies:
+  # code-x itself. Pin policy: SAME-RELEASE-AS-SELF — the installer always ships
+  # pinned to the exact code-x release it is packaged inside (documented choice,
+  # not a placeholder). release_tag below MUST equal `checkers/cx --version`'s
+  # version string — a pinned test enforces this (test_version_parity). The
+  # commit_sha is a build-time placeholder until the public port cuts a real
+  # release; installer/restamp-release.sh re-stamps BOTH fields together at
+  # every release cut (never edit release_tag without commit_sha, or vice versa).
+  code-x:
+    kind: claude_code_plugin_marketplace
+    official_source: "https://github.com/1984-alt/code-x"
+    marketplace_add_source: "1984-alt/code-x"
+    plugin_id: "code-x@code-x"
+    pin_policy: "same-release-as-self"
+    release_tag: "v1.22.4"
+    commit_sha: "cbd63cfe604c2271f7f201696c2605e2b596082f"
+    # No single-archive checksum pinned here: the plugin is installed live by the
+    # `claude` CLI's own marketplace/plugin machinery (git clone under the hood),
+    # not a raw tarball fetch install.sh performs itself. install.sh instead
+    # verifies the installed marketplace's resolved commit == commit_sha above
+    # (`claude plugin marketplace list --json`) and fails closed on a mismatch.
+    verify_method: "installed_marketplace_commit_match"
+
+  superpowers:
+    kind: claude_code_plugin
+    official_source: "https://github.com/obra/superpowers"
+    marketplace_add_source: "obra/superpowers"
+    plugin_id: "superpowers@superpowers"
+    # documented Claude Code convenience alias also exists:
+    # "superpowers@claude-plugins-official" — install.sh prefers the direct
+    # GitHub coordinate so the pin below is meaningful and verifiable.
+    pin_policy: "pinned-release"
+    release_tag: "v6.1.1"
+    commit_sha: "c984ea2e7aeffdcc865784fd6c5e3ab75da0209a"
+    tarball_url: "https://github.com/obra/superpowers/archive/refs/tags/v6.1.1.tar.gz"
+    # No sha256 here (xfam P1 PINNED_SHA256_DEAD_FIELD, 2026-07-03): install.sh
+    # never fetches this tarball — `claude plugin marketplace add` does its own
+    # `git clone` under the hood, so a tarball checksum has no enforcement point
+    # in this script. Trust binding for superpowers is IDENTICAL to code-x:
+    # installed_marketplace_commit_match (pinned commit + clean working tree,
+    # see install.sh ensure_marketplace_and_plugin). tarball_url above is kept
+    # only as a human reference link, not a verified coordinate.
+    verify_method: "installed_marketplace_commit_match"
+    fetched_2026-07-03_note: >
+      tag->commit fetched live from api.github.com during this build
+      (2026-07-03). Not a PIN-ME placeholder.
+
+  coderabbit:
+    kind: third_party_offer_only
+    official_source: "https://docs.coderabbit.ai/cli/overview"
+    install_url: "https://cli.coderabbit.ai/install.sh"
+    relationship: "works-with"   # NEVER "includes" — no bundling, no endorsement implied
+    account_required: true
+    auto_install: false          # install.sh NEVER runs this — offer + explain only
+    note: >
+      CodeRabbit is a proprietary, account-bound third-party service. install.sh
+      prints the official install URL and a plain-English note that it needs the
+      user's own CodeRabbit account, then moves on. It is never fetched, never
+      executed, and a decline never fails the run.
+
+  python3:
+    kind: system_prerequisite
+    official_source: "https://www.python.org/"
+    min_version: "3.10"
+    macos_fallback_path: "/opt/homebrew/bin/python3"
+    verify_method: "version_probe"
+
+  pyyaml:
+    kind: python_package
+    official_source: "https://pypi.org/project/PyYAML/"
+    verify_method: "import_probe"
+
+  git:
+    kind: system_prerequisite
+    official_source: "https://git-scm.com/"
+    verify_method: "presence_probe"
+
+  claude_cli:
+    kind: system_prerequisite
+    official_source: "https://github.com/anthropics/claude-code"
+    verify_method: "presence_probe"
