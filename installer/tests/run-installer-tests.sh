@@ -29,12 +29,77 @@ run_case() {
   fi
 }
 
+installer_release_tag() {
+  grep '^INSTALLER_RELEASE_TAG=' "$INSTALL_SH" | sed -E 's/.*="(.*)"/\1/'
+}
+
+manifest_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+predict_fake_commit_sha() {
+  # $1 = the exact `claude plugin marketplace add` source string (full
+  # URL#tag) that will be used for a real add. The fake CLI's commit is
+  # fully deterministic (fixed committer identity + date; tree content
+  # derived only from the requested ref/version — see tests/fixtures/claude)
+  # so running it once in a disposable, throwaway FAKE_CLAUDE_HOME and
+  # reading back HEAD tells us exactly what commit sha a REAL install run's
+  # clone will also produce, WITHOUT needing a real upstream clone. This is
+  # what lets the offline suite exercise INV-3 (a real, enforced commit_sha
+  # pin) at all.
+  local add_source="$1"
+  local tmp; tmp="$(mktemp -d)"
+  FAKE_CLAUDE_HOME="$tmp" "$FAKE_CLAUDE" plugin marketplace add "$add_source" >/dev/null
+  local mp_dir; mp_dir="$(find "$tmp/marketplaces" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  git -C "$mp_dir" rev-parse HEAD
+  rm -rf "$tmp"
+}
+
 fresh_sandbox() {
-  # Sets up an isolated workdir + fake HOME + an untouched manifest copy.
+  # Sets up an isolated workdir + fake HOME + a file:// "remote" release tree
+  # that mirrors install.sh's ALWAYS-fetch trust root (INV-1, council
+  # trust-model rebuild 2026-07-03): there is no local-manifest code path
+  # anymore, so every happy-path test below exercises the exact same
+  # fetch-and-verify logic a real user's install hits — not a shortcut.
+  # Modeled on test_bootstrap_fetch_correct_hash_proceeds further down.
+  # Deliberately does NOT place any installer-manifest.yaml next to
+  # install.sh itself — see test_cwd_manifest_is_ignored, which proves that
+  # even a manifest planted right there is never read.
+  #
+  # The fetched manifest is the REAL shipped one with ONE substitution: the
+  # superpowers commit_sha is swapped for the sha this offline fixture's
+  # OWN deterministic clone will actually produce (see
+  # predict_fake_commit_sha above). Real users get the real upstream commit
+  # sha (INSTALLER_DIR/installer-manifest.yaml, never touched by tests);
+  # this sandbox copy only needs to be satisfiable by the fake CLI so INV-3
+  # is exercised for real rather than skipped.
   local dir="$1"
   mkdir -p "$dir/home" "$dir/state"
   cp "$INSTALL_SH" "$dir/install.sh"
-  cp "$INSTALLER_DIR/installer-manifest.yaml" "$dir/installer-manifest.yaml"
+  local tag; tag="$(installer_release_tag)"
+  local remote="$dir/remote/$tag/installer"
+  mkdir -p "$remote"
+  local sp_source fake_sp_sha
+  sp_source="$(tag_pinned_add_source superpowers)"
+  fake_sp_sha="$(predict_fake_commit_sha "$sp_source")"
+  sed -E "s/^(    commit_sha: \")[0-9a-f]{40}(\")/\\1${fake_sp_sha}\\2/" \
+    "$INSTALLER_DIR/installer-manifest.yaml" > "$remote/installer-manifest.yaml"
+  # The shipped install.sh's embedded checksum pins the REAL manifest bytes
+  # (real upstream commit_sha included) — this offline fixture can never
+  # reproduce that real commit, so the substitution above necessarily
+  # changes the manifest's bytes/hash. Re-stamp the SANDBOX's OWN install.sh
+  # copy to match, exactly like installer/restamp-release.sh does at a real
+  # release cut. This never touches the real installer/install.sh under
+  # test — that file's real checksum-vs-real-manifest pairing is verified
+  # separately by test_bootstrap_fetch_correct_hash_proceeds below.
+  local sandbox_sha
+  sandbox_sha="$(manifest_sha256 "$remote/installer-manifest.yaml")"
+  sed -i.bak "s/^INSTALLER_MANIFEST_SHA256=\".*\"/INSTALLER_MANIFEST_SHA256=\"$sandbox_sha\"/" "$dir/install.sh"
+  rm -f "$dir/install.sh.bak"
 }
 
 manifest_field() {
@@ -80,6 +145,7 @@ run_installer() {
     HOME="$dir/home" \
     FAKE_CLAUDE_HOME="$dir/state" \
     PATH="$HERE/fixtures:$PATH" \
+    CODE_X_INSTALLER_REMOTE_BASE="file://$dir/remote" \
     bash "$dir/install.sh" ) > "$dir/out.log" 2>&1
   echo $?
 }
@@ -225,6 +291,7 @@ EOF
   chmod +x "$dir/fakebin/python3"
   ( cd "$dir" && HOME="$dir/home" FAKE_CLAUDE_HOME="$dir/state" \
       PATH="$dir/fakebin:$HERE/fixtures:$PATH" \
+      CODE_X_INSTALLER_REMOTE_BASE="file://$dir/remote" \
       bash "$dir/install.sh" ) > "$dir/out.log" 2>&1
   local status=$?
   local rc=1
@@ -383,6 +450,139 @@ test_non_git_checkout_fails_closed() {
   return $rc
 }
 
+# ---- INV-1: a manifest planted in the CWD/beside install.sh is IGNORED -----
+test_cwd_manifest_is_ignored() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  # Plant a malicious manifest right next to install.sh, pointing code-x at
+  # an attacker repo — exactly what a manifest dropped beside a downloaded
+  # install.sh (e.g. in ~/Downloads) would look like. install.sh must never
+  # read it: it only trusts the copy it fetches itself from the pinned tag.
+  cat > "$dir/installer-manifest.yaml" <<'EOF'
+schema_version: 1
+dependencies:
+  code-x:
+    marketplace_add_url: "https://github.com/attacker/code-x-evil.git"
+    marketplace_name: "code-x"
+    plugin_id: "code-x@code-x"
+    release_tag: "v1.22.4"
+  superpowers:
+    marketplace_add_url: "https://github.com/attacker/superpowers-evil.git"
+    marketplace_name: "superpowers-dev"
+    plugin_id: "superpowers@superpowers-dev"
+    release_tag: "v6.1.1"
+EOF
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -eq 0 ] && \
+     grep -qi "fetched + verified installer-manifest.yaml from pinned release" "$dir/out.log" && \
+     ! grep -qi "attacker" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-2: a same-NAME marketplace with a DIFFERENT origin fails closed ---
+test_same_name_different_origin_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  local cx_tag; cx_tag="$(manifest_release_tag code-x)"
+  # Pre-seed a marketplace named "code-x" (the name install.sh looks up) that
+  # is actually cloned from an attacker repo — same name, same tag, same
+  # self-declared version, so only reading the checkout's OWN git origin
+  # (not its name) can catch this.
+  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "https://github.com/evil/code-x.git#$cx_tag" >/dev/null
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && grep -qi "points at a different repo" "$dir/out.log" && \
+     grep -qi "marketplace remove" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-3: superpowers' pinned commit moved (tag re-cut) fails closed -----
+test_commit_sha_mismatch_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Move superpowers' tag onto a NEW commit that still declares the SAME
+  # version (tag-exact-match and version-parity both still pass) — an
+  # upstream tag moved/re-cut to different content. Only the commit_sha pin
+  # (enforced for superpowers, which has one; code-x has none) can catch it.
+  local sp_dir="$dir/state/marketplaces/superpowers-dev"
+  local sp_tag; sp_tag="$(manifest_release_tag superpowers)"
+  echo "moved content" > "$sp_dir/MOVED.md"
+  git -C "$sp_dir" add -A
+  git -C "$sp_dir" -c user.email=test@test -c user.name=test commit -q -m "upstream tag moved to different content"
+  git -C "$sp_dir" tag -f "$sp_tag" >/dev/null 2>&1
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && grep -qi "does not match the pinned commit" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-4 robustness: two tags on one commit must NOT false-fail ----------
+test_two_tags_one_commit_still_passes() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Add a SECOND tag on the exact same commit as the pinned release tag.
+  # `git describe --exact-match --tags HEAD` (the old check) can report
+  # either tag name when several point at one commit — a false fail if it
+  # picked the other one. Comparing commits (INV-4) never has this problem.
+  local cx_dir="$dir/state/marketplaces/code-x"
+  git -C "$cx_dir" tag "unrelated-alias-tag" >/dev/null 2>&1
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -eq 0 ]; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-5: a soft-failed code-x step hard-stops before superpowers -------
+test_chain_halts_before_superpowers_on_codex_soft_fail() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Force the underlying `claude plugin install` call to fail for code-x
+  # specifically — a "soft" failure (ensure_marketplace_and_plugin returns 1
+  # without itself calling fail_closed/exit). INV-5: this must hard-stop
+  # before superpowers is ever touched, not print a warning and continue.
+  local status
+  status="$(FAKE_CLAUDE_FAIL_INSTALL="code-x@code-x" run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && \
+     grep -qi "Code-X plugin setup did not complete" "$dir/out.log" && \
+     ! grep -q "Step 3/4" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
 # ---- P1: install.sh is self-sufficient — bootstrap-fetches its own manifest -
 test_bootstrap_fetch_correct_hash_proceeds() {
   local dir; dir="$(mktemp -d)"
@@ -498,6 +698,11 @@ run_case "P1: marketplace-add uses the documented full-URL#<release_tag> form" t
 run_case "P1: wrong plugin version at the same tag fails closed (belt)" test_wrong_installed_version_fails_closed
 run_case "BLOCKING: clean+right-version but HEAD not at tag fails closed" test_right_version_wrong_branch_fails_closed
 run_case "P2: non-git/corrupted checkout fails closed (not read as clean)" test_non_git_checkout_fails_closed
+run_case "INV-1: manifest planted in cwd/beside install.sh is ignored" test_cwd_manifest_is_ignored
+run_case "INV-2: same-name marketplace with a different origin fails closed" test_same_name_different_origin_fails_closed
+run_case "INV-3: superpowers commit_sha mismatch (tag moved) fails closed" test_commit_sha_mismatch_fails_closed
+run_case "INV-4: two tags on one commit still passes (no false fail)" test_two_tags_one_commit_still_passes
+run_case "INV-5: code-x soft-fail hard-stops before superpowers" test_chain_halts_before_superpowers_on_codex_soft_fail
 
 echo ""
 echo "installer tests: $PASS passed, $FAIL failed"

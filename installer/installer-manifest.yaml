@@ -26,9 +26,17 @@
 #
 # UPDATE PROCEDURE (manual, deliberate — no auto-pin-bump):
 #   1. Decide to move the pin (new upstream release, security fix, etc).
-#   2. Confirm the new tag exists at the upstream repo (and, for an external
-#      dependency like superpowers, what commit it currently points at — kept
-#      as an informational cross-check, not a verified coordinate).
+#   2. Confirm the new tag exists at the upstream repo and, for an external
+#      dependency like superpowers, what COMMIT it points at — this is now a
+#      VERIFIED, ENFORCED coordinate (install.sh's INV-3 check), not merely
+#      informational. Get the commit with `git rev-parse <tag>^{commit}` (or
+#      `git rev-list -n1 <tag>`) run against a real clone of the tag — NEVER
+#      the tag ref's own sha from `git rev-parse <tag>` or from
+#      api.github.com's tag-ref JSON. An ANNOTATED tag's ref sha is the
+#      TAG-OBJECT, not the commit it points at, and those two shas differ
+#      (the fold-2026-07-03 bug: the stored commit_sha was the tag-object
+#      sha, which would fail EVERY real install against it). Peel the tag to
+#      its commit first, always.
 #   3. Edit release_tag (installer/restamp-release.sh does this for code-x,
 #      plus install.sh's own embedded bootstrap tag + manifest checksum, all
 #      together). Record the change in VERSION-HISTORY.md / a design-history
@@ -94,23 +102,32 @@ dependencies:
     # GitHub coordinate so the pin below is meaningful and verifiable.
     pin_policy: "pinned-release"
     release_tag: "v6.1.1"
-    # Informational only (fold v1.22.4, 2026-07-03) — NOT used by install.sh's
-    # verification, which is release_tag + version-parity, identical in kind
-    # to code-x above. Unlike code-x's pin, superpowers is an external
-    # dependency pinned from outside its own release process, so this commit
-    # is not self-referential/circular — it's kept as a human audit trail (did
-    # the v6.1.1 tag ever move?) fetched live from api.github.com at pin time.
-    commit_sha: "c984ea2e7aeffdcc865784fd6c5e3ab75da0209a"
+    # ENFORCED when present (council trust-model rebuild, 2026-07-03; INV-3)
+    # — install.sh requires `git rev-parse HEAD` at the cloned checkout to
+    # equal this value. Unlike code-x's pin, superpowers is an external
+    # dependency pinned from outside its own release process, so this is not
+    # self-referential/circular the way a code-x self-sha would be.
+    #
+    # This is the COMMIT the v6.1.1 tag points at — NOT the tag ref's own
+    # sha. v6.1.1 is an ANNOTATED tag: `git rev-parse refs/tags/v6.1.1`
+    # returns the TAG-OBJECT sha (c984ea2e7aeffdcc865784fd6c5e3ab75da0209a),
+    # which is a different object than the commit it points at. The value
+    # below was verified 2026-07-03 by cloning the real tag and reading
+    # `git rev-parse refs/tags/v6.1.1^{commit}` (== `git rev-parse HEAD`
+    # after checkout) — see UPDATE PROCEDURE above; never store the
+    # tag-ref/api.github.com value here again.
+    commit_sha: "d884ae04edebef577e82ff7c4e143debd0bbec99"
     tarball_url: "https://github.com/obra/superpowers/archive/refs/tags/v6.1.1.tar.gz"
     # No sha256 here (xfam P1 PINNED_SHA256_DEAD_FIELD, 2026-07-03): install.sh
     # never fetches this tarball — `claude plugin marketplace add` does its own
     # `git clone` under the hood, so a tarball checksum has no enforcement point
     # in this script. tarball_url above is kept only as a human reference link,
     # not a verified coordinate.
-    verify_method: "installed_marketplace_tag_pin_plus_version_parity"
+    verify_method: "installed_marketplace_tag_pin_plus_version_parity_plus_commit_sha"
     fetched_2026-07-03_note: >
-      tag->commit fetched live from api.github.com during this build
-      (2026-07-03). Not a PIN-ME placeholder.
+      tag->commit re-verified by cloning the real tag (not api.github.com's
+      tag-ref JSON) during the council trust-model rebuild (2026-07-03).
+      Not a PIN-ME placeholder.
 
   coderabbit:
     kind: third_party_offer_only

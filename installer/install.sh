@@ -22,17 +22,17 @@
 # nounset even though the array is legitimately declared-but-empty. Since
 # macOS/bash-3.2 is this installer's primary target, every variable below is
 # given an explicit default instead of relying on nounset to catch typos.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-# ---- embedded trust root (xfam P1 ONE_LINE_COMMAND_NONFUNCTIONAL, 2026-07-03) --
-# `curl .../install.sh | bash` downloads ONLY this file — no adjacent manifest.
-# These two values make install.sh self-sufficient: when no local manifest is
-# found beside the script, it fetches installer-manifest.yaml from this exact
-# pinned release tag and verifies it against this exact pinned checksum before
-# trusting a single byte of it. Re-stamped together by
-# installer/restamp-release.sh at every release cut — never edit by hand.
+# ---- embedded trust root (council trust-model rebuild, 2026-07-03; INV-1) --
+# This installer has exactly ONE manifest trust root: it ALWAYS fetches
+# installer-manifest.yaml fresh from this exact pinned release tag and
+# verifies it against this exact pinned checksum BEFORE trusting a single
+# byte of it — it never reads a manifest sitting beside the script or in the
+# current directory (that would let a manifest planted next to a downloaded
+# install.sh, e.g. in ~/Downloads, be trusted silently). Re-stamped together
+# by installer/restamp-release.sh at every release cut — never edit by hand.
 INSTALLER_RELEASE_TAG="v1.22.4"
-INSTALLER_MANIFEST_SHA256="7e3c2992bc8555aa30a2210046fdc15c7437c2ee7b45296ed2fa7a263cf042f0"
+INSTALLER_MANIFEST_SHA256="9877f2c17bc7eb843af5035a4a2889f08a39006783bb9bd0ee71c7f1387cf5b5"
 DEFAULT_REMOTE_BASE="https://raw.githubusercontent.com/1984-alt/code-x"
 # Test-only override (offline fixtures point this at a file:// tree); never
 # set this yourself for a real install.
@@ -77,36 +77,37 @@ shasum_file() {
   fi
 }
 
-# ---- manifest resolution: local file first, pinned-release fetch as fallback -
-# This is the single trust root install.sh relies on. Local-file mode (manifest
-# copied beside the script) is what dev/tests use. The pipe-to-bash path with no
-# local manifest falls back to fetching it from the pinned release tag and
-# checking it against the embedded checksum above before using it.
-MANIFEST="${SCRIPT_DIR}/installer-manifest.yaml"
-if [ ! -f "$MANIFEST" ]; then
-  if [ "$INSTALLER_MANIFEST_SHA256" = "__PENDING_RESTAMP__" ]; then
-    fail_closed "install.sh's embedded manifest checksum has not been stamped for a release yet" \
-      "this is a dev/pre-release copy of install.sh — download the whole installer/ folder instead of just install.sh, or run installer/restamp-release.sh first"
-  fi
-  if ! command -v curl >/dev/null 2>&1; then
-    fail_closed "installer-manifest.yaml not found next to install.sh, and curl is unavailable to fetch it" \
-      "download the whole installer/ folder instead of just install.sh"
-  fi
-  TMP_MANIFEST="$(mktemp -t code-x-manifest.XXXXXX 2>/dev/null || mktemp)"
-  trap 'rm -f "$TMP_MANIFEST"' EXIT
-  REMOTE_MANIFEST_URL="${REMOTE_BASE}/${INSTALLER_RELEASE_TAG}/installer/installer-manifest.yaml"
-  if ! curl -fsSL "$REMOTE_MANIFEST_URL" -o "$TMP_MANIFEST" 2>/dev/null; then
-    fail_closed "could not fetch installer-manifest.yaml from the pinned release ($REMOTE_MANIFEST_URL)" \
-      "check your internet connection, or download the whole installer/ folder instead of just install.sh"
-  fi
-  FETCHED_SHA256="$(shasum_file "$TMP_MANIFEST")"
-  if [ -z "$FETCHED_SHA256" ] || [ "$FETCHED_SHA256" != "$INSTALLER_MANIFEST_SHA256" ]; then
-    fail_closed "fetched installer-manifest.yaml does not match the pinned checksum (expected ${INSTALLER_MANIFEST_SHA256:0:12}\xe2\x80\xa6, got ${FETCHED_SHA256:0:12}\xe2\x80\xa6)" \
-      "the release asset may be corrupted or tampered with \xe2\x80\x94 do not proceed; report this"
-  fi
-  MANIFEST="$TMP_MANIFEST"
-  ok "fetched + verified installer-manifest.yaml from pinned release $INSTALLER_RELEASE_TAG"
+# ---- manifest resolution: single trust root, ALWAYS fetch (INV-1) ----------
+# install.sh never reads a manifest from disk (cwd or beside the script) —
+# it always fetches its own copy from the pinned release tag and checksum
+# above, then parses that. This collapses what used to be two code paths
+# (local-file vs fetch) into one: the same fetch-and-verify logic runs for
+# every install, dev or real, so a test can never accidentally exercise a
+# different (and weaker) path than a real user does. Tests point
+# CODE_X_INSTALLER_REMOTE_BASE at a throwaway file:// tree instead of the
+# real network — same code, no shortcuts.
+if [ "$INSTALLER_MANIFEST_SHA256" = "__PENDING_RESTAMP__" ]; then
+  fail_closed "install.sh's embedded manifest checksum has not been stamped for a release yet" \
+    "this is a dev/pre-release copy of install.sh — run installer/restamp-release.sh first"
 fi
+if ! command -v curl >/dev/null 2>&1; then
+  fail_closed "curl is unavailable, and this installer needs it to fetch installer-manifest.yaml" \
+    "install curl, then re-run this installer"
+fi
+TMP_MANIFEST="$(mktemp -t code-x-manifest.XXXXXX 2>/dev/null || mktemp)"
+trap 'rm -f "$TMP_MANIFEST"' EXIT
+REMOTE_MANIFEST_URL="${REMOTE_BASE}/${INSTALLER_RELEASE_TAG}/installer/installer-manifest.yaml"
+if ! curl -fsSL "$REMOTE_MANIFEST_URL" -o "$TMP_MANIFEST" 2>/dev/null; then
+  fail_closed "could not fetch installer-manifest.yaml from the pinned release ($REMOTE_MANIFEST_URL)" \
+    "check your internet connection and try again"
+fi
+FETCHED_SHA256="$(shasum_file "$TMP_MANIFEST")"
+if [ -z "$FETCHED_SHA256" ] || [ "$FETCHED_SHA256" != "$INSTALLER_MANIFEST_SHA256" ]; then
+  fail_closed "fetched installer-manifest.yaml does not match the pinned checksum (expected ${INSTALLER_MANIFEST_SHA256:0:12}\xe2\x80\xa6, got ${FETCHED_SHA256:0:12}\xe2\x80\xa6)" \
+    "the release asset may be corrupted or tampered with \xe2\x80\x94 do not proceed; report this"
+fi
+MANIFEST="$TMP_MANIFEST"
+ok "fetched + verified installer-manifest.yaml from pinned release $INSTALLER_RELEASE_TAG"
 
 # ---- tiny YAML field reader (no PyYAML dependency for the shell layer) -----
 # The manifest is a flat, hand-authored YAML file. We only need scalar leaf
@@ -133,6 +134,9 @@ SP_RELEASE_TAG="$(yaml_get "  superpowers:" release_tag)"
 SP_MARKETPLACE_URL="$(yaml_get "  superpowers:" marketplace_add_url)"
 SP_MP_NAME="$(yaml_get "  superpowers:" marketplace_name)"
 SP_PLUGIN_ID="$(yaml_get "  superpowers:" plugin_id)"
+# INV-3: enforced when present (superpowers has it; code-x has none — see
+# ensure_marketplace_and_plugin below for why code-x auto-skips this check).
+SP_COMMIT_SHA="$(yaml_get "  superpowers:" commit_sha)"
 CR_INSTALL_URL="$(yaml_get "  coderabbit:" install_url)"
 PY_MIN_VERSION="$(yaml_get "  python3:" min_version)"
 PY_FALLBACK="$(yaml_get "  python3:" macos_fallback_path)"
@@ -223,6 +227,22 @@ if [ "${#FAIL_ROWS[@]}" -gt 0 ]; then
 fi
 
 # ---- helpers to drive the claude CLI plugin machinery ----------------------
+marketplace_exists() {
+  # $1 = marketplace name. Structured JSON read (INV-5), not a substring
+  # grep — a grep for `"name": "$mp_name"` can also match that same string
+  # appearing as another marketplace's unrelated field value, or miss on a
+  # harmless whitespace difference the CLI is free to emit.
+  local name="$1"
+  claude plugin marketplace list --json 2>/dev/null | "$PYTHON_BIN" -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any(m.get('name') == '$name' for m in data) else 1)
+"
+}
+
 marketplace_installed_location() {
   # $1 = marketplace name as configured (e.g. "code-x")
   local name="$1"
@@ -261,20 +281,53 @@ for p in data.get('plugins', []):
 "
 }
 
+plugin_installed() {
+  # $1 = plugin id ("name@marketplace"). Structured JSON read — see
+  # marketplace_exists above for why this replaced a substring grep.
+  local id="$1"
+  claude plugin list --json 2>/dev/null | "$PYTHON_BIN" -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any(p.get('id') == '$id' for p in data) else 1)
+"
+}
+
+normalize_git_origin() {
+  # $1 = a git remote URL. Prints "host/owner/repo" (host lowercased) so
+  # equivalent forms of the SAME repo compare equal — https with or without
+  # a trailing "/" or ".git", the git@host:owner/repo ssh shorthand — without
+  # accepting a lookalike host or a different owner/repo. (INV-2's
+  # highest-attention item: accept every legit form, never a lookalike.)
+  local url="$1"
+  url="${url%/}"
+  url="${url%.git}"
+  url="${url#*://}"   # strip a scheme (https://, git://, ssh://), if any
+  url="${url#*@}"      # strip a "user@" prefix, if any (ssh shorthand)
+  url="${url/://}"    # ssh shorthand's "host:owner/repo" -> "host/owner/repo"
+  local host="${url%%/*}"
+  local rest="${url#*/}"
+  printf '%s/%s' "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$rest"
+}
+
 ensure_marketplace_and_plugin() {
   # $1 = human label, $2 = marketplace add URL (full https .git URL),
   # $3 = marketplace name (as the marketplace declares itself, NOT the repo
-  # name), $4 = plugin id (plugin@marketplace), $5 = pinned release tag.
+  # name), $4 = plugin id (plugin@marketplace), $5 = pinned release tag,
+  # $6 = pinned commit sha (INV-3; empty string when the dep has none — e.g.
+  # code-x, whose own release commit cannot contain its own sha).
   #
   # The tag pin uses the DOCUMENTED full-URL + `#<ref>` form
   # ("<url>.git#<tag>"). The bare `owner/repo@tag` shorthand is undocumented
   # for `marketplace add` and can silently clone unpinned on some CLI
   # versions — this form is the one Anthropic's docs guarantee.
-  local label="$1" add_url="$2" mp_name="$3" plugin_id="$4" release_tag="$5"
+  local label="$1" add_url="$2" mp_name="$3" plugin_id="$4" release_tag="$5" commit_sha="${6:-}"
   local newly_added=0
   local add_source="${add_url}#${release_tag}"
 
-  if ! claude plugin marketplace list --json 2>/dev/null | grep -q "\"name\": \"$mp_name\""; then
+  if ! marketplace_exists "$mp_name"; then
     note "Adding the $label marketplace ($add_url, pinned to $release_tag)..."
     if ! claude plugin marketplace add "$add_source" >/dev/null 2>&1; then
       bad "$label: could not add marketplace $add_source"
@@ -313,24 +366,46 @@ ensure_marketplace_and_plugin() {
       "remove the marketplace and re-run so it is re-cloned fresh: claude plugin marketplace remove $mp_name"
   fi
 
-  # xfam FIX-FIRST BLOCKING (2026-07-03): prove HEAD is EXACTLY the pinned tag.
-  # A tag-pinned `marketplace add ...#<tag>` SHOULD land HEAD on the tag, but we
-  # must not TRUST that it did: a marketplace added UNPINNED earlier (hole A —
-  # e.g. someone ran the manual `marketplace add owner/repo`), or an older CLI
-  # that ignored the `#<tag>` suffix (hole B), can sit at a clean, same-version
-  # main-branch HEAD that is NOT the tag — and the version-parity check alone
-  # would wave it through. Only an exact tag match proves the checkout is the
-  # pinned release. (Runtime-verified 2026-07-03: a real pinned clone reports
-  # `git describe --exact-match --tags HEAD` == the tag.)
-  local head_tag
-  head_tag="$(git -C "$loc" describe --exact-match --tags HEAD 2>/dev/null)"
-  if [ "$head_tag" != "$release_tag" ]; then
+  # INV-2 (council trust-model rebuild, 2026-07-03): identity = this
+  # checkout's OWN git origin, not its name. A marketplace called "code-x"
+  # could be ANY repo — `claude plugin marketplace list --json`'s own
+  # url/source field reflects settings, not what actually got cloned, so we
+  # read the on-disk clone's real remote instead. Highest-attention item:
+  # accept every legit form of the official URL, never a lookalike origin.
+  local origin_url
+  origin_url="$(git -C "$loc" remote get-url origin 2>/dev/null)"
+  if [ -z "$origin_url" ]; then
+    rollback_if_newly_added
+    fail_closed "$label: could not read the checkout's own git origin at $loc" \
+      "remove the marketplace and re-run so it is re-cloned fresh: claude plugin marketplace remove $mp_name"
+  fi
+  if [ "$(normalize_git_origin "$origin_url")" != "$(normalize_git_origin "$add_url")" ]; then
+    rollback_if_newly_added
+    fail_closed "$label: the '$mp_name' marketplace points at a different repo ($origin_url) than the official source ($add_url)" \
+      "a marketplace named '$mp_name' already exists but is not the real one — remove it and re-run so the official one is added: claude plugin marketplace remove $mp_name"
+  fi
+
+  # xfam FIX-FIRST BLOCKING (2026-07-03), rebuilt for INV-4 (council
+  # trust-model, 2026-07-03): prove HEAD is EXACTLY the commit the pinned tag
+  # points at. A tag-pinned `marketplace add ...#<tag>` SHOULD land HEAD on
+  # the tag, but we must not TRUST that it did: a marketplace added UNPINNED
+  # earlier (hole A — e.g. someone ran the manual `marketplace add
+  # owner/repo`), or an older CLI that ignored the `#<tag>` suffix (hole B),
+  # can sit at a clean, same-version main-branch HEAD that is NOT the tag —
+  # and the version-parity check alone would wave it through. Comparing
+  # commits (via `rev-parse refs/tags/<tag>^{commit}`, not tag NAMES via
+  # `git describe --exact-match`) also means two tags sharing one commit
+  # never produce a false fail.
+  local tag_commit head_commit
+  tag_commit="$(git -C "$loc" rev-parse "refs/tags/${release_tag}^{commit}" 2>/dev/null)"
+  head_commit="$(git -C "$loc" rev-parse HEAD 2>/dev/null)"
+  if [ -z "$tag_commit" ] || [ "$tag_commit" != "$head_commit" ]; then
     rollback_if_newly_added
     if [ "$newly_added" -eq 1 ]; then
-      fail_closed "$label: the marketplace was added but HEAD is not the pinned tag $release_tag (got '${head_tag:-an untagged commit}')" \
+      fail_closed "$label: the marketplace was added but HEAD is not the pinned tag $release_tag (HEAD's commit does not match the tag's commit)" \
         "your Claude CLI may be too old to honor a #<tag> pin — update Claude Code, then re-run this installer (it is safe to re-run)"
     else
-      fail_closed "$label: an existing '$mp_name' marketplace is NOT at the pinned tag $release_tag (HEAD is '${head_tag:-an untagged commit}')" \
+      fail_closed "$label: an existing '$mp_name' marketplace is NOT at the pinned tag $release_tag (HEAD's commit does not match the tag's commit)" \
         "it was likely added unpinned earlier — remove it and re-run so it is re-added pinned: claude plugin marketplace remove $mp_name"
     fi
   fi
@@ -345,9 +420,11 @@ ensure_marketplace_and_plugin() {
   # Belt-and-suspenders (fold v1.22.4): the tagged content's OWN self-declared
   # plugin version must equal the pinned release tag — catches a mispinned or
   # botched release where the tag exists but its marketplace.json declares a
-  # different version. (commit_sha pinning is impossible here: a marketplace
-  # source can only be pinned to a branch/tag ref, never a raw commit sha, and
-  # a code-x release commit cannot contain its own sha — the tag IS the pin.)
+  # different version. (For code-x, this is the strongest content check
+  # available: a marketplace source can only be pinned to a branch/tag ref,
+  # never a raw commit sha, and a code-x release commit cannot contain its
+  # own sha — the tag IS the pin. superpowers gets an additional, stronger
+  # check right after this one — see INV-3 below.)
   local plugin_name installed_version expected_version
   plugin_name="${plugin_id%%@*}"
   installed_version="$(installed_plugin_version "$loc" "$plugin_name")"
@@ -363,9 +440,22 @@ ensure_marketplace_and_plugin() {
     fail_closed "$label: installed plugin version ($installed_version) does not match the pinned release ($expected_version)" \
       "the upstream tag may have moved, or the checkout is stale — do not proceed on an unverified version; tell the maintainer to re-pin installer-manifest.yaml"
   fi
+  # INV-3 (council trust-model rebuild, 2026-07-03): enforced when the
+  # manifest carries a commit_sha for this dependency (external deps like
+  # superpowers, pinned from outside their own release process). code-x has
+  # none — a release commit cannot contain its own sha, so this auto-skips
+  # code-x. Runs AFTER version-parity above (a stronger check on top of it):
+  # catches an upstream tag moved/re-cut to different content while keeping
+  # the same self-declared version, which version-parity alone cannot see.
+  if [ -n "$commit_sha" ] && [ "$head_commit" != "$commit_sha" ]; then
+    rollback_if_newly_added
+    fail_closed "$label: the checkout's commit (${head_commit:-unknown}) does not match the pinned commit ($commit_sha)" \
+      "the upstream tag may have moved to different content since it was pinned — do not proceed; report this so installer-manifest.yaml can be re-verified and re-pinned"
+  fi
+
   ok "$label: marketplace verified at pinned tag $release_tag (HEAD on tag, clean tree, version $installed_version)"
 
-  if claude plugin list --json 2>/dev/null | grep -q "\"id\": \"$plugin_id\""; then
+  if plugin_installed "$plugin_id"; then
     ok "$label: plugin already installed ($plugin_id)"
   else
     note "Installing $label ($plugin_id)..."
@@ -383,11 +473,23 @@ ensure_marketplace_and_plugin() {
 if [ "$CLAUDE_OK" -eq 1 ] && [ -n "$PYTHON_BIN" ]; then
   note ""
   note "Step 2/4: Code-X plugin (pinned to release $CX_RELEASE_TAG)"
-  ensure_marketplace_and_plugin "Code-X" "$CX_MARKETPLACE_URL" "$CX_MP_NAME" "$CX_PLUGIN_ID" "$CX_RELEASE_TAG"
+  # INV-5 (council trust-model rebuild, 2026-07-03): chain-halt. A code-x
+  # step that only "soft-failed" (returned 1 without already calling
+  # fail_closed — e.g. the marketplace add itself failed) must STOP here,
+  # before superpowers ever runs. Installing superpowers on top of a broken
+  # Code-X would leave the user with a half-working setup and no clear
+  # signal why.
+  if ! ensure_marketplace_and_plugin "Code-X" "$CX_MARKETPLACE_URL" "$CX_MP_NAME" "$CX_PLUGIN_ID" "$CX_RELEASE_TAG" ""; then
+    fail_closed "Code-X plugin setup did not complete — see the FAIL line(s) above" \
+      "fix the Code-X issue above, then re-run this installer — it will not move on to superpowers until Code-X itself is verified"
+  fi
 
   note ""
   note "Step 3/4: superpowers plugin (pinned to release $SP_RELEASE_TAG)"
-  ensure_marketplace_and_plugin "superpowers" "$SP_MARKETPLACE_URL" "$SP_MP_NAME" "$SP_PLUGIN_ID" "$SP_RELEASE_TAG"
+  if ! ensure_marketplace_and_plugin "superpowers" "$SP_MARKETPLACE_URL" "$SP_MP_NAME" "$SP_PLUGIN_ID" "$SP_RELEASE_TAG" "$SP_COMMIT_SHA"; then
+    fail_closed "superpowers plugin setup did not complete — see the FAIL line(s) above" \
+      "fix the superpowers issue above, then re-run this installer"
+  fi
 else
   warn "skipping plugin installs — fix the preflight failures above first"
 fi

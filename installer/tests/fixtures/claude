@@ -21,6 +21,19 @@ repo_name_from_source() {
   basename "$s"
 }
 
+resolved_origin_url() {
+  # $1 = the add source (with or without a "#ref" pin). Mirrors what the
+  # real `claude` CLI + GitHub actually do: a full URL is used as-is (minus
+  # the "#ref" pin); a bare "owner/repo" shorthand resolves against GitHub,
+  # same as the real CLI's shorthand always does. This is what INV-2 reads
+  # back via `git remote get-url origin` on the real checkout.
+  local s="${1%%#*}"
+  case "$s" in
+    *://*) printf '%s' "$s" ;;
+    *) printf 'https://github.com/%s.git' "$s" ;;
+  esac
+}
+
 declared_marketplace_name() {
   # A real marketplace's NAME comes from its own marketplace.json `name`
   # field, which can differ from the repo name. RUNTIME-VERIFIED 2026-07-03:
@@ -63,7 +76,17 @@ case "$cmd $sub" in
             "$mp_name" "$plugin_name" "$version" \
             > "$dir/.claude-plugin/marketplace.json"
           git -C "$dir" init -q
+          git -C "$dir" remote add origin "$(resolved_origin_url "$source")" >/dev/null 2>&1
           git -C "$dir" add -A
+          # Fixed author/committer date (not "now"): a commit's sha is a hash
+          # of its content INCLUDING these timestamps, so pinning them makes
+          # this fake clone's resulting commit sha fully deterministic and
+          # reproducible across separate invocations — the offline test
+          # suite relies on predicting this sha (see predict_fake_commit_sha
+          # in run-installer-tests.sh) to exercise INV-3's commit_sha pin
+          # without needing a real upstream clone.
+          GIT_AUTHOR_DATE="2026-01-01T00:00:00+00:00" \
+          GIT_COMMITTER_DATE="2026-01-01T00:00:00+00:00" \
           git -C "$dir" -c user.email=test@test -c user.name=test commit -q -m "init $mp_name"
           # Mirror a real tag-pinned clone: HEAD sits exactly ON the tag, so
           # `git describe --exact-match --tags HEAD` returns it. A shorthand /
@@ -100,6 +123,13 @@ case "$cmd $sub" in
     ;;
   "plugin install")
     id="${1:-}"
+    # FAKE_CLAUDE_FAIL_INSTALL lets a test simulate a plugin install that
+    # fails for a specific id (e.g. a flaky registry) — used to prove INV-5's
+    # chain-halt: a soft-failed code-x install must stop before superpowers.
+    if [ -n "${FAKE_CLAUDE_FAIL_INSTALL:-}" ] && [ "$id" = "$FAKE_CLAUDE_FAIL_INSTALL" ]; then
+      echo "fake-claude: simulated install failure for $id" >&2
+      exit 1
+    fi
     tmp="$(mktemp)"
     python3 - "$INSTALLED_FILE" "$id" > "$tmp" <<'EOF'
 import json, sys
