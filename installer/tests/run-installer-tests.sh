@@ -541,18 +541,35 @@ test_two_tags_one_commit_still_passes() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
   seed_marketplaces_matching_manifest "$dir"
-  # Add a SECOND tag on the exact same commit as the pinned release tag.
-  # `git describe --exact-match --tags HEAD` (the old check) can report
-  # either tag name when several point at one commit — a false fail if it
-  # picked the other one. Comparing commits (INV-4) never has this problem.
+  # Add a SECOND tag on the exact same commit as the pinned release tag —
+  # an ANNOTATED tag with a NEWER tagger date, so the OLD check
+  # `git describe --exact-match --tags HEAD` deterministically prefers it
+  # (annotated + most-recent tagger date wins) over the pinned release tag.
   local cx_dir="$dir/state/marketplaces/code-x"
-  git -C "$cx_dir" tag "unrelated-alias-tag" >/dev/null 2>&1
+  local cx_tag; cx_tag="$(manifest_release_tag code-x)"
+  GIT_COMMITTER_DATE="2027-01-01T00:00:00+00:00" \
+  git -C "$cx_dir" -c user.email=test@test -c user.name=test \
+    tag -a -m "alias" "zzz-alias-tag" >/dev/null 2>&1
+
+  # RED CONTROL (proves INV-4 fixed a REAL false-fail, not a no-op):
+  # the OLD path would have picked the alias tag here and compared it to the
+  # pinned release_tag, mismatching -> false fail-closed. Assert that.
+  local old_describe
+  old_describe="$(git -C "$cx_dir" describe --exact-match --tags HEAD 2>/dev/null)"
+  if [ "$old_describe" = "$cx_tag" ]; then
+    echo "red-control setup failed: describe still returns the release tag ($old_describe); the alias did not shadow it, so this test would not prove INV-4 fixed anything" >&2
+    rm -rf "$dir"
+    return 1
+  fi
+
+  # INV-4 (commit comparison) must nonetheless PASS: HEAD's commit still
+  # equals the release tag's commit regardless of how many tags point at it.
   local status; status="$(run_installer "$dir")"
   local rc=1
   if [ "$status" -eq 0 ]; then
     rc=0
   else
-    echo "--- installer output ---" >&2
+    echo "--- installer output (old describe returned '$old_describe' != release '$cx_tag') ---" >&2
     cat "$dir/out.log" >&2
   fi
   rm -rf "$dir"
@@ -577,6 +594,110 @@ test_chain_halts_before_superpowers_on_codex_soft_fail() {
     rc=0
   else
     echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-2 hardening: origin normalization adversarial matrix (unit) -------
+# Loads the REAL normalize_git_origin straight out of install.sh (not a copy),
+# so a future regression of that function makes this go RED — this is the
+# mutation control the whole trust-model rebuild is about. Proves a
+# path-embedded "@" (e.g. https://evil.com/@github.com/1984-alt/code-x.git)
+# is NOT mistaken for "user@" userinfo and does NOT normalize to the official
+# repo (the confirmed P1 trust-root bypass), while every LEGIT form
+# (credentials, trailing slash, .git) still matches.
+test_origin_normalization_matrix() {
+  # Extract the function definition verbatim from the shipped install.sh and
+  # define it in this shell. Ties the assertions to the real source.
+  local fn_src
+  fn_src="$(sed -n '/^normalize_git_origin() {/,/^}/p' "$INSTALL_SH")"
+  if [ -z "$fn_src" ]; then
+    echo "could not extract normalize_git_origin from install.sh" >&2
+    return 1
+  fi
+  eval "$fn_src"
+
+  local official; official="$(normalize_git_origin "https://github.com/1984-alt/code-x.git")"
+  local rc=0
+  assert_norm() {
+    # $1 = url, $2 = "MATCH" | "NOMATCH"
+    local got; got="$(normalize_git_origin "$1")"
+    if [ "$2" = "MATCH" ] && [ "$got" != "$official" ]; then
+      echo "expected MATCH but got '$got' for: $1" >&2; rc=1
+    elif [ "$2" = "NOMATCH" ] && [ "$got" = "$official" ]; then
+      echo "expected NO match (bypass!) but it MATCHED for: $1  (-> '$got')" >&2; rc=1
+    fi
+  }
+  # Legit forms — must all MATCH the official normalization:
+  assert_norm "https://github.com/1984-alt/code-x.git"            MATCH
+  assert_norm "https://x@github.com/1984-alt/code-x.git"          MATCH
+  assert_norm "https://github.com/1984-alt/code-x/"               MATCH
+  # Attacker / lookalike forms — must all FAIL to match (fail closed):
+  assert_norm "https://evil.com/@github.com/1984-alt/code-x.git"     NOMATCH
+  assert_norm "https://evil.com/foo/@github.com/1984-alt/code-x.git" NOMATCH
+  assert_norm "https://github.com.evil.com/1984-alt/code-x.git"      NOMATCH
+  assert_norm "https://github.com/1984-alt/code-x/extra"            NOMATCH
+  assert_norm ""                                                    NOMATCH
+  return $rc
+}
+
+# ---- INV-2 hardening: path-"@" bypass fails closed THROUGH the real guard --
+# Drives the confirmed bypass string through install.sh end-to-end: a
+# pre-existing marketplace named "code-x" whose checkout origin is the
+# attacker URL with a path-embedded "@". Must fail closed on origin mismatch,
+# NOT be accepted as the official trust root.
+test_path_at_origin_bypass_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  local cx_tag; cx_tag="$(manifest_release_tag code-x)"
+  # basename of this URL (after stripping #ref and .git) is "code-x", so the
+  # fake CLI names the marketplace "code-x" and sets its origin to this exact
+  # attacker URL — same name + tag + version as the official one.
+  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add \
+    "https://evil.com/@github.com/1984-alt/code-x.git#$cx_tag" >/dev/null
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && grep -qi "points at a different repo" "$dir/out.log" && \
+     grep -qi "evil.com" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output (path-@ bypass MUST fail closed) ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- INV-5 hardening: structured JSON read is not fooled by a decoy substring
+# The fake CLI's marketplace/plugin list output carries a decoy nested
+# `"name": "code-x"` / `"id": "code-x@code-x"` on an entry that is NOT
+# actually code-x. A grep-substring presence check (the pre-rebuild code)
+# would match the decoy and wrongly conclude the code-x marketplace already
+# exists — skipping the add. The structured read must see it as ABSENT and
+# add it. Asserting the "Adding the Code-X marketplace" line proves that.
+test_structured_read_not_fooled_by_decoy_substring() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  # Seed ONLY superpowers (no code-x marketplace at all). Its list entry
+  # still carries the decoy `"name": "code-x"` substring.
+  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add \
+    "$(tag_pinned_add_source superpowers)" >/dev/null
+  # Sanity: a naive grep WOULD be fooled (decoy present though code-x absent).
+  if ! FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace list \
+       | grep -q '"name": "code-x"'; then
+    echo "decoy setup failed: expected the decoy substring in list output" >&2
+    rm -rf "$dir"; return 1
+  fi
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  # Structured read must have treated code-x as ABSENT and added it, and the
+  # whole run must still succeed.
+  if [ "$status" -eq 0 ] && grep -qi "Adding the Code-X marketplace" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output (structured read must ADD the absent code-x) ---" >&2
     cat "$dir/out.log" >&2
   fi
   rm -rf "$dir"
@@ -701,8 +822,11 @@ run_case "P2: non-git/corrupted checkout fails closed (not read as clean)" test_
 run_case "INV-1: manifest planted in cwd/beside install.sh is ignored" test_cwd_manifest_is_ignored
 run_case "INV-2: same-name marketplace with a different origin fails closed" test_same_name_different_origin_fails_closed
 run_case "INV-3: superpowers commit_sha mismatch (tag moved) fails closed" test_commit_sha_mismatch_fails_closed
-run_case "INV-4: two tags on one commit still passes (no false fail)" test_two_tags_one_commit_still_passes
+run_case "INV-4: two tags on one commit still passes (no false fail; old-describe red control)" test_two_tags_one_commit_still_passes
 run_case "INV-5: code-x soft-fail hard-stops before superpowers" test_chain_halts_before_superpowers_on_codex_soft_fail
+run_case "INV-2: origin normalization adversarial matrix (path-@ bypass blocked)" test_origin_normalization_matrix
+run_case "INV-2: path-@ origin bypass fails closed through the real guard" test_path_at_origin_bypass_fails_closed
+run_case "INV-5: structured JSON read not fooled by decoy substring" test_structured_read_not_fooled_by_decoy_substring
 
 echo ""
 echo "installer tests: $PASS passed, $FAIL failed"

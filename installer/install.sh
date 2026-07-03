@@ -298,18 +298,36 @@ sys.exit(0 if any(p.get('id') == '$id' for p in data) else 1)
 normalize_git_origin() {
   # $1 = a git remote URL. Prints "host/owner/repo" (host lowercased) so
   # equivalent forms of the SAME repo compare equal — https with or without
-  # a trailing "/" or ".git", the git@host:owner/repo ssh shorthand — without
-  # accepting a lookalike host or a different owner/repo. (INV-2's
-  # highest-attention item: accept every legit form, never a lookalike.)
+  # a trailing "/" or ".git", with or without legit "user@"/"user:pass@"
+  # credentials or a ":port" — WITHOUT accepting a lookalike host or a
+  # different owner/repo. (INV-2's highest-attention item: accept every legit
+  # form, never a lookalike.)
+  #
+  # CRITICAL: split the AUTHORITY (host[:port], optional userinfo) from the
+  # PATH *first*, then strip userinfo/port from the authority ONLY. A naive
+  # `${url#*@}` over the whole string treats a path-embedded "@" as userinfo,
+  # so a URL like `https://evil.com/@github.com/1984-alt/code-x.git` would
+  # normalize to `github.com/1984-alt/code-x` and MATCH the official repo — a
+  # trust-root bypass. Because code-x carries no commit_sha pin (self-sha is
+  # circular), that bypass would let an attacker-controlled repo be accepted
+  # as the official trust root. Never do "@"-surgery on the path.
+  #
+  # ssh shorthand (git@host:owner/repo) is deliberately NOT handled: the real
+  # origin is always the https URL (runtime-probed 2026-07-03), and a legit-
+  # but-odd form failing closed is the safe direction — adding ssh parsing
+  # risks re-opening exactly the hole above.
   local url="$1"
-  url="${url%/}"
-  url="${url%.git}"
-  url="${url#*://}"   # strip a scheme (https://, git://, ssh://), if any
-  url="${url#*@}"      # strip a "user@" prefix, if any (ssh shorthand)
-  url="${url/://}"    # ssh shorthand's "host:owner/repo" -> "host/owner/repo"
-  local host="${url%%/*}"
-  local rest="${url#*/}"
-  printf '%s/%s' "$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')" "$rest"
+  url="${url%/}"          # one trailing slash
+  url="${url%.git}"       # .git suffix
+  url="${url#*://}"       # scheme (https://, git://, ssh://), if present
+  local authority path
+  case "$url" in
+    */*) authority="${url%%/*}"; path="${url#*/}" ;;
+    *)   authority="$url"; path="" ;;
+  esac
+  authority="${authority#*@}"    # strip user@ / user:pass@ — AUTHORITY ONLY
+  authority="${authority%%:*}"   # strip :port — AUTHORITY ONLY
+  printf '%s/%s' "$(printf '%s' "$authority" | tr '[:upper:]' '[:lower:]')" "$path"
 }
 
 ensure_marketplace_and_plugin() {
