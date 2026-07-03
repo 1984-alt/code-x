@@ -37,7 +37,7 @@
 
 schema_version: 1
 generated: "2026-07-03"
-generated_by: "PBF-PROP-017 builder seat (Sonnet), worktree cx-v1-prop017"
+generated_by: "Code-X release build (PBF-PROP-017)"
 
 dependencies:
   # code-x itself. Pin policy: SAME-RELEASE-AS-SELF — the installer always ships

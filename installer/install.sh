@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # trusting a single byte of it. Re-stamped together by
 # installer/restamp-release.sh at every release cut — never edit by hand.
 INSTALLER_RELEASE_TAG="v1.22.4"
-INSTALLER_MANIFEST_SHA256="3fe4a4efd7a58014f60cc055cf9163cec12d8bc924c07edee63709c40dbe0be9"
+INSTALLER_MANIFEST_SHA256="7e3c2992bc8555aa30a2210046fdc15c7437c2ee7b45296ed2fa7a263cf042f0"
 DEFAULT_REMOTE_BASE="https://raw.githubusercontent.com/1984-alt/code-x"
 # Test-only override (offline fixtures point this at a file:// tree); never
 # set this yourself for a real install.
