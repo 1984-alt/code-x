@@ -81,7 +81,8 @@ Any leg failing fails the CI job. See `.github/workflows/tests.yml`.
 From a clone of this repo (needs Python ≥3.10 and PyYAML):
 
 ```bash
-pip3 install pyyaml
+pip3 install pyyaml   # convenience shortcut; installer/install.sh instead uses a pinned
+                       # version + hash (no unpinned, unverified fetch) — see installer/installer-manifest.yaml
 cd plugins/code-x/skills/code-x
 
 python3 checkers/tests/run.py             # expect: all 424 tests pass, exit 0

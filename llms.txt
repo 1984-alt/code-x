@@ -12,7 +12,7 @@
 - [plugins/code-x/skills/code-x/checkers/check-contracts.yaml](plugins/code-x/skills/code-x/checkers/check-contracts.yaml): 404 gate clauses, each pinned to a BAD fixture the checker must reject and a GOOD fixture it must pass
 - [plugins/code-x/skills/code-x/checkers/tests/run_contracts.py](plugins/code-x/skills/code-x/checkers/tests/run_contracts.py): the meta-test harness proving every clause bites — the "green ≠ enforcing" defense
 - [plugins/code-x/skills/code-x/checkers/tests/run.py](plugins/code-x/skills/code-x/checkers/tests/run.py): 424 unit self-tests for the checker
-- [plugins/code-x/skills/code-x/checkers/cx](plugins/code-x/skills/code-x/checkers/cx): the checker CLI — 31 `cx check` subcommands, exit 0 = PASS / 1 = FIX-FIRST
+- [plugins/code-x/skills/code-x/checkers/cx](plugins/code-x/skills/code-x/checkers/cx): the checker CLI — 32 `cx check` subcommands, exit 0 = PASS / 1 = FIX-FIRST
 - [plugins/code-x/skills/code-x/checkers/CX-CHECK-SPEC.md](plugins/code-x/skills/code-x/checkers/CX-CHECK-SPEC.md): the checker's specification
 - [.github/workflows/tests.yml](.github/workflows/tests.yml): public CI runs the full four-leg eval gate (`cx check evals`) on every push
 

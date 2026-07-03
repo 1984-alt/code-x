@@ -20,7 +20,10 @@ You need four things. Most machines already have the first two.
   (On macOS the built-in `/usr/bin/python3` may be older; if so, install a newer one from
   [python.org](https://www.python.org/downloads/) or Homebrew.)
 - **git** — `git --version` should print something.
-- **PyYAML** — the one library the checker needs: `pip3 install pyyaml`
+- **PyYAML** — the one library the checker needs. `pip3 install pyyaml` is the quick,
+  convenience way; the installer in Step 2 below instead prints an exact pinned-version +
+  hashed command (belt-and-suspenders — no unpinned, unverified fetch), which you can also
+  run here directly.
 - **An AI engine** — [Claude Code](https://claude.com/claude-code) or the `codex` CLI.
   This is the tool Code-X plugs into.
 
@@ -149,23 +152,3 @@ the plan-then-build workflow. From here you're the director:
 - **[ROSETTA.md](ROSETTA.md)** — every Code-X word translated to plain English.
 - **README "How the trust holds"** — the honest account of what Code-X proves and what it
   can't.
-
----
-
-*Draft for CEO review. Flags to check:*
-- *`cx --version` output — I wrote the expected line as `cx — Code-X V1.22.4` (extrapolated
-  from the private checker printing `cx — Code-X V1.22.2` at that version). Confirm the
-  public v1.22.4 checker formats it exactly this way.*
-- *Clone paths — verified against the repo layout: the `cx` self-tests run from
-  `plugins/code-x/skills/code-x`, and tip-split lives at the REPO ROOT
-  (`examples/tip-split/run.sh`, receipts alongside). Step 1 now returns to the root
-  (`cd ../../../..`) before the tip-split demo, with the working directory shown at each
-  command block.*
-- *`cx` on PATH — I deliberately used `python3 checkers/cx` (the README's pattern) rather
-  than a bare `cx`, since a plain `cx` command isn't guaranteed on a new user's shell.
-  Confirm that's the right call for the public repo.*
-- *Ordering — I put "see the checker work" (clone) BEFORE "install the plugin," because the
-  clone demo is the fastest, account-free proof. If you'd rather lead with the plugin
-  install, the two blocks swap cleanly.*
-- *Checksum placeholder — `<sha256-from-the-v1.22.4-GitHub-Release-notes>` is copied
-  verbatim from the install source doc; it gets filled at release time.*
