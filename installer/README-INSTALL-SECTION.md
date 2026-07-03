@@ -39,8 +39,8 @@ curl -fsSL https://raw.githubusercontent.com/1984-alt/code-x/v1.22.4/installer/i
 ```
 
 Either way, once install.sh is running it re-verifies everything else it
-touches (Code-X, superpowers) against pinned commit coordinates — see
-"What it does" below.
+touches (Code-X, superpowers) against pinned release tags — see "What it
+does" below.
 
 What it does, in plain English:
 
@@ -68,16 +68,33 @@ Prefer to see each step yourself, or on Codex? Use the manual steps below.
 <details>
 <summary>Prerequisites</summary>
 
-**1. Python 3 + PyYAML:**
+**1. Python 3 + PyYAML** (pinned + hash-verified — same as the installer does;
+never a bare `pip install`, which would trust whatever PyPI serves):
 
 ```bash
-pip3 install pyyaml
+pip3 install --no-binary :all: --require-hashes \
+  -r <(printf 'pyyaml==6.0.3 --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f\n')
 ```
 
-**2. superpowers** ([obra/superpowers](https://github.com/obra/superpowers)):
+(If your shell doesn't support `<(...)`, write that one line to a file first
+and pass it with `-r <file>`.) The pin + hash mirror `install.sh`'s
+`PYYAML_PIN` / `PYYAML_SHA256` — update all three together if PyYAML moves.
 
-- **Claude Code:** `/plugin install superpowers@claude-plugins-official`
-- **Codex:** open a `codex` session, run `/plugins`, find **Superpowers**, Install
+**2. superpowers** ([obra/superpowers](https://github.com/obra/superpowers)) —
+pinned to the SAME release the one-line installer uses (`v6.1.1` from
+obra/superpowers, whose marketplace declares the name `superpowers-dev`), so
+the manual path and the installer agree:
+
+- **Claude Code:**
+  ```
+  /plugin marketplace add https://github.com/obra/superpowers.git#v6.1.1
+  /plugin install superpowers@superpowers-dev
+  ```
+- **Codex:**
+  ```bash
+  codex plugin marketplace add https://github.com/obra/superpowers.git#v6.1.1
+  codex plugin add superpowers@superpowers-dev
+  ```
 
 **3. CodeRabbit** (optional, third-party — works with Code-X, not included):
 
@@ -93,17 +110,20 @@ pip3 install pyyaml
 <details>
 <summary>Install Code-X itself</summary>
 
+Pin the marketplace to the exact release tag (the full-git-URL + `#<tag>`
+form — a bare `1984-alt/code-x` follows the moving default branch):
+
 **Claude Code:**
 
 ```
-/plugin marketplace add 1984-alt/code-x
+/plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.4
 /plugin install code-x@code-x
 ```
 
 **Codex:**
 
 ```bash
-codex plugin marketplace add 1984-alt/code-x
+codex plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.4
 codex plugin add code-x@code-x
 ```
 

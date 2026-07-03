@@ -1,28 +1,33 @@
 #!/usr/bin/env bash
-# Release-cut re-stamp for the Code-X installer (PBF-PROP-017 fix-fold, 2026-07-03).
+# Release-cut re-stamp for the Code-X installer (PBF-PROP-017 fix-fold, 2026-07-03;
+# verification-model fix folded into v1.22.4, 2026-07-03, CEO-D-042).
 #
 # What this does, in plain English:
-#   Every time Code-X cuts a release, the installer's two self-referential
-#   pins go stale: the manifest's code-x release_tag/commit_sha (must match
-#   the release being cut — "same-release-as-self"), and install.sh's own
-#   embedded release tag + manifest checksum (its bootstrap trust root for
-#   the pipe-to-bash path). This script updates all four together and prints
-#   a plain diff of what changed, so nothing is re-stamped by hand.
+#   Every time Code-X cuts a release, the installer's self-referential pins go
+#   stale: the manifest's code-x release_tag (must match the release being cut
+#   — "same-release-as-self"), and install.sh's own embedded release tag +
+#   manifest checksum (its bootstrap trust root for the pipe-to-bash path).
+#   This script updates all three together and prints a plain diff of what
+#   changed, so nothing is re-stamped by hand.
+#
+#   No commit sha is stamped here (fold v1.22.4): a release commit cannot
+#   contain its own sha, so code-x has no commit_sha field to stamp — the
+#   release TAG is the pin, verified by install.sh via marketplace-add's
+#   ref-pin syntax + a post-clone version-parity check, not a commit match.
 #
 # Usage:
-#   installer/restamp-release.sh <release_tag> <code_x_commit_sha>
+#   installer/restamp-release.sh <release_tag>
 #
 # Example (run from the port session at the actual release cut):
-#   installer/restamp-release.sh v1.22.3 3edca29c1234...(real 40-char sha)
+#   installer/restamp-release.sh v1.22.5
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 MANIFEST="$HERE/installer-manifest.yaml"
 INSTALL_SH="$HERE/install.sh"
 
 RELEASE_TAG="${1:-}"
-COMMIT_SHA="${2:-}"
-if [ -z "$RELEASE_TAG" ] || [ -z "$COMMIT_SHA" ]; then
-  echo "Usage: $0 <release_tag> <code_x_commit_sha>" >&2
+if [ -z "$RELEASE_TAG" ]; then
+  echo "Usage: $0 <release_tag>" >&2
   exit 1
 fi
 
@@ -35,16 +40,16 @@ shasum_file() {
 }
 
 echo "Before:"
-grep -n 'release_tag:\|^    commit_sha:' "$MANIFEST" | head -2 | sed 's/^/  manifest: /'
+grep -n 'release_tag:' "$MANIFEST" | head -1 | sed 's/^/  manifest: /'
 grep -n 'INSTALLER_RELEASE_TAG=\|INSTALLER_MANIFEST_SHA256=' "$INSTALL_SH" | sed 's/^/  install.sh: /'
 
-# 1. Stamp the manifest's code-x pin (release_tag + commit_sha together — never one alone).
-python3 - "$MANIFEST" "$RELEASE_TAG" "$COMMIT_SHA" <<'EOF'
+# 1. Stamp the manifest's code-x pin (release_tag — the only self-referential
+#    field left; see header note on why there is no commit_sha to stamp).
+python3 - "$MANIFEST" "$RELEASE_TAG" <<'EOF'
 import sys, re
-path, tag, sha = sys.argv[1:4]
+path, tag = sys.argv[1:3]
 text = open(path).read()
 text = re.sub(r'(code-x:.*?release_tag: ")[^"]*(")', r'\g<1>' + tag + r'\g<2>', text, count=1, flags=re.S)
-text = re.sub(r'(code-x:.*?commit_sha: ")[0-9a-f]+(")', r'\g<1>' + sha + r'\g<2>', text, count=1, flags=re.S)
 open(path, 'w').write(text)
 EOF
 
@@ -59,7 +64,7 @@ rm -f "$INSTALL_SH.bak"
 
 echo ""
 echo "After:"
-grep -n 'release_tag:\|^    commit_sha:' "$MANIFEST" | head -2 | sed 's/^/  manifest: /'
+grep -n 'release_tag:' "$MANIFEST" | head -1 | sed 's/^/  manifest: /'
 grep -n 'INSTALLER_RELEASE_TAG=\|INSTALLER_MANIFEST_SHA256=' "$INSTALL_SH" | sed 's/^/  install.sh: /'
 echo ""
 echo "Re-stamped for release $RELEASE_TAG. Re-run installer/tests/run-installer-tests.sh before shipping."

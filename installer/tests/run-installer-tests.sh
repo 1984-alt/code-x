@@ -30,34 +30,48 @@ run_case() {
 }
 
 fresh_sandbox() {
-  # Sets up an isolated workdir + fake HOME + a manifest copy whose pinned
-  # code-x commit is rewritten to match the fake marketplace's real HEAD.
+  # Sets up an isolated workdir + fake HOME + an untouched manifest copy.
   local dir="$1"
   mkdir -p "$dir/home" "$dir/state"
   cp "$INSTALL_SH" "$dir/install.sh"
   cp "$INSTALLER_DIR/installer-manifest.yaml" "$dir/installer-manifest.yaml"
 }
 
-pin_matches_fake_repo() {
-  # $1 = sandbox dir. Adds the marketplace via fake-claude first so we can
-  # read its real commit, then rewrites the manifest's pinned commit to match
-  # (so the "happy path" tests aren't tautologically doomed by using a
-  # fabricated real GitHub sha against a fabricated local repo).
+manifest_field() {
+  # $1 = block header (e.g. "code-x"), $2 = field name. Robust to any number
+  # of comment lines inside the block: enters at the "  <block>:" line, exits
+  # when the next top-level (2-space-indented) key appears, prints the first
+  # matching field value. Not position-dependent (the old grep -A<N> broke
+  # when a comment shifted a field past the window).
+  awk -v blk="  $1:" -v field="$2" '
+    $0 == blk { inb=1; next }
+    inb && /^  [a-zA-Z]/ { inb=0 }
+    inb && $0 ~ "^    "field":" {
+      sub("^    "field":[ ]*", ""); gsub(/^"|"$/, ""); print; exit
+    }
+  ' "$INSTALLER_DIR/installer-manifest.yaml"
+}
+
+manifest_release_tag() {
+  # $1 = block header, e.g. "code-x" or "superpowers"
+  manifest_field "$1" release_tag | grep -oE 'v[0-9.]+'
+}
+
+tag_pinned_add_source() {
+  # $1 = block header. Reconstructs the exact full-URL#tag string install.sh
+  # passes to `claude plugin marketplace add`.
+  printf '%s#%s' "$(manifest_field "$1" marketplace_add_url)" "$(manifest_release_tag "$1")"
+}
+
+seed_marketplaces_matching_manifest() {
+  # $1 = sandbox dir. Pre-adds both marketplaces via fake-claude using the
+  # SAME full-URL#<tag> the real install.sh would request, so the fake CLI's
+  # self-declared version already matches the shipped manifest (see
+  # tests/fixtures/claude: version = the requested ref). Used by tests that
+  # need marketplaces already present before running the installer.
   local dir="$1"
-  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "1984-alt/code-x" >/dev/null
-  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "obra/superpowers" >/dev/null
-  local cx_sha sp_sha
-  cx_sha="$(git -C "$dir/state/marketplaces/code-x" rev-parse HEAD)"
-  sp_sha="$(git -C "$dir/state/marketplaces/superpowers" rev-parse HEAD)"
-  python3 - "$dir/installer-manifest.yaml" "$cx_sha" "$sp_sha" <<'EOF'
-import sys
-path, cx_sha, sp_sha = sys.argv[1:4]
-text = open(path).read()
-import re
-text = re.sub(r'(code-x:.*?commit_sha: ")[0-9a-f]+(")', r'\g<1>' + cx_sha + r'\g<2>', text, count=1, flags=re.S)
-text = re.sub(r'(superpowers:.*?commit_sha: ")[0-9a-f]+(")', r'\g<1>' + sp_sha + r'\g<2>', text, count=1, flags=re.S)
-open(path, 'w').write(text)
-EOF
+  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "$(tag_pinned_add_source code-x)" >/dev/null
+  FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "$(tag_pinned_add_source superpowers)" >/dev/null
 }
 
 run_installer() {
@@ -74,7 +88,6 @@ run_installer() {
 test_clean_install_exits_zero() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  pin_matches_fake_repo "$dir"
   local status; status="$(run_installer "$dir")"
   [ "$status" -eq 0 ]
   local rc=$?
@@ -86,7 +99,6 @@ test_clean_install_exits_zero() {
 test_idempotent_second_run() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  pin_matches_fake_repo "$dir"
   run_installer "$dir" >/dev/null
   local status2; status2="$(run_installer "$dir")"
   [ "$status2" -eq 0 ] || return 1
@@ -101,18 +113,21 @@ test_idempotent_second_run() {
   return $rc
 }
 
-# ---- case 3: fail-closed on a commit-sha mismatch ---------------------------
-test_fail_closed_on_mismatch() {
+# ---- case 3: a PRE-EXISTING UNPINNED marketplace fails closed (hole A) ------
+test_preexisting_unpinned_marketplace_fails_closed() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  # Add marketplaces via fake-claude but DO NOT sync the pin -> manifest keeps
-  # its shipped (real GitHub) commit shas, which will not match the throwaway
-  # local repos' commits.
+  # Add marketplaces via fake-claude with NO ref (the unpinned shorthand a
+  # user's manual `marketplace add owner/repo` would use) -> no tag is created,
+  # so HEAD is not at the pinned tag. install.sh must NOT trust the
+  # pre-existing marketplace: exact-tag check fails closed with a "remove and
+  # re-run" instruction.
   FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "1984-alt/code-x" >/dev/null
   FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace add "obra/superpowers" >/dev/null
   local status; status="$(run_installer "$dir")"
   local rc=1
-  if [ "$status" -ne 0 ] && grep -qi "does not match the pinned coordinate" "$dir/out.log"; then
+  if [ "$status" -ne 0 ] && grep -qi "is NOT at the pinned tag" "$dir/out.log" && \
+     grep -qi "marketplace remove" "$dir/out.log"; then
     rc=0
   else
     echo "--- installer output ---" >&2
@@ -126,7 +141,6 @@ test_fail_closed_on_mismatch() {
 test_coderabbit_never_autoinstalled() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  pin_matches_fake_repo "$dir"
   run_installer "$dir" >/dev/null
   local rc=1
   if grep -qi "offered, not installed" "$dir/out.log" && \
@@ -198,7 +212,6 @@ test_no_unpinned_pip_install() {
 test_missing_pyyaml_hints_pinned_hashed_command() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  pin_matches_fake_repo "$dir"
   # Shadow python3 with a stub that has no yaml module and is not the real
   # PY_FALLBACK, so the PyYAML-missing branch is guaranteed to trigger.
   mkdir -p "$dir/fakebin"
@@ -226,11 +239,11 @@ EOF
   return $rc
 }
 
-# ---- P0-3: matching HEAD with a DIRTY working tree must still FAIL ----------
+# ---- P0-3: matching version with a DIRTY working tree must still FAIL ------
 test_dirty_tree_fails_even_with_matching_head() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  pin_matches_fake_repo "$dir"
+  seed_marketplaces_matching_manifest "$dir"
   # Dirty the already-pinned code-x checkout after the pin was aligned to it.
   echo "unexpected local edit" >> "$dir/state/marketplaces/code-x/README.md"
   local status; status="$(run_installer "$dir")"
@@ -249,16 +262,119 @@ test_dirty_tree_fails_even_with_matching_head() {
 test_rollback_removes_newly_added_marketplace_on_mismatch() {
   local dir; dir="$(mktemp -d)"
   fresh_sandbox "$dir"
-  # Deliberately do NOT sync the pin: the shipped manifest's real commit_sha
-  # will not match the freshly-created fake local repo's commit, so install.sh
-  # must add the marketplace, discover the mismatch, and remove it again.
-  local status; status="$(run_installer "$dir")"
+  # Neither marketplace exists yet, and FAKE_CLAUDE_FORCE_VERSION simulates
+  # upstream drift: the tag's real content, once cloned, self-declares a
+  # DIFFERENT version than installer-manifest.yaml expects. install.sh must
+  # add the marketplace itself (newly_added=1), discover the mismatch on the
+  # SAME run, and remove it again — never leave it sitting unverified.
+  local status
+  status="$(FAKE_CLAUDE_FORCE_VERSION=9.9.9 run_installer "$dir")"
   local rc=1
-  if [ "$status" -ne 0 ] && grep -qi "does not match the pinned coordinate" "$dir/out.log"; then
+  if [ "$status" -ne 0 ] && grep -qi "does not match the pinned release" "$dir/out.log"; then
     local mp_count
     mp_count="$(FAKE_CLAUDE_HOME="$dir/state" "$FAKE_CLAUDE" plugin marketplace list | \
       python3 -c "import json,sys; print(len(json.load(sys.stdin)))")"
     [ "$mp_count" -eq 0 ] && rc=0 || echo "expected marketplace rolled back (0 left), got $mp_count" >&2
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- P1: marketplace-add uses the DOCUMENTED full-URL#<release_tag> form ----
+test_marketplace_add_uses_tag_pinned_source() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  run_installer "$dir" >/dev/null
+  local cx_expected sp_expected
+  cx_expected="$(tag_pinned_add_source code-x)"
+  sp_expected="$(tag_pinned_add_source superpowers)"
+  local rc=1
+  # Must be the documented full-git-URL + "#<tag>" form (not a bare
+  # owner/repo@tag shorthand, which is undocumented for marketplace add).
+  if [ -n "$cx_expected" ] && [ -n "$sp_expected" ] && \
+     [ "$cx_expected" = "https://github.com/1984-alt/code-x.git#$(manifest_release_tag code-x)" ] && \
+     grep -qx "$cx_expected" "$dir/state/marketplace_add_log" && \
+     grep -qx "$sp_expected" "$dir/state/marketplace_add_log" && \
+     ! grep -Eq '(code-x|superpowers)@v' "$dir/state/marketplace_add_log"; then
+    rc=0
+  else
+    echo "--- marketplace_add_log ---" >&2
+    cat "$dir/state/marketplace_add_log" >&2 2>/dev/null
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- P1: a WRONG plugin version at the SAME tag fails closed (belt) ---------
+test_wrong_installed_version_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Botched/mispinned release: the tag exists and HEAD is ON it, but the tagged
+  # content's marketplace.json declares a DIFFERENT version. Force-move the tag
+  # onto the amended commit so the exact-tag check passes and this isolates the
+  # belt-and-suspenders version-parity check.
+  local cx_dir="$dir/state/marketplaces/code-x"
+  local cx_tag; cx_tag="$(manifest_release_tag code-x)"
+  printf '{"name": "code-x", "plugins": [{"name": "code-x", "version": "9.9.9"}]}\n' > "$cx_dir/.claude-plugin/marketplace.json"
+  git -C "$cx_dir" -c user.email=test@test -c user.name=test commit -q -am "botched release: wrong version at tag"
+  git -C "$cx_dir" tag -f "$cx_tag" >/dev/null 2>&1
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && grep -qi "does not match the pinned release" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- BLOCKING: clean, RIGHT-version, but HEAD NOT at the tag -> fail closed --
+# This is the class the pre-fix verify missed: a main-branch checkout with the
+# same declared version and a clean tree would print "verified". Only the exact
+# tag assertion catches it.
+test_right_version_wrong_branch_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Add a commit on top of the tag that KEEPS the correct version (so
+  # version-parity would happily pass) but leaves HEAD off the tag — exactly
+  # what an unpinned main-branch checkout looks like.
+  local cx_dir="$dir/state/marketplaces/code-x"
+  echo "extra main-branch commit" > "$cx_dir/EXTRA.md"
+  git -C "$cx_dir" add -A
+  git -C "$cx_dir" -c user.email=test@test -c user.name=test commit -q -m "main-branch drift, version unchanged"
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  # Must fail closed on the TAG check (not version-parity: version still matches).
+  if [ "$status" -ne 0 ] && grep -qi "is NOT at the pinned tag" "$dir/out.log" && \
+     ! grep -qi "does not match the pinned release" "$dir/out.log"; then
+    rc=0
+  else
+    echo "--- installer output ---" >&2
+    cat "$dir/out.log" >&2
+  fi
+  rm -rf "$dir"
+  return $rc
+}
+
+# ---- P2: a NON-git / corrupted checkout must fail closed, not read "clean" ---
+test_non_git_checkout_fails_closed() {
+  local dir; dir="$(mktemp -d)"
+  fresh_sandbox "$dir"
+  seed_marketplaces_matching_manifest "$dir"
+  # Destroy the git metadata so `git status` exits nonzero with empty stdout —
+  # the case the old `[ -n "$dirty" ]` test silently treated as clean.
+  rm -rf "$dir/state/marketplaces/code-x/.git"
+  local status; status="$(run_installer "$dir")"
+  local rc=1
+  if [ "$status" -ne 0 ] && grep -qi "not a readable git checkout" "$dir/out.log"; then
+    rc=0
   else
     echo "--- installer output ---" >&2
     cat "$dir/out.log" >&2
@@ -317,24 +433,71 @@ test_version_parity_with_cx() {
   [ -x "$cx_bin" ] || cx_bin="python3 $INSTALLER_DIR/../plugins/code-x/skills/code-x/checkers/cx"
   local cx_version manifest_tag
   cx_version="$($cx_bin --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
-  manifest_tag="$(grep -A15 '^  code-x:' "$INSTALLER_DIR/installer-manifest.yaml" | \
-    grep 'release_tag:' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+  manifest_tag="$(manifest_release_tag code-x | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
   [ -n "$cx_version" ] && [ -n "$manifest_tag" ] && [ "$cx_version" = "$manifest_tag" ]
+}
+
+# ---- P1: marketplace.json + plugin.json version == the release tag (gate) --
+# xfam v1.22.4 public-port fold: install.sh's version-parity check (belt-and-
+# suspenders inside ensure_marketplace_and_plugin) only fires AFTER a real
+# `claude plugin marketplace add` clone — it cannot run offline in this local
+# suite. This test is the offline substitute: it reads the REAL, shipped
+# marketplace.json + plugin.json straight off disk and asserts their declared
+# version equals installer-manifest.yaml's code-x release_tag. If a release is
+# cut without bumping one of the three, real users hit install.sh's fail-closed
+# version-parity check for real — this test catches the mismatch before ship.
+test_marketplace_and_plugin_json_version_parity() {
+  local repo_root="$INSTALLER_DIR/.."
+  local marketplace_json="$repo_root/.claude-plugin/marketplace.json"
+  local plugin_json="$repo_root/plugins/code-x/.claude-plugin/plugin.json"
+  [ -f "$marketplace_json" ] || { echo "missing $marketplace_json" >&2; return 1; }
+  [ -f "$plugin_json" ] || { echo "missing $plugin_json" >&2; return 1; }
+  local manifest_tag mp_version plugin_version
+  manifest_tag="$(manifest_release_tag code-x | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+  mp_version="$(python3 -c "
+import json
+data = json.load(open('$marketplace_json'))
+plugins = [p for p in data.get('plugins', []) if p.get('name') == 'code-x']
+print(plugins[0].get('version', '') if plugins else '')
+" 2>/dev/null)"
+  plugin_version="$(python3 -c "
+import json
+print(json.load(open('$plugin_json')).get('version', ''))
+" 2>/dev/null)"
+  local rc=0
+  if [ -z "$manifest_tag" ]; then echo "could not read installer-manifest.yaml code-x release_tag" >&2; rc=1; fi
+  if [ -z "$mp_version" ]; then echo "could not read $marketplace_json plugins[code-x].version" >&2; rc=1; fi
+  if [ -z "$plugin_version" ]; then echo "could not read $plugin_json version" >&2; rc=1; fi
+  [ "$rc" -eq 0 ] || return 1
+  if [ "$mp_version" != "$manifest_tag" ]; then
+    echo "marketplace.json version ($mp_version) != installer-manifest.yaml release_tag ($manifest_tag)" >&2
+    rc=1
+  fi
+  if [ "$plugin_version" != "$manifest_tag" ]; then
+    echo "plugin.json version ($plugin_version) != installer-manifest.yaml release_tag ($manifest_tag)" >&2
+    rc=1
+  fi
+  return $rc
 }
 
 run_case "clean install exits 0" test_clean_install_exits_zero
 run_case "second run is idempotent (no duplicate marketplaces/plugins)" test_idempotent_second_run
-run_case "fail-closed on commit-sha mismatch" test_fail_closed_on_mismatch
+run_case "pre-existing UNPINNED marketplace fails closed (hole A)" test_preexisting_unpinned_marketplace_fails_closed
 run_case "CodeRabbit offered, never auto-installed" test_coderabbit_never_autoinstalled
 run_case "missing manifest + unreachable bootstrap fails closed" test_missing_manifest_fails_closed
 run_case "P0-1: no unpinned /main/ raw.githubusercontent URL" test_no_unpinned_main_branch_url
 run_case "P0-2: no unpinned/unhashed pip install in install.sh" test_no_unpinned_pip_install
 run_case "P0-2: missing PyYAML hints pinned+hashed command and fails closed" test_missing_pyyaml_hints_pinned_hashed_command
-run_case "P0-3: matching HEAD but dirty tree still fails closed" test_dirty_tree_fails_even_with_matching_head
-run_case "P1: newly-added marketplace rolled back on pin mismatch" test_rollback_removes_newly_added_marketplace_on_mismatch
+run_case "P0-3: matching version but dirty tree still fails closed" test_dirty_tree_fails_even_with_matching_head
+run_case "P1: newly-added marketplace rolled back on version mismatch" test_rollback_removes_newly_added_marketplace_on_mismatch
 run_case "P1: bootstrap manifest fetch — correct hash proceeds" test_bootstrap_fetch_correct_hash_proceeds
 run_case "P1: bootstrap manifest fetch — wrong hash fails closed" test_bootstrap_fetch_wrong_hash_fails_closed
 run_case "P1: manifest code-x pin version matches checkers/cx --version" test_version_parity_with_cx
+run_case "GATE: marketplace.json + plugin.json version == release tag" test_marketplace_and_plugin_json_version_parity
+run_case "P1: marketplace-add uses the documented full-URL#<release_tag> form" test_marketplace_add_uses_tag_pinned_source
+run_case "P1: wrong plugin version at the same tag fails closed (belt)" test_wrong_installed_version_fails_closed
+run_case "BLOCKING: clean+right-version but HEAD not at tag fails closed" test_right_version_wrong_branch_fails_closed
+run_case "P2: non-git/corrupted checkout fails closed (not read as clean)" test_non_git_checkout_fails_closed
 
 echo ""
 echo "installer tests: $PASS passed, $FAIL failed"

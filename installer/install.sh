@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # trusting a single byte of it. Re-stamped together by
 # installer/restamp-release.sh at every release cut — never edit by hand.
 INSTALLER_RELEASE_TAG="v1.22.4"
-INSTALLER_MANIFEST_SHA256="3f870d0b42e8f0fafddb9e68508993380119bb824dda6b73d8b721fe97a0fb98"
+INSTALLER_MANIFEST_SHA256="3fe4a4efd7a58014f60cc055cf9163cec12d8bc924c07edee63709c40dbe0be9"
 DEFAULT_REMOTE_BASE="https://raw.githubusercontent.com/1984-alt/code-x"
 # Test-only override (offline fixtures point this at a file:// tree); never
 # set this yourself for a real install.
@@ -113,7 +113,7 @@ fi
 # values under known keys, so a narrow indented-block reader is enough —
 # pulling in a YAML parser just for this would violate the do-less ladder.
 yaml_get() {
-  # $1 = block header (e.g. "  superpowers:"), $2 = field name (e.g. "commit_sha")
+  # $1 = block header (e.g. "  superpowers:"), $2 = field name (e.g. "release_tag")
   awk -v block="$1" -v field="$2" '
     $0 == block { inblock=1; next }
     inblock && /^  [a-zA-Z]/ && $0 != block { inblock=0 }
@@ -125,17 +125,22 @@ yaml_get() {
   ' "$MANIFEST"
 }
 
-CX_COMMIT="$(yaml_get "  code-x:" commit_sha)"
 CX_RELEASE_TAG="$(yaml_get "  code-x:" release_tag)"
-CX_MARKETPLACE="$(yaml_get "  code-x:" marketplace_add_source)"
-SP_COMMIT="$(yaml_get "  superpowers:" commit_sha)"
-SP_MARKETPLACE="$(yaml_get "  superpowers:" marketplace_add_source)"
+CX_MARKETPLACE_URL="$(yaml_get "  code-x:" marketplace_add_url)"
+CX_MP_NAME="$(yaml_get "  code-x:" marketplace_name)"
+CX_PLUGIN_ID="$(yaml_get "  code-x:" plugin_id)"
+SP_RELEASE_TAG="$(yaml_get "  superpowers:" release_tag)"
+SP_MARKETPLACE_URL="$(yaml_get "  superpowers:" marketplace_add_url)"
+SP_MP_NAME="$(yaml_get "  superpowers:" marketplace_name)"
+SP_PLUGIN_ID="$(yaml_get "  superpowers:" plugin_id)"
 CR_INSTALL_URL="$(yaml_get "  coderabbit:" install_url)"
 PY_MIN_VERSION="$(yaml_get "  python3:" min_version)"
 PY_FALLBACK="$(yaml_get "  python3:" macos_fallback_path)"
 
-for pair in "code-x:$CX_COMMIT" "code-x-marketplace:$CX_MARKETPLACE" \
-            "superpowers:$SP_COMMIT" "superpowers-marketplace:$SP_MARKETPLACE"; do
+for pair in "code-x-release:$CX_RELEASE_TAG" "code-x-marketplace-url:$CX_MARKETPLACE_URL" \
+            "code-x-marketplace-name:$CX_MP_NAME" "code-x-plugin-id:$CX_PLUGIN_ID" \
+            "superpowers-release:$SP_RELEASE_TAG" "superpowers-marketplace-url:$SP_MARKETPLACE_URL" \
+            "superpowers-marketplace-name:$SP_MP_NAME" "superpowers-plugin-id:$SP_PLUGIN_ID"; do
   key="${pair%%:*}"; val="${pair#*:}"
   if [ -z "$val" ]; then
     fail_closed "manifest is missing a pinned value for $key" \
@@ -206,9 +211,15 @@ else
   CLAUDE_OK=0
 fi
 
-if [ "${#FAIL_ROWS[@]}" -gt 0 ] && [ "$CLAUDE_OK" -eq 0 ]; then
-  fail_closed "the claude CLI is required for every remaining step" \
-    "install Claude Code, then re-run this script — it is safe to re-run"
+# xfam FIX-FIRST P3 (2026-07-03): HARD-STOP before any marketplace/plugin
+# mutation if ANY required prerequisite is missing. Previously only a missing
+# `claude` CLI stopped here — a missing PyYAML (with Python present) fell
+# through and installed the plugins anyway, leaving the user with plugins on
+# disk but a non-functional `cx` (which needs PyYAML). Every [FAIL] row above
+# is a required prerequisite, so stop closed here and change nothing.
+if [ "${#FAIL_ROWS[@]}" -gt 0 ]; then
+  fail_closed "a required prerequisite is missing (see the [FAIL] line(s) above)" \
+    "install the missing prerequisite(s) listed above, then re-run this installer — it is safe to re-run, and nothing has been installed or changed yet"
 fi
 
 # ---- helpers to drive the claude CLI plugin machinery ----------------------
@@ -229,14 +240,42 @@ for m in data:
 "
 }
 
+installed_plugin_version() {
+  # $1 = marketplace checkout location, $2 = plugin name as listed inside that
+  # marketplace's own marketplace.json (e.g. "code-x", "superpowers"). Reads
+  # the version straight out of the cloned marketplace.json — the release's
+  # own self-declared version, not a live network/CLI call — so this works
+  # immediately after marketplace add, before `claude plugin install` runs.
+  local loc="$1" name="$2"
+  "$PYTHON_BIN" -c "
+import json, sys
+try:
+    with open('$loc/.claude-plugin/marketplace.json') as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+for p in data.get('plugins', []):
+    if p.get('name') == '$name':
+        print(p.get('version', ''))
+        break
+"
+}
+
 ensure_marketplace_and_plugin() {
-  # $1 = human label, $2 = marketplace add source (owner/repo), $3 = marketplace name,
-  # $4 = plugin id (plugin@marketplace), $5 = pinned commit sha
-  local label="$1" add_source="$2" mp_name="$3" plugin_id="$4" pinned_commit="$5"
+  # $1 = human label, $2 = marketplace add URL (full https .git URL),
+  # $3 = marketplace name (as the marketplace declares itself, NOT the repo
+  # name), $4 = plugin id (plugin@marketplace), $5 = pinned release tag.
+  #
+  # The tag pin uses the DOCUMENTED full-URL + `#<ref>` form
+  # ("<url>.git#<tag>"). The bare `owner/repo@tag` shorthand is undocumented
+  # for `marketplace add` and can silently clone unpinned on some CLI
+  # versions — this form is the one Anthropic's docs guarantee.
+  local label="$1" add_url="$2" mp_name="$3" plugin_id="$4" release_tag="$5"
   local newly_added=0
+  local add_source="${add_url}#${release_tag}"
 
   if ! claude plugin marketplace list --json 2>/dev/null | grep -q "\"name\": \"$mp_name\""; then
-    note "Adding the $label marketplace ($add_source)..."
+    note "Adding the $label marketplace ($add_url, pinned to $release_tag)..."
     if ! claude plugin marketplace add "$add_source" >/dev/null 2>&1; then
       bad "$label: could not add marketplace $add_source"
       note "  Fix: check your internet connection, or add it manually:"
@@ -263,32 +302,68 @@ ensure_marketplace_and_plugin() {
     return 1
   fi
 
-  local resolved
-  resolved="$(git -C "$loc" rev-parse HEAD 2>/dev/null)"
-  if [ -z "$resolved" ]; then
-    bad "$label: could not read the installed marketplace's commit"
+  # xfam FIX-FIRST P2 (2026-07-03): git status on a NON-git or corrupted loc
+  # exits nonzero with EMPTY stdout, which the old `[ -n "$dirty" ]` test
+  # silently read as "clean". Check the exit status explicitly first.
+  local dirty status_rc
+  dirty="$(git -C "$loc" status --porcelain 2>/dev/null)"; status_rc=$?
+  if [ "$status_rc" -ne 0 ]; then
     rollback_if_newly_added
-    note "  Fix: run 'claude plugin marketplace update $mp_name' and re-run this installer"
-    return 1
-  fi
-  if [ "$resolved" != "$pinned_commit" ]; then
-    rollback_if_newly_added
-    fail_closed "$label: installed commit ($resolved) does not match the pinned coordinate ($pinned_commit)" \
-      "the upstream source has moved since this installer was pinned — do not proceed on an unverified checkout; tell the maintainer to re-pin installer-manifest.yaml"
+    fail_closed "$label: $loc is not a readable git checkout (git status failed)" \
+      "remove the marketplace and re-run so it is re-cloned fresh: claude plugin marketplace remove $mp_name"
   fi
 
-  # xfam P0 COMMIT_MATCH_NOT_CONTENT_BINDING (2026-07-03): a matching HEAD is
-  # spoofable — a dirty working tree can keep the pinned commit while the
-  # actual files `claude plugin install` reads have changed. Clean tree +
-  # matching HEAD together = content is provably the pinned commit's content.
-  local dirty
-  dirty="$(git -C "$loc" status --porcelain 2>/dev/null)"
+  # xfam FIX-FIRST BLOCKING (2026-07-03): prove HEAD is EXACTLY the pinned tag.
+  # A tag-pinned `marketplace add ...#<tag>` SHOULD land HEAD on the tag, but we
+  # must not TRUST that it did: a marketplace added UNPINNED earlier (hole A —
+  # e.g. someone ran the manual `marketplace add owner/repo`), or an older CLI
+  # that ignored the `#<tag>` suffix (hole B), can sit at a clean, same-version
+  # main-branch HEAD that is NOT the tag — and the version-parity check alone
+  # would wave it through. Only an exact tag match proves the checkout is the
+  # pinned release. (Runtime-verified 2026-07-03: a real pinned clone reports
+  # `git describe --exact-match --tags HEAD` == the tag.)
+  local head_tag
+  head_tag="$(git -C "$loc" describe --exact-match --tags HEAD 2>/dev/null)"
+  if [ "$head_tag" != "$release_tag" ]; then
+    rollback_if_newly_added
+    if [ "$newly_added" -eq 1 ]; then
+      fail_closed "$label: the marketplace was added but HEAD is not the pinned tag $release_tag (got '${head_tag:-an untagged commit}')" \
+        "your Claude CLI may be too old to honor a #<tag> pin — update Claude Code, then re-run this installer (it is safe to re-run)"
+    else
+      fail_closed "$label: an existing '$mp_name' marketplace is NOT at the pinned tag $release_tag (HEAD is '${head_tag:-an untagged commit}')" \
+        "it was likely added unpinned earlier — remove it and re-run so it is re-added pinned: claude plugin marketplace remove $mp_name"
+    fi
+  fi
+
+  # A dirty tree can diverge from the tagged content even when HEAD is the tag.
   if [ -n "$dirty" ]; then
     rollback_if_newly_added
     fail_closed "$label: installed checkout has local changes (working tree is not clean at $loc)" \
-      "delete the marketplace checkout and re-run this installer so it is re-cloned fresh — a pinned commit with local edits is not trustworthy content"
+      "delete the marketplace checkout and re-run this installer so it is re-cloned fresh — a pinned tag with local edits is not trustworthy content"
   fi
-  ok "$label: marketplace verified at pinned commit ${pinned_commit:0:12} (clean tree)"
+
+  # Belt-and-suspenders (fold v1.22.4): the tagged content's OWN self-declared
+  # plugin version must equal the pinned release tag — catches a mispinned or
+  # botched release where the tag exists but its marketplace.json declares a
+  # different version. (commit_sha pinning is impossible here: a marketplace
+  # source can only be pinned to a branch/tag ref, never a raw commit sha, and
+  # a code-x release commit cannot contain its own sha — the tag IS the pin.)
+  local plugin_name installed_version expected_version
+  plugin_name="${plugin_id%%@*}"
+  installed_version="$(installed_plugin_version "$loc" "$plugin_name")"
+  expected_version="${release_tag#v}"
+  if [ -z "$installed_version" ]; then
+    rollback_if_newly_added
+    bad "$label: could not read the installed plugin's declared version at $loc"
+    note "  Fix: run 'claude plugin marketplace update $mp_name' and re-run this installer"
+    return 1
+  fi
+  if [ "$installed_version" != "$expected_version" ]; then
+    rollback_if_newly_added
+    fail_closed "$label: installed plugin version ($installed_version) does not match the pinned release ($expected_version)" \
+      "the upstream tag may have moved, or the checkout is stale — do not proceed on an unverified version; tell the maintainer to re-pin installer-manifest.yaml"
+  fi
+  ok "$label: marketplace verified at pinned tag $release_tag (HEAD on tag, clean tree, version $installed_version)"
 
   if claude plugin list --json 2>/dev/null | grep -q "\"id\": \"$plugin_id\""; then
     ok "$label: plugin already installed ($plugin_id)"
@@ -307,12 +382,12 @@ ensure_marketplace_and_plugin() {
 
 if [ "$CLAUDE_OK" -eq 1 ] && [ -n "$PYTHON_BIN" ]; then
   note ""
-  note "Step 2/4: Code-X plugin (pinned to ${CX_COMMIT:0:12})"
-  ensure_marketplace_and_plugin "Code-X" "$CX_MARKETPLACE" "code-x" "code-x@code-x" "$CX_COMMIT"
+  note "Step 2/4: Code-X plugin (pinned to release $CX_RELEASE_TAG)"
+  ensure_marketplace_and_plugin "Code-X" "$CX_MARKETPLACE_URL" "$CX_MP_NAME" "$CX_PLUGIN_ID" "$CX_RELEASE_TAG"
 
   note ""
-  note "Step 3/4: superpowers plugin (pinned to ${SP_COMMIT:0:12})"
-  ensure_marketplace_and_plugin "superpowers" "$SP_MARKETPLACE" "superpowers" "superpowers@superpowers" "$SP_COMMIT"
+  note "Step 3/4: superpowers plugin (pinned to release $SP_RELEASE_TAG)"
+  ensure_marketplace_and_plugin "superpowers" "$SP_MARKETPLACE_URL" "$SP_MP_NAME" "$SP_PLUGIN_ID" "$SP_RELEASE_TAG"
 else
   warn "skipping plugin installs — fix the preflight failures above first"
 fi

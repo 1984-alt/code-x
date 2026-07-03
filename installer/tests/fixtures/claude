@@ -10,9 +10,27 @@ INSTALLED_FILE="$STATE/installed.json"
 mkdir -p "$MARKETPLACES_DIR"
 [ -f "$INSTALLED_FILE" ] || echo "[]" > "$INSTALLED_FILE"
 
-marketplace_name_from_source() {
-  # owner/repo -> repo
-  basename "$1"
+repo_name_from_source() {
+  # Strip a trailing "#ref" pin and a ".git" suffix, then take the last path
+  # segment. Accepts both the documented full-URL form
+  # ("https://github.com/obra/superpowers.git#v6.1.1") and a bare
+  # "owner/repo" shorthand (used by the negative tests to simulate an
+  # unpinned add). -> "superpowers" / "code-x".
+  local s="${1%%#*}"
+  s="${s%.git}"
+  basename "$s"
+}
+
+declared_marketplace_name() {
+  # A real marketplace's NAME comes from its own marketplace.json `name`
+  # field, which can differ from the repo name. RUNTIME-VERIFIED 2026-07-03:
+  # obra/superpowers declares "superpowers-dev"; 1984-alt/code-x declares
+  # "code-x". This mapping mirrors that reality so the fake CLI reports the
+  # same names the real one does (install.sh looks marketplaces up by name).
+  case "$(repo_name_from_source "$1")" in
+    superpowers) echo "superpowers-dev" ;;
+    *) repo_name_from_source "$1" ;;
+  esac
 }
 
 cmd="${1:-}"; shift || true
@@ -24,12 +42,34 @@ case "$cmd $sub" in
     case "$action" in
       add)
         source="${1:-}"
-        name="$(marketplace_name_from_source "$source")"
-        dir="$MARKETPLACES_DIR/$name"
+        echo "$source" >> "$STATE/marketplace_add_log"
+        ref="${source#*#}"
+        [ "$ref" = "$source" ] && ref=""
+        mp_name="$(declared_marketplace_name "$source")"
+        plugin_name="$(repo_name_from_source "$source")"
+        dir="$MARKETPLACES_DIR/$mp_name"
         if [ ! -d "$dir/.git" ]; then
-          mkdir -p "$dir"
+          # Fake CLI's stand-in for "clone this tag": self-declare the
+          # requested ref (minus a leading "v") as the plugin's version in a
+          # marketplace.json, mirroring what a real tagged release does. The
+          # marketplace's own `name` may differ from the plugin name (as with
+          # superpowers-dev). FAKE_CLAUDE_FORCE_VERSION overrides the version
+          # for tests that simulate upstream drift (the tag's real content
+          # declares a DIFFERENT version than what was requested).
+          version="${FAKE_CLAUDE_FORCE_VERSION:-${ref#v}}"
+          [ -z "$version" ] && version="0.0.0-notag"
+          mkdir -p "$dir/.claude-plugin"
+          printf '{"name": "%s", "plugins": [{"name": "%s", "version": "%s"}]}\n' \
+            "$mp_name" "$plugin_name" "$version" \
+            > "$dir/.claude-plugin/marketplace.json"
           git -C "$dir" init -q
-          git -C "$dir" -c user.email=test@test -c user.name=test commit -q --allow-empty -m "init $name"
+          git -C "$dir" add -A
+          git -C "$dir" -c user.email=test@test -c user.name=test commit -q -m "init $mp_name"
+          # Mirror a real tag-pinned clone: HEAD sits exactly ON the tag, so
+          # `git describe --exact-match --tags HEAD` returns it. A shorthand /
+          # unpinned add carries no ref => no tag => the installer's exact-tag
+          # check must fail closed (that is hole A/B being closed).
+          [ -n "$ref" ] && git -C "$dir" tag "$ref" >/dev/null 2>&1
         fi
         exit 0
         ;;

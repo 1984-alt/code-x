@@ -1,19 +1,24 @@
 # Code-X installer smoke test (PBF-PROP-017).
 #
-# PORT NOTE: this workflow is authored for the PUBLIC code-x repo. It is NOT
-# wired into this private canon's CI — the public-port session places this
-# file at .github/workflows/installer-smoke.yml in the public repo and wires
-# it there. Path assumptions below (installer/ at repo root) match the public
-# repo layout after the port.
+# Runs against the PUBLIC code-x repo layout: installer/ at repo root,
+# checkers/cx nested under plugins/code-x/skills/code-x/ (unlike the private
+# canon's flat Code-X-V1/ layout). Wired at
+# .github/workflows/installer-smoke.yml.
 #
 # What it proves, in plain English:
 #   - The installer works on a clean machine (no prior Code-X install) on both
-#     macOS and Linux.
+#     macOS and Linux, installing the REAL code-x + superpowers plugins from
+#     their real GitHub marketplaces (this is the runtime proof no offline
+#     test can give — installer/tests/run-installer-tests.sh only proves the
+#     shell logic against a fake local CLI stub).
+#   - After install, the installed plugin's version matches the pin AND the
+#     `cx` checker actually runs (not just "a directory got cloned").
 #   - Running it twice is safe (the second run does not break or duplicate
 #     anything) — the idempotency promise in install.sh.
-#   - It correctly REFUSES to proceed when something is wrong: a corrupted
-#     checksum, a missing Python, or the user saying no to CodeRabbit — the
-#     first two must fail with a plain message, the third must NOT fail the run.
+#   - It correctly REFUSES to proceed when something is wrong: an unresolvable
+#     pinned release tag, a missing Python, or the user saying no to
+#     CodeRabbit — the first two must fail with a plain message, the third
+#     must NOT fail the run.
 
 name: installer-smoke
 
@@ -58,23 +63,44 @@ jobs:
           chmod +x installer/install.sh
           ./installer/install.sh
 
+      - name: Verify installed code-x version matches the pinned release tag
+        run: |
+          # Robust block-scoped extraction (position-independent — a later
+          # added comment must not shift the field out of a fixed -A<N> window).
+          expected="$(awk '/^  code-x:/{f=1;next} f&&/^  [a-zA-Z]/{f=0} f&&/release_tag:/{print;exit}' installer/installer-manifest.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          claude plugin list --json | python3 -c "import json, sys; data = json.load(sys.stdin); match = [p for p in data if p['id'] == 'code-x@code-x']; assert match, 'code-x@code-x not found in installed plugins after install'; installed = match[0]['version']; expected = '$expected'; assert installed == expected, f'installed code-x version {installed} != pinned release {expected}'; print(f'confirmed: installed code-x version {installed} matches pinned release {expected}')"
+
+      - name: Verify the installed cx checker actually runs (real runtime proof)
+        run: |
+          # Public repo layout: checkers/cx is nested under
+          # plugins/code-x/skills/code-x/ (marketplace source = the cloned
+          # code-x repo root), not directly under it.
+          loc="$(claude plugin marketplace list --json | python3 -c "import json,sys; d=json.load(sys.stdin); print([m['installLocation'] for m in d if m['name']=='code-x'][0])")"
+          "$loc/plugins/code-x/skills/code-x/checkers/cx" --version
+
+      - name: Version-parity gate — marketplace.json + plugin.json == release tag
+        run: |
+          # Real-user consequence if this drifts: install.sh's version-parity
+          # check inside ensure_marketplace_and_plugin fails closed for every
+          # real install, because the tagged release's OWN self-declared
+          # version would not equal the pinned release_tag.
+          expected="$(awk '/^  code-x:/{f=1;next} f&&/^  [a-zA-Z]/{f=0} f&&/release_tag:/{print;exit}' installer/installer-manifest.yaml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          mp_version="$(python3 -c "import json; d=json.load(open('.claude-plugin/marketplace.json')); print([p['version'] for p in d['plugins'] if p['name']=='code-x'][0])")"
+          plugin_version="$(python3 -c "import json; print(json.load(open('plugins/code-x/.claude-plugin/plugin.json'))['version'])")"
+          echo "release_tag=$expected marketplace.json=$mp_version plugin.json=$plugin_version"
+          [ "$mp_version" = "$expected" ] || { echo "marketplace.json version ($mp_version) != release tag ($expected)"; exit 1; }
+          [ "$plugin_version" = "$expected" ] || { echo "plugin.json version ($plugin_version) != release tag ($expected)"; exit 1; }
+          echo "confirmed: marketplace.json + plugin.json version match release tag $expected"
+
       - name: Second install run (idempotency proof — must also succeed, no duplication)
         run: |
           ./installer/install.sh
 
       - name: Assert no duplicate marketplace entries after two runs
         run: |
-          claude plugin marketplace list --json | \
-            python3 -c "
-import json, sys, collections
-data = json.load(sys.stdin)
-names = [m['name'] for m in data]
-dupes = [n for n, c in collections.Counter(names).items() if c > 1]
-assert not dupes, f'duplicate marketplace entries after 2 runs: {dupes}'
-print('no duplicate marketplaces — idempotency holds')
-"
+          claude plugin marketplace list --json | python3 -c "import json, sys, collections; data = json.load(sys.stdin); names = [m['name'] for m in data]; dupes = [n for n, c in collections.Counter(names).items() if c > 1]; assert not dupes, f'duplicate marketplace entries after 2 runs: {dupes}'; print('no duplicate marketplaces — idempotency holds')"
 
-  negative-checksum-mismatch:
+  negative-nonexistent-pinned-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,21 +111,28 @@ print('no duplicate marketplaces — idempotency holds')
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Corrupt the pinned commit and expect a fail-closed exit
+      - name: Corrupt the pinned release tag and expect a fail-closed exit
         run: |
+          # A marketplace source can only be pinned to a branch/tag ref (see
+          # ensure_marketplace_and_plugin's "<url>.git#<release_tag>" add
+          # source) — there is no commit-sha pin to corrupt anymore (fold
+          # v1.22.4). The equivalent real-world negative case is a release_tag
+          # that does not exist upstream: `claude plugin marketplace add
+          # <url>.git#<tag>` must fail rather than silently falling back to the
+          # default branch.
           chmod +x installer/install.sh
           cp installer/installer-manifest.yaml /tmp/installer-manifest.yaml.bak
-          sed -i 's/commit_sha: "cdae8b866a21e78339cfb2d2e34c40f94eed95a6"/commit_sha: "0000000000000000000000000000000000000000"/' installer/installer-manifest.yaml
+          sed -i '0,/release_tag: "v[0-9.]*"/{s/release_tag: "v[0-9.]*"/release_tag: "v0.0.1-does-not-exist"/}' installer/installer-manifest.yaml
           set +e
           ./installer/install.sh
           status=$?
           set -e
           cp /tmp/installer-manifest.yaml.bak installer/installer-manifest.yaml
           if [ "$status" -eq 0 ]; then
-            echo "installer should have FAILED on a checksum/commit mismatch but exited 0"
+            echo "installer should have FAILED on a nonexistent pinned release tag but exited 0"
             exit 1
           fi
-          echo "confirmed: mismatched pin fails closed (exit $status)"
+          echo "confirmed: a pinned release tag that does not exist upstream fails closed (exit $status)"
 
   negative-missing-python:
     runs-on: ubuntu-latest

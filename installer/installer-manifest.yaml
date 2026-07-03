@@ -1,9 +1,16 @@
 # Code-X installer manifest (PBF-PROP-017) — PINNED trust root.
 #
-# Every dependency below is bound to an IMMUTABLE coordinate: a release tag, the
-# commit sha that tag points at, and (where the source is fetchable as a single
-# archive) a sha256 checksum of that archive. install.sh refuses to proceed if a
-# live fetch does not match this file byte-for-byte — fail-closed, not a warning.
+# Every dependency below is bound to an IMMUTABLE release TAG. install.sh builds
+# the DOCUMENTED tag-pin add-source — the full git URL plus `#<tag>`, e.g.
+# `https://github.com/1984-alt/code-x.git#v1.22.4` — from each dep's
+# `marketplace_add_url` + `release_tag` and passes it to `claude plugin
+# marketplace add`, so the clone can never silently follow a moving default
+# branch. (The bare `owner/repo@tag` shorthand is NOT documented for
+# marketplace add and can clone unpinned on some CLI versions — see the
+# code-x-installer-fold-v1.22.4 design note.) After cloning, install.sh reads
+# the checked-out release's OWN self-declared plugin version and requires it to
+# equal this pinned tag — fail-closed, not a warning, on any mismatch, missing
+# coordinate, or dirty (locally-edited) checkout.
 #
 # WHY PINNING EXISTS (xfam P0, PBF-PROP-017 design review): pulling straight from
 # each project's official source solves LICENSING/VENDORING exposure (no
@@ -12,12 +19,20 @@
 # this file. Any mismatch, disappearance, or unpinned coordinate is a fail-closed
 # condition in install.sh, never a soft warning.
 #
+# WHY NOT A COMMIT SHA (fold v1.22.4, 2026-07-03 — CEO-D-042): marketplace
+# sources only support pinning to a branch/tag ref, never a raw commit sha (the
+# `claude` CLI has no such option). A release tag is therefore the strongest
+# pin the marketplace-add step can actually enforce — see verify_method below.
+#
 # UPDATE PROCEDURE (manual, deliberate — no auto-pin-bump):
 #   1. Decide to move the pin (new upstream release, security fix, etc).
-#   2. Re-fetch the release's tag->commit mapping from the GitHub API
-#      (`/repos/<owner>/<repo>/tags`) and the tarball, recompute sha256 locally.
-#   3. Edit the three fields below (tag, commit, sha256) together — never one
-#      alone. Record the change in VERSION-HISTORY.md / a design-history note.
+#   2. Confirm the new tag exists at the upstream repo (and, for an external
+#      dependency like superpowers, what commit it currently points at — kept
+#      as an informational cross-check, not a verified coordinate).
+#   3. Edit release_tag (installer/restamp-release.sh does this for code-x,
+#      plus install.sh's own embedded bootstrap tag + manifest checksum, all
+#      together). Record the change in VERSION-HISTORY.md / a design-history
+#      note.
 #   4. Re-run installer tests (tests/run-installer-tests.sh) before shipping.
 
 schema_version: 1
@@ -28,45 +43,71 @@ dependencies:
   # code-x itself. Pin policy: SAME-RELEASE-AS-SELF — the installer always ships
   # pinned to the exact code-x release it is packaged inside (documented choice,
   # not a placeholder). release_tag below MUST equal `checkers/cx --version`'s
-  # version string — a pinned test enforces this (test_version_parity). The
-  # commit_sha is a build-time placeholder until the public port cuts a real
-  # release; installer/restamp-release.sh re-stamps BOTH fields together at
-  # every release cut (never edit release_tag without commit_sha, or vice versa).
+  # version string — a pinned test enforces this (test_version_parity). No
+  # commit_sha field exists for code-x: a release commit cannot contain its own
+  # sha (content-addressing), so any value stored here would be stale the
+  # instant it was written — that circular self-hash was the fold-v1.22.4 P0
+  # bug. installer/restamp-release.sh re-stamps release_tag (+ install.sh's
+  # embedded bootstrap tag/checksum) together at every release cut.
   code-x:
     kind: claude_code_plugin_marketplace
     official_source: "https://github.com/1984-alt/code-x"
-    marketplace_add_source: "1984-alt/code-x"
+    # Tag-pinning uses the DOCUMENTED full-git-URL + `#<ref>` form
+    # (code.claude.com/docs/en/claude-code/plugin-marketplaces): a bare
+    # `owner/repo@tag` shorthand is NOT documented for `marketplace add` and
+    # risks a silent unpinned clone on some CLI versions. install.sh appends
+    # `#<release_tag>` to this URL.
+    marketplace_add_url: "https://github.com/1984-alt/code-x.git"
+    # The marketplace NAME comes from the cloned marketplace.json's own `name`
+    # field (NOT the repo/URL), and `marketplace list --json` reports it under
+    # that name. Verified from the real code-x marketplace.json: "code-x".
+    marketplace_name: "code-x"
     plugin_id: "code-x@code-x"
+    plugin_name: "code-x"
     pin_policy: "same-release-as-self"
     release_tag: "v1.22.4"
-    commit_sha: "cbd63cfe604c2271f7f201696c2605e2b596082f"
-    # No single-archive checksum pinned here: the plugin is installed live by the
-    # `claude` CLI's own marketplace/plugin machinery (git clone under the hood),
-    # not a raw tarball fetch install.sh performs itself. install.sh instead
-    # verifies the installed marketplace's resolved commit == commit_sha above
-    # (`claude plugin marketplace list --json`) and fails closed on a mismatch.
-    verify_method: "installed_marketplace_commit_match"
+    # install.sh verifies two things: (1) `claude plugin marketplace add
+    # https://github.com/1984-alt/code-x.git#v1.22.4` clones this exact tag —
+    # never the default branch; (2) the cloned marketplace.json's own
+    # self-declared plugin version equals this release_tag (stripped of the
+    # leading "v"), plus a clean working tree. That is the strongest check the
+    # `claude` CLI's marketplace machinery actually supports — it has no
+    # commit-sha pin.
+    verify_method: "installed_marketplace_tag_pin_plus_version_parity"
 
   superpowers:
     kind: claude_code_plugin
     official_source: "https://github.com/obra/superpowers"
-    marketplace_add_source: "obra/superpowers"
-    plugin_id: "superpowers@superpowers"
+    # Same documented full-URL#ref tag-pin form as code-x above.
+    marketplace_add_url: "https://github.com/obra/superpowers.git"
+    # RUNTIME-VERIFIED 2026-07-03 (real `claude plugin marketplace add
+    # https://github.com/obra/superpowers.git#v6.1.1` in a throwaway HOME):
+    # the marketplace's OWN declared name is "superpowers-dev" (not
+    # "superpowers"), so `marketplace list --json` reports it under that name
+    # and the plugin id is "superpowers@superpowers-dev". The clone pinned
+    # cleanly to the v6.1.1 tag and self-declared plugin version 6.1.1.
+    marketplace_name: "superpowers-dev"
+    plugin_id: "superpowers@superpowers-dev"
+    plugin_name: "superpowers"
     # documented Claude Code convenience alias also exists:
     # "superpowers@claude-plugins-official" — install.sh prefers the direct
     # GitHub coordinate so the pin below is meaningful and verifiable.
     pin_policy: "pinned-release"
     release_tag: "v6.1.1"
+    # Informational only (fold v1.22.4, 2026-07-03) — NOT used by install.sh's
+    # verification, which is release_tag + version-parity, identical in kind
+    # to code-x above. Unlike code-x's pin, superpowers is an external
+    # dependency pinned from outside its own release process, so this commit
+    # is not self-referential/circular — it's kept as a human audit trail (did
+    # the v6.1.1 tag ever move?) fetched live from api.github.com at pin time.
     commit_sha: "c984ea2e7aeffdcc865784fd6c5e3ab75da0209a"
     tarball_url: "https://github.com/obra/superpowers/archive/refs/tags/v6.1.1.tar.gz"
     # No sha256 here (xfam P1 PINNED_SHA256_DEAD_FIELD, 2026-07-03): install.sh
     # never fetches this tarball — `claude plugin marketplace add` does its own
     # `git clone` under the hood, so a tarball checksum has no enforcement point
-    # in this script. Trust binding for superpowers is IDENTICAL to code-x:
-    # installed_marketplace_commit_match (pinned commit + clean working tree,
-    # see install.sh ensure_marketplace_and_plugin). tarball_url above is kept
-    # only as a human reference link, not a verified coordinate.
-    verify_method: "installed_marketplace_commit_match"
+    # in this script. tarball_url above is kept only as a human reference link,
+    # not a verified coordinate.
+    verify_method: "installed_marketplace_tag_pin_plus_version_parity"
     fetched_2026-07-03_note: >
       tag->commit fetched live from api.github.com during this build
       (2026-07-03). Not a PIN-ME placeholder.
