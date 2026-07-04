@@ -166,7 +166,7 @@ run it:
 CX_TAG=v1.22.4   # use the tag from the release you're installing
 
 curl -fsSL "https://raw.githubusercontent.com/1984-alt/code-x/${CX_TAG}/installer/install.sh" -o install.sh
-echo "<sha256-from-the-v1.22.4-GitHub-Release-notes>  install.sh" | shasum -a 256 -c -
+echo "84d9e15d66bc9c49476e8e75d71453abbce49e6b7b2a9128d833dd8f9acdfa93  install.sh" | shasum -a 256 -c -
 bash install.sh
 ```
 
