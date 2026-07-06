@@ -10,6 +10,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.5]
+
+Syncs the public release up to protocol **v1.22.5** — a bundle of 5 folds (patch class, no version-scheme change). 566 self-tests, 456 gate clauses, 33 `cx check` subcommands.
+
+### Added
+- **Checker-crash-masks-finding fix.** `cx check state` and `cx check boot` used to crash outright (instead of reporting a clean `[P0]`) on a malformed session-state file — the exact case a session-start safety check exists to catch. Fixed so a broken state file is now reported, never silently swallowed by a crash.
+- **Mockup-first change rule.** A card that changes a CEO-visible screen must now cite the current locked design AND compare its build against a real render of that design — never a prose-only description of a visual change. Closes the gap where a screen could quietly drift from its approved design between one release and the next.
+- **Per-project risk tiers (LITE / STANDARD / STRICT).** Small/throwaway projects can now run a lighter review ceremony (less mandatory cross-review, lighter audit) while the non-negotiable safety floor — coverage, frozen-plan hash, scope limits, dependency scanning, and the forced review of any money/auth/secrets-touching work — stays identical at every tier. Undeclared or invalid tier always defaults to the strictest setting.
+- **Given/When/Then acceptance examples, wired into runtime proof.** Every behavioral requirement must now carry at least one concrete "Given/When/Then" example (or a typed, reasoned exemption), and the runtime verification step must actually cite and resolve those examples — not just claim the feature was checked. Existing projects keep working under a non-blocking legacy path until they opt in.
+- **`/cx-accept` forge-parity acceptance recompute.** Module-acceptance receipts (the record that a feature was built, run, and approved) now have their key fields — the commit reference and the quality-card hash — independently recomputed and checked against reality, rather than trusted at face value. A new `cx check accept` command generates these receipts correctly by construction.
+- **Installer re-stamped to v1.22.5** via `installer/restamp-release.sh`; installer test suite: 26/26 passing.
+
+### Fixed
+- `EVALS.md` reconciled to the full set of 55 named self-tests (was 48); `PROP-CROSSWALK.md` gained the 4 proposal-numbering rows this bundle introduced.
+
+---
+
 ## [1.22.4]
 
 Syncs the public release up to protocol **v1.22.4** — a patch fold, adoption-surface class (no new private-checker gate/clause/subcommand beyond the installer itself).

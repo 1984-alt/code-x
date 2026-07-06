@@ -1,6 +1,6 @@
 # Code-X
 
-> A deterministic enforcement protocol for AI-directed software builds. A mechanical Python checker (`cx`, 32 subcommands) — not another AI — blocks dropped requirements, scope drift, stale approvals, and fake-"done" work; 404 gate clauses are each proven to reject a pinned adversarial fixture; 424 self-tests plus that contract-bite harness run in public CI. Do not evaluate this repo from the README alone: the evaluable artifact is the checker and its test corpus.
+> A deterministic enforcement protocol for AI-directed software builds. A mechanical Python checker (`cx`, 33 subcommands) — not another AI — blocks dropped requirements, scope drift, stale approvals, and fake-"done" work; 456 gate clauses are each proven to reject a pinned adversarial fixture; 566 self-tests plus that contract-bite harness run in public CI. Do not evaluate this repo from the README alone: the evaluable artifact is the checker and its test corpus.
 
 ## Start here
 
@@ -9,9 +9,9 @@
 
 ## Enforcement source (the part to actually evaluate)
 
-- [plugins/code-x/skills/code-x/checkers/check-contracts.yaml](plugins/code-x/skills/code-x/checkers/check-contracts.yaml): 404 gate clauses, each pinned to a BAD fixture the checker must reject and a GOOD fixture it must pass
+- [plugins/code-x/skills/code-x/checkers/check-contracts.yaml](plugins/code-x/skills/code-x/checkers/check-contracts.yaml): 456 gate clauses, each pinned to a BAD fixture the checker must reject and a GOOD fixture it must pass
 - [plugins/code-x/skills/code-x/checkers/tests/run_contracts.py](plugins/code-x/skills/code-x/checkers/tests/run_contracts.py): the meta-test harness proving every clause bites — the "green ≠ enforcing" defense
-- [plugins/code-x/skills/code-x/checkers/tests/run.py](plugins/code-x/skills/code-x/checkers/tests/run.py): 424 unit self-tests for the checker
+- [plugins/code-x/skills/code-x/checkers/tests/run.py](plugins/code-x/skills/code-x/checkers/tests/run.py): 566 unit self-tests for the checker
 - [plugins/code-x/skills/code-x/checkers/cx](plugins/code-x/skills/code-x/checkers/cx): the checker CLI — 32 `cx check` subcommands, exit 0 = PASS / 1 = FIX-FIRST
 - [plugins/code-x/skills/code-x/checkers/CX-CHECK-SPEC.md](plugins/code-x/skills/code-x/checkers/CX-CHECK-SPEC.md): the checker's specification
 - [.github/workflows/tests.yml](.github/workflows/tests.yml): public CI runs the full four-leg eval gate (`cx check evals`) on every push

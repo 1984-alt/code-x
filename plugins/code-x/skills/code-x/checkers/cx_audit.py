@@ -263,6 +263,11 @@ def collect_audit_findings(audit_dir: Path, final: bool = False, state_path=None
 
     # X1: LOAD the state — derive builder_family from it, never trust a self-declared field.
     derived_builder_family = None
+    # PBF-PROP-019 Phase 3 (design v2.B row 1): risk_tier, resolved from the SAME loaded state's
+    # packet_dir — reused below to decide whether the formal Audit-STAGE entry is required at all.
+    # Absent/unreadable state or an unsafe/missing packet_dir resolves STRICT (fail-closed; never
+    # silently drops the stage requirement when the tier cannot be determined).
+    risk_tier_val = "STRICT"
     if state_path is not None:
         state_data, state_err = load_yaml(str(state_path))
         if state_err or not isinstance(state_data, dict):
@@ -277,12 +282,22 @@ def collect_audit_findings(audit_dir: Path, final: bool = False, state_path=None
                 findings.append(("P1", str(state_path),
                     f"AUDIT-STAGE-STATE-REQUIRED: state active_build_engine='{engine}' not in "
                     f"{sorted(_ENGINE_TO_LADDER_FAMILY)} — builder_family cannot be derived (X1)"))
+            pkt_rel = str(state_data.get("packet_dir", "") or "").strip()
+            if pkt_rel and not (Path(pkt_rel).is_absolute() or ".." in Path(pkt_rel).parts):
+                from cx_common import resolve_risk_tier
+                risk_tier_val = resolve_risk_tier(repo_root / pkt_rel)
     else:
         findings.append(("P1", str(audit_dir),
             "AUDIT-STAGE-STATE-REQUIRED: no --state supplied — builder_family cannot be derived "
             "from bound state (X1)"))
 
     if not audit_dir.is_dir() or not (audit_dir / _SUMMARY_FILE).is_file():
+        if risk_tier_val == "LITE":
+            # PBF-PROP-019 Phase 3: LITE drops the SEPARATE formal Audit-STAGE ceremony (a light,
+            # fact-scaled audit folds into build instead). This ONLY relaxes the stage's ENTRY
+            # requirement — if an audit_dir IS provided (a light audit was produced anyway), it is
+            # still judged in FULL below (facts / N-A derivation / hard-rules are never suppressed).
+            return findings
         findings.append(("P1", str(audit_dir),
             f"AUDIT-STAGE-ENTRY-REQUIRED: {_SUMMARY_FILE} missing — a build that reaches "
             "final-ready with no audit receipt skipped the Audit stage entirely (A-PROP-001 Lever A)"))

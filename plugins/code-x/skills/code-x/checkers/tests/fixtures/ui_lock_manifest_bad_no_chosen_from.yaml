@@ -1,0 +1,32 @@
+# PBF-PROP-020 Rule 3 BAD (forward-scope, CEO-D-046): the lock DECLARES chosen_from but with only
+# ONE rendered option — a lock acceptance needs >=2 RENDERED options the CEO chose FROM. (A lock
+# that OMITS chosen_from entirely is grandfathered/untouched, not a bite — so the bite is now the
+# present-but-insufficient case.)
+ui_lock_manifest:
+  screen_id: income
+  route: /income
+  audit_status: PASS
+  audit_ref: design-history/income-lock-manifest-audit-2026-06-12.md
+  ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-012
+  chosen_from:
+  - path: module_demo_shot.png
+    hash: b1ff9c8ea3a7
+  lock_hash: 9b5aa88f58ab
+  dom_markers:
+  - id: top_tabs
+  - id: bottom_nav
+  - id: primary_content
+  controls:
+  - data_fn: add_income
+    label: Add income
+    role: button
+  - data_fn: month_picker
+    label: Month
+    role: combobox
+  shell_regions:
+  - selector: '#app-shell'
+    purpose: approved page chrome
+  forbidden_missing:
+  - top_tabs
+  - bottom_nav
+  - add_income

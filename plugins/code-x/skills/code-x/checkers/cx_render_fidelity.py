@@ -35,10 +35,14 @@
 import hashlib
 import json
 import math
+import re
+import subprocess
 from pathlib import Path
 
 from cx_common import findings_report, load_yaml
 from cx_module_acceptance import _sha12
+
+_HEX12_RE = re.compile(r"^[0-9a-fA-F]{12,}$")
 
 # A small, capped epsilon so deterministic sub-pixel rounding never false-fires overflow.
 _OVERFLOW_EPS = 0.5
@@ -200,6 +204,93 @@ def _evidence_is_valid(ev, current_head, profile_fp, pinned_widths, base, findin
     return ok
 
 
+def _git_diff_touched(repo_root: str, base_sha: str, head_sha: str) -> tuple[list | None, str | None]:
+    """PBF-PROP-020: the authoritative, non-self-declared touched-file set — `git diff --name-only
+    base_sha..head_sha`. Returns (files, error). Fail closed on a bad repo/sha rather than treating
+    an error as 'nothing touched' (which would silently exempt every screen)."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "diff", "--name-only", base_sha, head_sha],
+            capture_output=True, text=True,
+        )
+    except OSError as e:
+        return None, str(e)
+    if result.returncode != 0:
+        return None, (result.stderr or result.stdout or "git diff failed").strip()
+    return [ln for ln in result.stdout.splitlines() if ln.strip()], None
+
+
+def _touched_screens(registry_rows: list, touched_files: list) -> set:
+    """The touched CEO-visible screen-set: a registry 'screen' row whose declared `files` (the
+    screen->file binding authored on the row) intersects the git-touched file set."""
+    touched = set(touched_files)
+    out = set()
+    for m in registry_rows:
+        if not isinstance(m, dict) or str(m.get("kind", "")).strip() != "screen":
+            continue
+        sid = str(m.get("screen_id", "") or "").strip()
+        files = m.get("files") or []
+        if sid and isinstance(files, list) and any(str(f) in touched for f in files):
+            out.add(sid)
+    return out
+
+
+def _resolve_git_touched_scope(raw: dict, args, base: Path, findings: list, loc: str) -> set | None:
+    """PBF-PROP-020 Rules 2 + 7: resolve the git-touched CEO-visible screen-set from --repo-root +
+    --packet-dir + bundle.repo_sha_before. Returns None (Rules 2/7 do not apply — e.g. a legacy
+    bundle/project with no registry wired) UNLESS the caller supplied enough to attempt resolution,
+    in which case a resolution failure is a P0 finding (fail-closed) and this still returns None so
+    the caller does not also double-report on an unusable touched-set."""
+    repo_root = getattr(args, "repo_root", None)
+    packet_dir_rel = getattr(args, "packet_dir", None)
+    if not repo_root or not packet_dir_rel:
+        return None
+    repo_sha_before = str(raw.get("repo_sha_before", "") or "").strip()
+    if not repo_sha_before:
+        # PBF-PROP-020 fold re-sweep fix (CEO-D-046 grandfather made MECHANICAL): a render bundle
+        # with the repo/packet flags supplied but NO repo_sha_before can no longer go DORMANT by
+        # bare omission — that was a fail-OPEN dodge (new work drops the field and Rules 2/7 vanish,
+        # the exact self-declared-opt-in hole the v2 rework was built to kill). The pre-020 legacy
+        # carve-out is now an EXPLICIT typed marker, mirroring BF-PROP-006's legacy_no_baseline —
+        # never a silent absence. A genuine pre-020 bundle DECLARES `legacy_no_baseline: <reason>`
+        # (dormant, advisory WARN — migration debt); a 020-era bundle DECLARES repo_sha_before; a
+        # bare omission fails closed. (Return None after the P0 so the caller does not also
+        # double-report on an unusable touched-set — same posture as the malformed-hex branch below.)
+        carveout = str(raw.get("legacy_no_baseline", "") or "").strip()
+        if carveout:
+            print(f"WARN: render bundle has no repo_sha_before (legacy_no_baseline: {carveout}) — "
+                  "PBF-PROP-020 Rules 2/7 dormant for this pre-020 bundle (migration debt)")
+            return None
+        findings.append(("P0", loc,
+            "--repo-root/--packet-dir supplied but the render bundle has no repo_sha_before — the "
+            "git-touched CEO-visible scope cannot be derived, so RENDER-COVERS-GIT-TOUCHED / "
+            "UNPICTURED-STATE-IS-GAP would silently not run; a 020-era bundle MUST declare "
+            "repo_sha_before (or a typed legacy_no_baseline carve-out for a genuine pre-020 bundle) "
+            "— omission is no longer a free dormant pass (PBF-PROP-020 Rule 2/7, fail-closed)"))
+        return None
+    if not _HEX12_RE.match(repo_sha_before):
+        findings.append(("P0", loc,
+            f"--repo-root/--packet-dir supplied but bundle.repo_sha_before "
+            f"'{repo_sha_before}' is not a hex commit id of >=12 chars — the "
+            "git-touched scope cannot be derived without a real baseline (PBF-PROP-020 Rule 2/7)"))
+        return None
+    current_head = str(getattr(args, "repo_head", "") or "").strip()
+    touched_files, derr = _git_diff_touched(repo_root, repo_sha_before, current_head)
+    if derr is not None:
+        findings.append(("P0", loc,
+            f"cannot compute the git-touched file set ({repo_sha_before}..{current_head} in "
+            f"'{repo_root}'): {derr} — the git-touched scope cannot be derived (PBF-PROP-020 Rule 2/7)"))
+        return None
+    from cx_lock_fidelity import frozen_registry_rows
+    rows, rerr = frozen_registry_rows(repo_root, packet_dir_rel)
+    if rerr:
+        findings.append(("P0", loc,
+            f"cannot resolve MODULE-REGISTRY.yaml for the git-touched scope — {rerr} "
+            "(PBF-PROP-020 Rule 2/7)"))
+        return None
+    return _touched_screens(rows, touched_files)
+
+
 def cmd_render_fidelity(args) -> int:
     bundle_path = args.bundle
 
@@ -318,7 +409,62 @@ def cmd_render_fidelity(args) -> int:
                 "has no otherwise-valid render evidence; every required render row must carry fresh, "
                 "non-forged evidence (no row may silently ship unrendered)"))
 
-    # LAYER 2 — golden-drift: ADVISORY WARN ONLY. Never a finding, never changes the exit code.
+    # PBF-PROP-020 Rules 2 + 7: the git-touched CEO-visible screen-set (None when --repo-root /
+    # --packet-dir were not supplied — Rules 2/7 then do not apply, matching the design's scoped-not-
+    # global posture; a resolution FAILURE when the flags WERE supplied is a P0 above, not a skip).
+    touched_screens = _resolve_git_touched_scope(raw, args, base, findings, loc)
+
+    if touched_screens is not None:
+        required_screen_ids = {_row_key(r)[0] for r in required_rows if isinstance(r, dict)}
+        # RENDER-COVERS-GIT-TOUCHED (P0): every git-touched CEO-visible screen must appear in
+        # coverage_matrix.required_rows — the bundle can no longer hide a touched screen by omission.
+        for sid in sorted(touched_screens - required_screen_ids):
+            findings.append(("P0", loc,
+                f"RENDER-COVERS-GIT-TOUCHED — screen_id={sid!r} was touched by this build "
+                f"(git diff vs repo_sha_before) but has NO row in coverage_matrix.required_rows; a "
+                "touched CEO-visible screen cannot be omitted from the bundle's own required set "
+                "(PBF-PROP-020 Rule 2)"))
+
+        # UNPICTURED-STATE-IS-GAP (P0): resolve pictured_states from the HASH-BOUND lock manifest via
+        # the registry lock_ref (never a bundle-local copy) — a touched (screen_id, content_state) not
+        # in the lock's pictured_states is a coverage GAP the builder must stop on.
+        from cx_lock_fidelity import frozen_registry_rows, registry_screen_lock, resolve_in_repo
+        repo_root = getattr(args, "repo_root", None)
+        packet_dir_rel = getattr(args, "packet_dir", None)
+        reg_rows, _rerr = frozen_registry_rows(repo_root, packet_dir_rel) if repo_root and packet_dir_rel else (None, None)
+        pictured_by_screen: dict = {}
+        if reg_rows is not None:
+            for sid in touched_screens:
+                live_lock, lerr = registry_screen_lock(reg_rows, sid)
+                if lerr or not live_lock:
+                    continue
+                lock_target, lp_err = resolve_in_repo(repo_root, live_lock)
+                if lp_err or lock_target is None or not lock_target.is_file():
+                    continue
+                lock_raw, _le = load_yaml(str(lock_target))
+                lock_body = (lock_raw.get("ui_lock_manifest") if isinstance(lock_raw, dict)
+                            and isinstance(lock_raw.get("ui_lock_manifest"), dict) else lock_raw)
+                ps = lock_body.get("pictured_states") if isinstance(lock_body, dict) else None
+                pictured_by_screen[sid] = {
+                    (str(p.get("screen_id", "") or "").strip(), str(p.get("content_state", "") or "").strip())
+                    for p in ps if isinstance(p, dict)
+                } if isinstance(ps, list) else set()
+
+        for row in required_rows:
+            if not isinstance(row, dict):
+                continue
+            sid, _vid, _theme, cstate = _row_key(row)
+            if sid not in touched_screens or sid not in pictured_by_screen:
+                continue
+            if (sid, cstate) not in pictured_by_screen[sid]:
+                findings.append(("P0", loc,
+                    f"UNPICTURED-STATE-IS-GAP — touched screen_id={sid!r} content_state={cstate!r} "
+                    "is absent from the lock's pictured_states — an unpictured state is a coverage "
+                    "GAP, not an improvised builder judgment call (PBF-PROP-020 Rule 7)"))
+
+    # LAYER 2 — golden-drift. Untouched screens stay ADVISORY WARN ONLY (never a finding, never
+    # changes the exit code). A git-touched screen's drift is PBF-PROP-020 Rule 2's
+    # GOLDEN-DRIFT-BLOCKS-TOUCHED (P1) — flipped from WARN to a blocking finding.
     golden = raw.get("golden_drift") if isinstance(raw.get("golden_drift"), list) else []
     for g in golden:
         if not isinstance(g, dict):
@@ -326,10 +472,18 @@ def cmd_render_fidelity(args) -> int:
         diff_score = g.get("diff_score")
         tolerance = g.get("tolerance")
         if isinstance(diff_score, (int, float)) and isinstance(tolerance, (int, float)) and diff_score > tolerance:
-            print(f"WARN: golden-drift screen_id={_str(g, 'screen_id') or '?'} "
-                  f"viewport_id={_str(g, 'viewport_id') or '?'} diff_score={diff_score} > "
-                  f"tolerance={tolerance} vs baseline {_str(g, 'baseline_ref') or '?'} — ADVISORY only "
-                  "(Layer 2 graduates to a blocking P1 via a follow-up PROP once same-commit "
-                  "repeatability is proven; it never blocks today)")
+            g_sid = _str(g, "screen_id")
+            if touched_screens is not None and g_sid in touched_screens:
+                findings.append(("P1", loc,
+                    f"GOLDEN-DRIFT-BLOCKS-TOUCHED — screen_id={g_sid!r} "
+                    f"viewport_id={_str(g, 'viewport_id') or '?'} diff_score={diff_score} > "
+                    f"tolerance={tolerance} vs baseline {_str(g, 'baseline_ref') or '?'} on a "
+                    "GIT-TOUCHED CEO-visible screen — blocking (PBF-PROP-020 Rule 2), not advisory"))
+            else:
+                print(f"WARN: golden-drift screen_id={g_sid or '?'} "
+                      f"viewport_id={_str(g, 'viewport_id') or '?'} diff_score={diff_score} > "
+                      f"tolerance={tolerance} vs baseline {_str(g, 'baseline_ref') or '?'} — ADVISORY only "
+                      "(untouched screen; Layer 2 graduates to a blocking P1 via a follow-up PROP once "
+                      "same-commit repeatability is proven for the general case)")
 
     return findings_report(findings)

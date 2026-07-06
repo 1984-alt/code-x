@@ -4,6 +4,11 @@ ui_lock_manifest:
   audit_status: PASS
   audit_ref: design-history/expense-lock-audit-2026-06-20.md
   ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-031
+  chosen_from:
+  - path: module_demo_shot.png
+    hash: b1ff9c8ea3a7
+  - path: screenshot_good.png
+    hash: e878950f8091
   baseline_source: external_capture
   external_reference_ref: mm-expense
   capture_ids: [mm-expense]

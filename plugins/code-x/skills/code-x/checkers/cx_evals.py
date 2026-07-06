@@ -2,7 +2,8 @@
 #
 #   cx check evals [--checkers-dir <dir>]
 #
-# Runs the three protocol suites with the SAME interpreter + environment that is
+# Runs the four protocol suites (unit + contracts + strict consistency + live kaizen)
+# with the SAME interpreter + environment that is
 # already running cx (sys.executable + os.environ) — no actor re-discovers
 # PYTHONPATH/interpreter quirks:
 #   1. tests/run.py            (unit suite)

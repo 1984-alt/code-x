@@ -137,6 +137,57 @@ def _frozen_registry(packet_dir: Path) -> tuple[dict, str | None]:
     return by_module, None
 
 
+def frozen_registry_rows(repo_root: str, packet_dir_rel: str) -> tuple[list | None, str | None]:
+    """PBF-PROP-020 shared reader: RECOMPUTE the full frozen MODULE-REGISTRY row list from the
+    frozen packet on disk. Rules 1/6/7 all read these SAME rows — never a bundle-local copy.
+    Returns (rows, error); rows is the raw module_registry.modules list (each row keeps its
+    screen_id / lock_ref / superseded_by / tombstoned / pictured_states fields, if any). Fail
+    closed: unresolvable packet_dir, a symlinked/unreadable registry, or a non-list modules
+    block returns an error rather than a partial/empty list."""
+    resolved, perr = resolve_in_repo(repo_root, packet_dir_rel)
+    if perr:
+        return None, f"packet_dir {perr}"
+    if not resolved.is_dir():
+        return None, f"packet_dir '{packet_dir_rel}' is not a directory under the repo"
+    reg_path = resolved / "MODULE-REGISTRY.yaml"
+    if reg_path.is_symlink():
+        return None, ("MODULE-REGISTRY.yaml is a symlink — a frozen registry must be a real "
+                      "in-tree file, not a pointer to arbitrary bytes")
+    if not reg_path.is_file():
+        return None, f"MODULE-REGISTRY.yaml not found in packet '{packet_dir_rel}'"
+    data, err = load_yaml(str(reg_path))
+    if err or not isinstance(data, dict):
+        return None, f"MODULE-REGISTRY unreadable in packet: {err or 'not a mapping'}"
+    mr = data.get("module_registry")
+    modules = (mr.get("modules") if isinstance(mr, dict) else None) or []
+    if not isinstance(modules, list):
+        return None, "MODULE-REGISTRY.module_registry.modules is not a list"
+    return modules, None
+
+
+def registry_screen_lock(rows: list, screen_id: str) -> tuple[str | None, str | None]:
+    """PBF-PROP-020 Rule 6a: the screen's CURRENT LIVE lock_ref, derived from the frozen registry
+    rows — exactly one live (non-tombstoned) lock_ref per screen_id. Returns (lock_ref, error).
+    error is set when the screen has ZERO or MORE THAN ONE live lock_ref — this reader never
+    silently picks one of many; ambiguity is itself the P0 (ONE-LIVE-LOCK-PER-SCREEN)."""
+    live = []
+    for m in rows:
+        if not isinstance(m, dict):
+            continue
+        if str(m.get("screen_id", "") or "").strip() != screen_id:
+            continue
+        lr = str(m.get("lock_ref", "") or "").strip()
+        if not lr or str(m.get("tombstoned", "") or "").strip():
+            continue
+        live.append(lr)
+    if not live:
+        return None, f"screen_id '{screen_id}' has no live lock_ref in MODULE-REGISTRY.yaml"
+    if len(set(live)) > 1:
+        return None, (f"screen_id '{screen_id}' has MULTIPLE live lock_refs in "
+                      f"MODULE-REGISTRY.yaml: {sorted(set(live))}")
+    return live[0], None
+
+
 def accepted_module_ids(state: dict) -> set:
     """The RAW set of module_ids the live state CLAIMS as accepted. NOTE: a raw id here is
     model-authored — it is NOT proof of a bound acceptance receipt. Use verified_accepted_module_ids()

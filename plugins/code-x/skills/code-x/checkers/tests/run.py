@@ -41,6 +41,7 @@ os.environ["CX_PROFILES"] = str(FIXTURES / "profiles_test.yaml")
 # static fixture — it needs a real commit graph mirroring the nested-worktree layout).
 sys.path.insert(0, str(CHECKERS_DIR))
 import cx_kaizen  # noqa: E402
+import cx_blueprint  # noqa: E402 — PBF-PROP-019 Phase 3: unit-test _derive_expected_anchor_ids directly
 
 
 def run_cx(*args) -> tuple[int, str]:
@@ -164,6 +165,80 @@ class TestCheckCard(unittest.TestCase):
         """BUILD-PREVENTION-PREAMBLE-MISSING: card_good.yaml (with valid prevention_preamble) passes."""
         rc, out = run_cx("check", "card", fix("card_good.yaml"))
         self.assertEqual(rc, 0, f"Expected PASS for card_good.yaml with prevention_preamble, got rc={rc}.\n{out}")
+
+
+class TestCardHighRiskForcesFoundation(unittest.TestCase):
+    """PBF-PROP-019 Phase 2 (design v2 P0-1, CARD-HIGH-RISK-FORCES-FOUNDATION): a
+    card_high_risk card mechanically requires foundation_checkpoint_required: yes —
+    regardless of self-declaration. This gate is SPINE (never reads risk_tier)."""
+
+    def test_high_risk_card_without_checkpoint_fails(self):
+        rc, out = run_cx("check", "card", fix("card_bad_high_risk_no_foundation_checkpoint.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("CARD-HIGH-RISK-FORCES-FOUNDATION", out, out)
+
+    def test_high_risk_card_with_checkpoint_passes(self):
+        rc, out = run_cx("check", "card", fix("card_good_high_risk_with_foundation_checkpoint.yaml"))
+        self.assertEqual(rc, 0, out)
+
+    def test_non_high_risk_card_unaffected(self):
+        # Positive control: card_good.yaml has no truthy tripwire — unaffected by the new gate.
+        rc, out = run_cx("check", "card", fix("card_good.yaml"))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("CARD-HIGH-RISK-FORCES-FOUNDATION", out, out)
+
+
+# ---------------------------------------------------------------------------
+# PBF-PROP-019 Phase 3: per-gate ceremony reads (cx_card CodeRabbit + cross-review)
+# ---------------------------------------------------------------------------
+class TestCardCoderabbitTierGated(unittest.TestCase):
+    """design v2.B row 3: LITE drops the CodeRabbit rail requirement; STANDARD/STRICT unchanged."""
+
+    def test_missing_coderabbit_strict_default_fails(self):
+        # No --state -> risk_tier defaults STRICT (fail-closed) -> CodeRabbit still mandatory.
+        rc, out = run_cx("check", "card", fix("card_good_no_coderabbit.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("CodeRabbit", out)
+
+    def test_missing_coderabbit_strict_state_fails(self):
+        rc, out = run_cx("check", "card", fix("card_good_no_coderabbit.yaml"),
+                         "--state", fix("state_pbf019_strict.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("CodeRabbit", out)
+
+    def test_missing_coderabbit_lite_state_passes(self):
+        rc, out = run_cx("check", "card", fix("card_good_no_coderabbit.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 0, out)
+
+
+class TestCardCrossReviewLiteSelfReviewOk(unittest.TestCase):
+    """design v2.B row 2: LITE relaxes the per-module cross-family review floor to self-review
+    only — UNLESS the card is high-risk, in which case Phase-2's mechanical force is NOT relaxed."""
+
+    def test_same_family_default_strict_rejected(self):
+        rc, out = run_cx("check", "card", fix("card_good_lite_self_review.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("same-family", out.lower())
+
+    def test_same_family_strict_state_rejected(self):
+        rc, out = run_cx("check", "card", fix("card_good_lite_self_review.yaml"),
+                         "--state", fix("state_pbf019_strict.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("same-family", out.lower())
+
+    def test_same_family_lite_state_self_review_ok(self):
+        rc, out = run_cx("check", "card", fix("card_good_lite_self_review.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 0, out)
+
+    def test_high_risk_same_family_lite_state_still_rejected(self):
+        """Invariant (c): the LITE relaxation must NEVER override the Phase-2 high-risk force —
+        a money-touching card with same-family cross_review fails in EVERY tier, including LITE."""
+        rc, out = run_cx("check", "card", fix("card_bad_high_risk_same_family_lite_not_relaxed.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("same-family", out.lower())
 
 
 # ---------------------------------------------------------------------------
@@ -577,6 +652,453 @@ class TestCheckModuleAcceptance(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# B-PROP-013 Unit 2 — `cx check accept` (the STAMPER). Mirrors cx_boot.py's generate->write->
+# self-hash-seal pattern: recomputes state_sha_before + repo HEAD + quality_card_hash, refuses
+# verdict: accepted without a ceo_accept_token embedding the recomputed HEAD prefix.
+# HONEST FRAMING (design §3/§10.3): this command is ergonomics + honest capture, NOT a forge
+# wall — the wall is `cx check module-acceptance` (Unit 1). These tests pin the STAMPER's own
+# mechanical behavior only.
+# ---------------------------------------------------------------------------
+class TestCheckAccept(unittest.TestCase):
+
+    def _repo_and_state(self, tmp):
+        repo = os.path.join(tmp, "repo")
+        _git_init(repo)
+        head = _git_commit(repo, "first")
+        state = os.path.join(tmp, "state.yaml")
+        with open(state, "w") as f:
+            f.write("project: cx-accept-unit-test\nprotocol_stamp: Code-X V1\n")
+        return repo, state, head
+
+    def test_refuses_accepted_verdict_with_no_ceo_accept_token(self):
+        """CX-ACCEPT-NO-CEO-TOKEN: verdict: accepted with no token anywhere → refuse (P0), no
+        receipt written."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, _head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {"module_id": "m1", "verdict": "accepted"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P0]", out)
+            self.assertIn("CX-ACCEPT-NO-CEO-TOKEN", out)
+            self.assertFalse(os.path.exists(out_path), "a refusal must write NO receipt file")
+
+    def test_refuses_when_token_does_not_embed_head_prefix(self):
+        """A ceo_accept_token that does NOT embed the recomputed HEAD prefix is not valid —
+        refuses even though a token is present (proves it isn't just a non-blank check)."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, _head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "ceo_accept_token": "ceo-accepts-ffffff"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("CX-ACCEPT-NO-CEO-TOKEN", out)
+
+    def test_stamps_with_valid_ceo_accept_token(self):
+        """A token embedding the real 12-char HEAD prefix PLUS a ceo_turn_ref stamps cleanly:
+        PASS, receipt written, generated_by/state_sha_before/repo_sha_before recomputed (never
+        trusted from the draft) — the honest full-prefix+turn_ref case (FIX-FIRST B-PROP-013)."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "generated_by": "hand-authored-should-be-overwritten",
+                    "repo_sha_before": "stale00000000",
+                    "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+                    "ceo_turn_ref": "turn-2026-07-06-001"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 0, out)
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path) as f:
+                receipt = yaml.safe_load(f)
+            ma = receipt["module_acceptance"]
+            self.assertEqual(ma["generated_by"], "cx check accept")
+            self.assertEqual(ma["repo_sha_before"], head)
+            self.assertTrue(ma.get("state_sha_before"))
+
+    def test_refuses_short_six_char_prefix_token_fix_first(self):
+        """FIX-FIRST (B-PROP-013 xfam P1): a token embedding only the OLD 6-char HEAD prefix
+        (`auto-<HEAD[:6]>`) with no ceo_turn_ref must now be REFUSED — the forgeable short-prefix
+        substring check is closed; 12 hex chars are required."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "ceo_accept_token": f"auto-{head[:6]}"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("CX-ACCEPT-NO-CEO-TOKEN", out)
+            self.assertFalse(os.path.exists(out_path))
+
+    def test_refuses_full_prefix_token_with_no_ceo_turn_ref(self):
+        """FIX-FIRST (B-PROP-013 xfam P1): a full 12-char HEAD-prefix token with NO ceo_turn_ref
+        on the same block must be REFUSED — a token alone (no turn reference) is not proof of a
+        real CEO turn."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "ceo_accept_token": f"ceo-accepts-{head[:12]}"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("CX-ACCEPT-NO-CEO-TOKEN", out)
+            self.assertIn("ceo_turn_ref", out)
+            self.assertFalse(os.path.exists(out_path))
+
+    def test_refuses_token_on_wrong_top_level_block_for_live_slice_module(self):
+        """FIX-FIRST (B-PROP-013 xfam P1): a live_slice module's draft carrying live_slice_accept
+        (present but with NO ceo_accept_token on it) plus a bare TOP-LEVEL ceo_accept_token/
+        ceo_turn_ref must be REFUSED — for a live_slice/module_demo module the token must live ON
+        that structured block, not at the top level (closes the block-co-location bypass)."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "live_slice_accept": {"passed": True},
+                    "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+                    "ceo_turn_ref": "turn-2026-07-06-001"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("CX-ACCEPT-NO-CEO-TOKEN", out)
+            self.assertFalse(os.path.exists(out_path))
+
+    def test_stamps_with_token_and_turn_ref_on_live_slice_accept_block(self):
+        """The honest live_slice case: token + ceo_turn_ref co-located ON live_slice_accept
+        stamps cleanly."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "live_slice_accept": {
+                        "passed": True,
+                        "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+                        "ceo_turn_ref": "turn-2026-07-06-001"}}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 0, out)
+            self.assertTrue(os.path.exists(out_path))
+
+    def test_recomputes_quality_card_hash_never_trusts_draft(self):
+        """The draft's quality_card_hash (if any) is IGNORED and recomputed from the inline
+        quality_card block — mirrors cx_module_acceptance._canonicalize_quality_card_hash."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {
+                    "module_id": "m1", "verdict": "accepted",
+                    "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+                    "ceo_turn_ref": "turn-2026-07-06-001",
+                    "quality_card": {"b": 2, "a": 1},
+                    "quality_card_hash": "stale-and-wrong"}}, f)
+            out_path = os.path.join(repo, "out.yaml")
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo, "--out", out_path)
+            self.assertEqual(rc, 0, out)
+            with open(out_path) as f:
+                receipt = yaml.safe_load(f)
+            ma = receipt["module_acceptance"]
+            self.assertNotEqual(ma["quality_card_hash"], "stale-and-wrong")
+            import hashlib, json
+            expected = hashlib.sha256(json.dumps({"a": 1, "b": 2}, sort_keys=True,
+                                                  separators=(",", ":")).encode("utf-8")).hexdigest()[:12]
+            self.assertEqual(ma["quality_card_hash"], expected)
+
+    def test_missing_module_id_refused(self):
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, state, _head = self._repo_and_state(tmp)
+            draft = os.path.join(repo, "draft.yaml")
+            with open(draft, "w") as f:
+                yaml.dump({"module_acceptance": {"verdict": "accepted"}}, f)
+            rc, out = run_cx("check", "accept", "--draft", draft, "--state", state,
+                             "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("module_id", out)
+
+
+# ---------------------------------------------------------------------------
+# PB-PROP-003 Unit 2 — acceptance-stage criteria_refs WIRING (Design Resolution v2).
+# 4 clauses: ACCEPTANCE-CRITERIA-REFS-RESOLVE (Layer 1, spine), ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED
+# (Layer 2, ceremony/tier-split), ACCEPTANCE-PRESENT-EXAMPLE-COVERED (Layer 2, spine), and the
+# ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY §R5 migration carve-out (non-blocking).
+# ---------------------------------------------------------------------------
+class TestPBProp003AcceptanceWiring(unittest.TestCase):
+    WIRED_PKT = fix("pb_prop_003_wired_packet")
+    LITE_PKT = fix("pb_prop_003_lite_packet")
+    LEGACY_PKT = fix("pb_prop_003_legacy_packet")
+
+    def test_wired_good_resolves_and_reverse_covers(self):
+        """Layer 1 + Layer 2 clean: criteria_refs covers both m_wired behavioral requirements."""
+        rc, out = run_cx("check", "verify-app", "--acceptance", fix("verify_app_wired_good.yaml"),
+                         "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+    def test_dangling_ref_rejected(self):
+        """Layer 1: a citation to a requirement id that does not exist ANYWHERE in the frozen
+        manifest is a P0, distinct message from the coverage clauses (ACCEPTANCE-CRITERIA-REFS-
+        RESOLVE)."""
+        rc, out = run_cx("check", "verify-app", "--acceptance",
+                         fix("verify_app_wired_dangling_ref.yaml"),
+                         "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("ACCEPTANCE-CRITERIA-REFS-RESOLVE", out)
+        self.assertIn("REQ-999", out)
+
+    def test_exempt_id_cannot_be_cited(self):
+        """Layer 1: a non_behavioral_exemption'd id (REQ-003, exempt in the wired packet) is NOT
+        citable even though it exists in the manifest — 'behavioral' is required, not just present."""
+        with tempfile.TemporaryDirectory() as td:
+            rp = os.path.join(td, "receipt.yaml")
+            with open(rp, "w") as f:
+                f.write("module_acceptance:\n  module_id: m_wired\n  verify_app:\n"
+                        "    passed: true\n    repo_sha: 7d1408c9aa21\n"
+                        "    generated_by: verify-app-agent\n    criteria_refs: [REQ-003]\n")
+            rc, out = run_cx("check", "verify-app", "--acceptance", rp,
+                             "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+            self.assertEqual(rc, 1)
+            self.assertIn("ACCEPTANCE-CRITERIA-REFS-RESOLVE", out)
+            self.assertIn("REQ-003", out)
+
+    def test_criteria_refs_grammar_rejects_non_string_and_duplicate(self):
+        """§R7 grammar: non-string entries and duplicate ids both P0, before resolution ever runs."""
+        with tempfile.TemporaryDirectory() as td:
+            bad_type = os.path.join(td, "bad_type.yaml")
+            with open(bad_type, "w") as f:
+                f.write("module_acceptance:\n  module_id: m_wired\n  verify_app:\n"
+                        "    passed: true\n    repo_sha: 7d1408c9aa21\n"
+                        "    generated_by: verify-app-agent\n    criteria_refs: [REQ-001, 42]\n")
+            rc, out = run_cx("check", "verify-app", "--acceptance", bad_type,
+                             "--packet-dir", self.WIRED_PKT)
+            self.assertEqual(rc, 1)
+            self.assertIn("non-string/blank", out)
+
+            dupe = os.path.join(td, "dupe.yaml")
+            with open(dupe, "w") as f:
+                f.write("module_acceptance:\n  module_id: m_wired\n  verify_app:\n"
+                        "    passed: true\n    repo_sha: 7d1408c9aa21\n"
+                        "    generated_by: verify-app-agent\n"
+                        "    criteria_refs: [REQ-001, REQ-001]\n")
+            rc, out = run_cx("check", "verify-app", "--acceptance", dupe, "--packet-dir", self.WIRED_PKT)
+            self.assertEqual(rc, 1)
+            self.assertIn("duplicate", out)
+
+    def test_unwired_behavioral_req_blocks_at_standard(self):
+        """Layer 2 ceremony: REQ-002 (behavioral, has an example) uncovered at STANDARD tier -> P1
+        ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED."""
+        rc, out = run_cx("check", "verify-app", "--acceptance", fix("verify_app_wired_unwired.yaml"),
+                         "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+        self.assertEqual(rc, 1)
+        self.assertIn("ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED", out)
+        self.assertIn("REQ-002", out)
+
+    def test_present_example_uncovered_blocks_regardless(self):
+        """Layer 2 spine: the SAME uncovered REQ-002 also trips ACCEPTANCE-PRESENT-EXAMPLE-COVERED
+        (a DISTINCT clause from the ceremony one — both fire together here)."""
+        rc, out = run_cx("check", "verify-app", "--acceptance", fix("verify_app_wired_unwired.yaml"),
+                         "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+        self.assertEqual(rc, 1)
+        self.assertIn("ACCEPTANCE-PRESENT-EXAMPLE-COVERED", out)
+
+    def test_lite_tier_relaxes_ceremony_with_nothing_to_wire(self):
+        """Tier-split (§R3): m_lite's only requirement has NO authored example (LITE relaxes
+        authoring) -> an empty criteria_refs is valid grammar AND passes reverse coverage clean."""
+        rc, out = run_cx("check", "verify-app", "--acceptance", fix("verify_app_wired_lite_ok.yaml"),
+                         "--packet-dir", self.LITE_PKT, "--module-id=m_lite")
+        self.assertEqual(rc, 0, out)
+
+    def test_same_unwired_shape_fails_at_standard_not_lite(self):
+        """Direct tier-boundary contrast: the STANDARD wired packet's unwired fixture fails; an
+        LITE-tier module with the identical 'nothing cited' shape does not."""
+        rc_standard, _ = run_cx("check", "verify-app", "--acceptance",
+                                fix("verify_app_wired_unwired.yaml"),
+                                "--packet-dir", self.WIRED_PKT, "--module-id=m_wired")
+        rc_lite, _ = run_cx("check", "verify-app", "--acceptance", fix("verify_app_wired_lite_ok.yaml"),
+                            "--packet-dir", self.LITE_PKT, "--module-id=m_lite")
+        self.assertEqual(rc_standard, 1)
+        self.assertEqual(rc_lite, 0)
+
+    def test_legacy_carveout_is_advisory_not_blocking(self):
+        """§R5 migration proof: a packet with NO pb_prop_003_wiring marker keeps the OLD scalar
+        criteria_ref accepted — a typed P2 advisory, non-blocking (rc stays 0)."""
+        rc, out = run_cx("check", "verify-app", "--acceptance", fix("verify_app_legacy_ok.yaml"),
+                         "--packet-dir", self.LEGACY_PKT)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[P2]", out)
+        self.assertIn("ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY", out)
+
+    def test_no_packet_dir_preserves_pre_existing_behavior(self):
+        """Migration proof #2: the pre-existing standalone invocation (no --packet-dir at all,
+        e.g. every EXISTING live_slice acceptance fixture) is untouched — the old free-text
+        criteria_ref alone still satisfies the gate, no new findings appear."""
+        rc, out = run_cx("check", "verify-app", "--acceptance",
+                         fix("module_acceptance_live_slice_good.yaml"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+    def test_module_acceptance_order_wall_still_green_with_legacy_fixture(self):
+        """Migration proof #3: the EXISTING module_acceptance_live_slice_good.yaml fixture (no
+        pb_prop_003_wiring marker anywhere in its acceptance context) still passes module-quality/
+        module-acceptance-shaped checks untouched by this Unit — verified via the pre-existing
+        contract clause family (MODULE-QUALITY-LIVE-SLICE-NO-DRIVE) which this test re-confirms
+        directly."""
+        rc, out = run_cx("check", "module-quality", "--acceptance",
+                         fix("module_acceptance_live_slice_good.yaml"),
+                         "--registry", fix("module_registry_good.yaml"), "--module-id=m_live")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+
+# ---------------------------------------------------------------------------
+# CX-PB003-001 FIX-FIRST (xfam finding 1, P0): the FINAL/ONLY live_slice module of a marked packet
+# — the one no later module-start order-wall re-validation ever fires for — must trip the SAME
+# criteria_refs wiring/reverse-coverage checks a PRIOR module already gets via the order wall.
+# `cx check module-quality` (previously called validate_live_slice_accept with no packet_dir/
+# module_id, cx_module_quality.py:130) and the graduation c7 replay (cx_graduation.py's _NS, which
+# previously carried no packet_dir at all) are the two production chokepoints fixed.
+# ---------------------------------------------------------------------------
+class TestCXPB003001ModuleQualityPacketDirWiring(unittest.TestCase):
+    WIRED_PKT = fix("pb_prop_003_wired_packet")
+
+    def test_module_quality_with_packet_dir_rejects_unwired_final_module(self):
+        """THE FIX: `cx check module-quality --packet-dir` on m_wired (live_slice: true, this
+        packet's final/only live_slice module) with an unwired REQ-002 now FAILS."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_pb003_wired_live_unwired.yaml"),
+                         "--registry", fix("pb_prop_003_wired_packet/MODULE-REGISTRY.yaml"),
+                         "--module-id=m_wired", "--packet-dir", self.WIRED_PKT)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED", out)
+        self.assertIn("REQ-002", out)
+
+    def test_module_quality_with_packet_dir_accepts_fully_wired_module(self):
+        """Good control: the SAME module fully wired (criteria_refs covers REQ-001 + REQ-002)
+        passes clean with --packet-dir."""
+        rc, out = run_cx("check", "module-quality",
+                         "--acceptance", fix("module_acceptance_pb003_wired_live_good.yaml"),
+                         "--registry", fix("pb_prop_003_wired_packet/MODULE-REGISTRY.yaml"),
+                         "--module-id=m_wired", "--packet-dir", self.WIRED_PKT)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+    def test_legacy_no_packet_dir_still_green_no_new_blocking(self):
+        """Migration proof: the PRE-EXISTING legacy fixture (module_acceptance_live_slice_good.yaml
+        + module_registry_good.yaml, no pb_prop_003_wiring marker anywhere) stays green with
+        --packet-dir omitted (the pre-existing standalone invocation) — untouched by this fix."""
+        rc, out = run_cx("check", "module-quality", "--acceptance",
+                         fix("module_acceptance_live_slice_good.yaml"),
+                         "--registry", fix("module_registry_good.yaml"), "--module-id=m_live")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+    def test_legacy_with_packet_dir_advisory_stays_non_blocking(self):
+        """A legacy (unmarked) packet's P2 migration-debt advisory — only reachable once
+        --packet-dir is supplied — must stay non-blocking (has_blocking gate on module-quality's
+        own return, mirroring cmd_module_acceptance/cmd_verify_app's identical pattern)."""
+        rc, out = run_cx("check", "module-quality", "--acceptance",
+                         fix("module_acceptance_live_slice_good.yaml"),
+                         "--registry", fix("module_registry_good.yaml"), "--module-id=m_live",
+                         "--packet-dir", fix("."))
+        self.assertEqual(rc, 0, out)
+
+
+class TestCXPB003001GraduationC7PacketDirWiring(unittest.TestCase):
+    """Unit-tests cx_graduation._crit_c7 directly (mirrors TestGraduationTierEvidence's in-process
+    pattern) — proves the graduation replay's _NS now threads packet_dir = the registry ref's own
+    parent directory (the SAME canonical-location convention module-start's --packet-dir already
+    trusts: <packet-dir>/MODULE-REGISTRY.yaml), so a marked packet's final/only live_slice module
+    with an unwired behavioral requirement makes c7 UNMET at graduation-entry replay time too."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.receipts_dir = Path(self._tmp.name)
+        pkt_src = Path(__file__).resolve().parent / "fixtures" / "pb_prop_003_wired_packet"
+        pkt_dst = self.receipts_dir / "pkt"
+        _shutil.copytree(pkt_src, pkt_dst)
+        fixtures_dir = Path(__file__).resolve().parent / "fixtures"
+        good_src = fixtures_dir / "module_acceptance_pb003_wired_live_good.yaml"
+        bad_src = fixtures_dir / "module_acceptance_pb003_wired_live_unwired.yaml"
+        for name, src in (("good.yaml", good_src), ("bad.yaml", bad_src)):
+            (self.receipts_dir / name).write_bytes(src.read_bytes())
+        # The receipts carry module_demo/build_validation refs resolved relative to the receipt's
+        # OWN directory (base=str(Path(loc).parent) in cmd_module_quality) — copy those two real
+        # sidecars alongside so the demo/log legs (unrelated to the wiring fix under test) pass.
+        (self.receipts_dir / "module_demo_shot.png").write_bytes(
+            (fixtures_dir / "module_demo_shot.png").read_bytes())
+        (self.receipts_dir / "logs").mkdir(exist_ok=True)
+        (self.receipts_dir / "logs" / "build_validation_pass.txt").write_bytes(
+            (fixtures_dir / "logs" / "build_validation_pass.txt").read_bytes())
+        # Reuse the pre-existing, already-valid c7 coderabbit sidecar pair (real typed
+        # coderabbit_review + its egress_scrub sidecar) — this test is about the packet_dir
+        # threading leg, not re-proving the coderabbit-receipt shape checks.
+        (self.receipts_dir / "coderabbit.yaml").write_bytes(
+            (fixtures_dir / "graduation_receipts" / "clean" / "coderabbit-receipt.yaml").read_bytes())
+        (self.receipts_dir / "egress_scrub_good.yaml").write_bytes(
+            (fixtures_dir / "egress_scrub_good.yaml").read_bytes())
+        self.manifest_files = {}
+        for rel in ("pkt/MODULE-REGISTRY.yaml", "pkt/requirements-manifest.yaml",
+                    "good.yaml", "bad.yaml", "coderabbit.yaml", "egress_scrub_good.yaml"):
+            self.manifest_files[rel] = _hashlib.sha256((self.receipts_dir / rel).read_bytes()).hexdigest()
+
+    def _doc(self, acceptance_rel):
+        return {
+            "modules": [{"module_id": "m_wired", "acceptance_receipt": acceptance_rel,
+                        "registry": "pkt/MODULE-REGISTRY.yaml"}],
+            "coderabbit_receipt": "coderabbit.yaml",
+        }
+
+    def test_unwired_final_module_makes_c7_unmet(self):
+        findings = cx_graduation._crit_c7(
+            self._doc("bad.yaml"), self.receipts_dir / "bad.yaml", "proj-x", "loc",
+            self.receipts_dir, {"manifest_files": self.manifest_files})
+        self.assertTrue(any("module-quality replay FAILED" in f[2] for f in findings), findings)
+
+    def test_wired_final_module_makes_c7_met(self):
+        findings = cx_graduation._crit_c7(
+            self._doc("good.yaml"), self.receipts_dir / "good.yaml", "proj-x", "loc",
+            self.receipts_dir, {"manifest_files": self.manifest_files})
+        self.assertEqual(findings, [])
+
+
+# ---------------------------------------------------------------------------
 # PROP-028 — phantom-completion guard at the module-acceptance Andon wall.
 # The git-dependent core (empty-diff + ancestor) cannot be a static fixture, so each test
 # builds a TEMP git repo with real commits and binds the receipt to state by sha12.
@@ -680,6 +1202,193 @@ class TestProp028PhantomCompletion(unittest.TestCase):
             self.assertIn("[P2]", out)
             self.assertNotIn("[P0]", out)
             self.assertNotIn("[P1]", out)
+
+
+class TestBProp013ForgeParity(unittest.TestCase):
+    """B-PROP-013 Unit 1 (the GUARD): a hex-shaped-but-unreachable repo_sha in verify_app /
+    module_demo / live_slice_accept must be graded fabrication (P0) when the frozen packet opts
+    in via b_prop_013_forge_parity: true — and must NOT fire at all when the marker is absent
+    (grandfather carve-out: legacy packets ride the pre-existing presence-only path unchanged)."""
+
+    def _build(self, tmp, *, marker=True, malformed_marker=False, bad_field=None,
+              bad_qc_hash=False, no_packet=False, module_registry_ref=None):
+        """Real git repo (2 commits) + a packet dir (requirements-manifest.yaml carrying the
+        marker) + a sha12-bound receipt/state. bad_field, if set, is one of
+        {"verify_app", "module_demo", "live_slice_accept"} and gets a fabricated (unreachable)
+        hex repo_sha; the other two get the real HEAD sha."""
+        import hashlib
+        repo = os.path.join(tmp, "repo")
+        _git_init(repo)
+        with open(os.path.join(repo, "a.txt"), "w") as f:
+            f.write("one\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        _git_commit(repo, "first")
+        with open(os.path.join(repo, "b.txt"), "w") as f:
+            f.write("two\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        head_sha = _git_commit(repo, "second")
+        fabricated = "deadbeefdead"  # hex-shaped, 12 chars, not a real commit in this repo
+
+        if not no_packet:
+            os.makedirs(os.path.join(repo, "packet"), exist_ok=True)
+            marker_val = '"true"' if malformed_marker else ("true" if marker else None)
+            manifest_lines = []
+            if marker_val is not None:
+                manifest_lines.append(f"b_prop_013_forge_parity: {marker_val}\n")
+            with open(os.path.join(repo, "packet", "requirements-manifest.yaml"), "w") as f:
+                f.writelines(manifest_lines)
+            subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+            _git_commit(repo, "packet")
+
+        def sha_for(field):
+            return fabricated if bad_field == field else head_sha
+
+        qc_block = "  quality_card:\n    security: PASS\n    efficient: PASS\n" \
+                   "    regression: PASS\n    tests: PASS\n    conformance: PASS\n"
+        qc_hash = _canon_qc_hash({"security": "PASS", "efficient": "PASS", "regression": "PASS",
+                                  "tests": "PASS", "conformance": "PASS"})
+        if bad_qc_hash:
+            qc_hash = "wronghash1234"
+
+        body = (
+            "module_acceptance:\n  module_id: m1\n  verdict: accepted\n"
+            "  generated_by: cx-accept\n  state_sha_before: 9f8e7d6c5b4a\n"
+            f"  quality_card_hash: {qc_hash}\n"
+            f"  repo_sha_before: {head_sha}\n"
+            + qc_block +
+            "  verify_app:\n    passed: true\n"
+            f"    repo_sha: {sha_for('verify_app')}\n"
+            "    generated_by: verify-app\n    criteria_ref: manual\n"
+            "  module_demo:\n    surface: web\n    generated_by: verify-app\n"
+            f"    repo_sha: {sha_for('module_demo')}\n"
+            "  live_slice_accept:\n    live_url: http://localhost:8787\n"
+            "    ceo_drove: true\n    ceo_turn_ref: handoffs/x.md\n"
+            f"    repo_sha: {sha_for('live_slice_accept')}\n"
+        )
+        rp = os.path.join(repo, "receipt.yaml")
+        with open(rp, "w") as f:
+            f.write(body)
+        sha = hashlib.sha256(open(rp, "rb").read()).hexdigest()[:12]
+        sp = os.path.join(tmp, "state.yaml")
+        pkt_line = "" if no_packet else "packet_dir: packet\n"
+        reg_line = f"module_registry_ref: {module_registry_ref}\n" if module_registry_ref else ""
+        with open(sp, "w") as f:
+            f.write("project: x\nprotocol_stamp: Code-X V1\n" + pkt_line + reg_line +
+                    "accepted_modules:\n  - module_id: m1\n    acceptance_ref: receipt.yaml\n"
+                    f'    acceptance_sha12: "{sha}"\n')
+        return repo, sp
+
+    def test_fabricated_verify_app_repo_sha_bites_p0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, bad_field="verify_app")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P0]", out)
+            self.assertIn("verify_app.repo_sha", out)
+            self.assertIn("MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT", out)
+
+    def test_fabricated_module_demo_repo_sha_bites_p0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, bad_field="module_demo")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P0]", out)
+            self.assertIn("module_demo.repo_sha", out)
+
+    def test_fabricated_live_slice_accept_repo_sha_bites_p0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, bad_field="live_slice_accept")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P0]", out)
+            self.assertIn("live_slice_accept.repo_sha", out)
+
+    def test_quality_card_hash_drift_bites_p1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, bad_qc_hash=True)
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("quality_card_hash", out)
+            self.assertIn("recomputed canonical hash", out)
+
+    def test_malformed_marker_bites_p1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, malformed_marker=True)
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P1]", out)
+            self.assertIn("b_prop_013_forge_parity", out)
+            self.assertIn("botched", out)
+
+    def test_marker_absent_grandfathers_fabricated_sha(self):
+        """No marker at all => legacy path, non-blocking on this guard: a fabricated repo_sha in
+        verify_app/module_demo/live_slice_accept must NOT be graded by the B-PROP-013 guard (it
+        may still fail other unrelated checks, but never this one) — grandfather carve-out."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, marker=False, bad_field="verify_app")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertNotIn("MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT", out)
+
+    def test_good_fixture_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp)
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_missing_packet_dir_with_registry_ref_fires_p2_advisory(self):
+        """FIX-FIRST (B-PROP-013 xfam P1, packet_dir-omission fail-open): a state that carries
+        module_registry_ref (cx_build_turn.py's OWN signal that this is a module-advancing,
+        packet-bound build) but NO packet_dir is an anomaly, not genuine legacy — the guard must
+        surface a NON-BLOCKING P2 advisory (never P0/P1, per the judge's grandfather ruling), and
+        acceptance must still PASS (rc=0) since P2 never blocks."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, no_packet=True, module_registry_ref="MODULE-REGISTRY.yaml")
+            # A real post-baseline commit so repo_sha_before != HEAD (avoids an UNRELATED
+            # BF-PROP-006 phantom-completion P1 from an incidentally-empty diff — not what this
+            # test is proving).
+            with open(os.path.join(repo, "c.txt"), "w") as f:
+                f.write("three\n")
+            subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+            _git_commit(repo, "third")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 0, f"P2 is non-blocking, expected PASS. Got {rc}.\n{out}")
+            self.assertIn("[P2]", out)
+            self.assertIn("MODULE-ACCEPTANCE-FORGE-PARITY-PACKET-CONTEXT-MISSING", out)
+            self.assertNotIn("[P0]", out)
+            self.assertNotIn("[P1]", out)
+
+    def test_missing_packet_dir_no_registry_ref_stays_fully_silent(self):
+        """Genuine legacy carve-out (judge-protected): NO packet_dir AND no module_registry_ref
+        signal at all => completely silent on this guard (no P0/P1/P2) — the grandfathered
+        no-packet project must never see even an advisory noise."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sp = self._build(tmp, no_packet=True)
+            with open(os.path.join(repo, "c.txt"), "w") as f:
+                f.write("three\n")
+            subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+            _git_commit(repo, "third")
+            rc, out = run_cx("check", "module-acceptance", "--module-id", "m1",
+                             "--state", sp, "--repo-root", repo)
+            self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+            self.assertNotIn("MODULE-ACCEPTANCE-FORGE-PARITY-PACKET-CONTEXT-MISSING", out)
+
+
+def _canon_qc_hash(qc: dict) -> str:
+    """Test-side mirror of cx_module_acceptance._canonicalize_quality_card_hash — kept as an
+    independent re-implementation (not an import) so the test proves the ALGORITHM, not just
+    that the same function was called on both sides."""
+    import hashlib as _h
+    import json as _j
+    canonical = _j.dumps(qc, sort_keys=True, separators=(",", ":"), default=str)
+    return _h.sha256(canonical.encode("utf-8")).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------------------
@@ -1299,7 +2008,7 @@ def _write_dep_repo(tmp, high=0, crit=0, lock_hash=None, write_lock=True,
                     f"      advisory_ids: {cover}\n"
                     "      package: a\n      severity: high\n"
                     "      reason: not reachable\n      mitigation: pinned\n"
-                    "      expiry: '2026-12-01'\n      owner: dev\n") if waiver else "  waivers: []\n"
+                    "      expiry: '2026-12-01'\n      owner: acme\n") if waiver else "  waivers: []\n"
     receipt = ("dependency_scan:\n  scans:\n"
                "    - ecosystem: npm\n      command: npm audit\n"
                "      scanner_version: npm/10.8.0\n      db_timestamp: '2026-06-18T00:00:00Z'\n"
@@ -1423,6 +2132,54 @@ class TestDepScan(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# PBF-PROP-019 Phase 3: cx_build_turn CodeRabbit tier-conditional (design v2.B row 3)
+# ---------------------------------------------------------------------------
+class TestBuildTurnCoderabbitTierGated(unittest.TestCase):
+    """LITE drops the every-card CodeRabbit-mandatory finding; STANDARD/STRICT unchanged.
+    Mirrors test_build_turn_xfam_requires_coderabbit's minimal-card shape (many OTHER
+    sub-checks also fail on this minimal card/state — only the CodeRabbit line is asserted)."""
+
+    def _run(self, tier_packet_dir=None):
+        with tempfile.TemporaryDirectory() as t:
+            repo = os.path.join(t, "repo")
+            os.makedirs(repo, exist_ok=True)
+            card = os.path.join(t, "card.yaml")
+            with open(card, "w") as f:
+                f.write("id: BUILD-X\nmode: MODULE_BUILD\n")
+            state = os.path.join(t, "state.yaml")
+            body = "project: t\nprotocol_stamp: Code-X V1\n"
+            if tier_packet_dir:
+                os.makedirs(os.path.join(repo, tier_packet_dir), exist_ok=True)
+                body += f"packet_dir: {tier_packet_dir}\n"
+            with open(state, "w") as f:
+                f.write(body)
+            return run_cx("check", "build-turn", card, "--state", state, "--repo-root", repo)
+
+    def test_no_tier_default_strict_requires_coderabbit(self):
+        rc, out = self._run()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("CodeRabbit is MANDATORY", out)
+
+    def test_lite_tier_drops_coderabbit_requirement(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo = os.path.join(t, "repo")
+            pkt = "pbf019_pkt"
+            os.makedirs(os.path.join(repo, pkt), exist_ok=True)
+            with open(os.path.join(repo, pkt, "requirements-manifest.yaml"), "w") as f:
+                f.write("risk_tier: LITE\nrisk_tier_decision_ref: CEO-D-001\n")
+            card = os.path.join(t, "card.yaml")
+            with open(card, "w") as f:
+                f.write("id: BUILD-X\nmode: MODULE_BUILD\n")
+            state = os.path.join(t, "state.yaml")
+            with open(state, "w") as f:
+                f.write(f"project: t\nprotocol_stamp: Code-X V1\npacket_dir: {pkt}\n")
+            rc, out = run_cx("check", "build-turn", card, "--state", state, "--repo-root", repo)
+            # other sub-checks on this minimal card still fail closed, but never on CodeRabbit
+            self.assertNotIn("CodeRabbit is MANDATORY", out)
+            self.assertIn("NOT_APPLICABLE coderabbit-receipt (risk_tier: LITE)", out)
+
+
+# ---------------------------------------------------------------------------
 # PROP-026 — scrub-before-egress gate (EVAL-020)
 # ---------------------------------------------------------------------------
 class TestEgress(unittest.TestCase):
@@ -1457,6 +2214,43 @@ class TestEgress(unittest.TestCase):
                          "--receipt", fix("egress_scrub_for_secret.yaml"))
         self.assertEqual(rc, 1)
         self.assertIn("contradicted by the diff content", out)
+
+
+class TestEgressTierGated(unittest.TestCase):
+    """PBF-PROP-019 Phase 3 (design v2.B row 4): LITE/STANDARD only require the scrub for a
+    money/PII-touching card; STRICT requires it for every module. Absent --card/--state (the
+    pre-existing call shape, TestEgress above) preserves always-required — proven unchanged."""
+
+    def test_non_money_lite_not_required(self):
+        rc, out = run_cx("check", "egress", fix("egress_diff_clean.txt"), "--target", "coderabbit",
+                         "--card", fix("egress_card_non_money.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("NOT_APPLICABLE", out)
+
+    def test_non_money_strict_still_required(self):
+        rc, out = run_cx("check", "egress", fix("egress_diff_clean.txt"), "--target", "coderabbit",
+                         "--card", fix("egress_card_non_money.yaml"),
+                         "--state", fix("state_pbf019_strict.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("NO scrub receipt and NO local-only carve-out", out)
+
+    def test_money_lite_still_required(self):
+        """The money/PII trigger is NEVER relaxed by tier, even under LITE."""
+        rc, out = run_cx("check", "egress", fix("egress_diff_clean.txt"), "--target", "coderabbit",
+                         "--card", fix("egress_card_money.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("NO scrub receipt and NO local-only carve-out", out)
+
+    def test_sensitive_hit_lite_non_money_still_required(self):
+        """A mechanical tripwire hit (a real detected secret) is evidence, not a self-declared
+        risk class — it forces the requirement regardless of tier/card declaration."""
+        rc, out = run_cx("check", "egress", fix("egress_diff_secret.txt"), "--target", "coderabbit",
+                         "--card", fix("egress_card_non_money.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("NO scrub receipt and NO local-only carve-out", out)
 
 
 # ---------------------------------------------------------------------------
@@ -1494,7 +2288,7 @@ class TestXfamCapability(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# PROP-042-DRAFT / V1.21-candidate — review routing hardening from the a real project planning skip
+# PROP-042-DRAFT / V1.21-candidate — review routing hardening from the real-project planning skip
 # ---------------------------------------------------------------------------
 class TestReviewRoutingHardening(unittest.TestCase):
     def test_build_state_rejects_coderabbit_not_applicable(self):
@@ -1525,6 +2319,25 @@ class TestReviewRoutingHardening(unittest.TestCase):
         rc, out = run_cx("check", "state", fix("state_good_final_xfam_with_built_app_audit.yaml"))
         self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
         self.assertIn("PASS", out)
+
+
+class TestStateReviewBoundaryCoderabbitTierGated(unittest.TestCase):
+    """PBF-PROP-019 P2 FIX (integration drift): `cx check state` required
+    coderabbit_before_self_review: yes for BUILD_FACTORY MODULE_BUILD/MODE_A_UI work in EVERY
+    tier, but cards + build-turn already let LITE skip CodeRabbit (cx_card.py:419,
+    cx_build_turn.py:251) — a LITE project was forced to either keep an inaccurate 'yes' or
+    fail state check. Now tier-aware: LITE relaxes the requirement; STANDARD/STRICT
+    unchanged."""
+
+    def test_lite_state_without_coderabbit_passes(self):
+        rc, out = run_cx("check", "state", fix("state_good_review_boundary_coderabbit_na_lite.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_standard_same_shape_without_coderabbit_still_fails(self):
+        # Same shape, no packet_dir -> tier defaults STRICT (fail-closed) -> still mandatory.
+        rc, out = run_cx("check", "state", fix("state_bad_review_boundary_coderabbit_na.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("CodeRabbit", out)
 
 
 # ---------------------------------------------------------------------------
@@ -2246,7 +3059,7 @@ class TestCheckEvidenceNewFindings(unittest.TestCase):
 
     def test_evidence_path_resolves_relative_to_project_root_for_cards_dir(self):
         """PROP-041 follow-up: cards may declare repo-root evidence paths.
-        a real project cards live under cards/ and require evidence/... at the project root; the
+        real-project cards live under cards/ and require evidence/... at the project root; the
         checker must not turn that into cards/evidence/... and block a real build.
         """
         import yaml, tempfile, os
@@ -2814,20 +3627,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_4_locked(self):
-        """The checker reports v1.22.4 as the locked canonical protocol version (CEO-D-042, PBF-PROP-017 patch)."""
+    def test_protocol_version_constant_marks_1_22_5_locked(self):
+        """The checker reports v1.22.5 as the LOCKED CANONICAL 2026-07-06 (CEO-D-050) protocol version."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.4")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.5")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_4_locked(self):
-        """`cx --version` reports the locked v1.22.4 canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_5_locked(self):
+        """`cx --version` reports the LOCKED CANONICAL 2026-07-06 (CEO-D-050) v1.22.5 canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.4(?!\d)")
+        self.assertRegex(out, r"V1\.22\.5(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -3047,6 +3860,75 @@ def _write_state_ss(path, last_commit, wip=None, boot=False):
             "acked_by": "cx-test", "timestamp": "2026-06-12T00:00:00"}
         with open(path, "w") as f:
             yaml.dump(state, f)
+
+
+class TestPBFPROP015StateArity(unittest.TestCase):
+    """PBF-PROP-015: an unparseable / ill-shaped CODE-X-STATE.yaml must be
+    REPORTED as a [P0], never crash the checker on a tuple-unpack. The two
+    early-error return sites in collect_state_findings were 3-ary while both
+    callers (cmd_state and cx check boot) unpack 4 — so ANY bad state file
+    exited 2 ("not enough values to unpack") with the real P0 swallowed. A
+    session-start guard that cannot report its own worst input is a gate that
+    does not bite. These pin the [P0] line via BOTH callers."""
+
+    def test_duplicate_key_state_reports_p0_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = os.path.join(tmp, "state.yaml")
+            with open(state, "w") as f:
+                f.write("protocol_stamp: Code-X V1\nproject: x\nproject: y\n")
+            rc, out = run_cx("check", "state", state)
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST exit 1 (not crash exit 2), got {rc}.\n{out}")
+            self.assertIn("[P0]", out)
+            self.assertIn("duplicate key", out.lower())
+            self.assertNotIn("not enough values to unpack", out)
+
+    def test_non_mapping_state_reports_p0_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = os.path.join(tmp, "state.yaml")
+            with open(state, "w") as f:
+                f.write("- just\n- a list\n")
+            rc, out = run_cx("check", "state", state)
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST exit 1 (not crash exit 2), got {rc}.\n{out}")
+            self.assertIn("[P0]", out)
+            self.assertIn("not a YAML mapping", out)
+            self.assertNotIn("not enough values to unpack", out)
+
+    def test_boot_on_unparseable_state_reports_p0_not_crash(self):
+        """Second caller: cx check boot must surface the [P0], not crash. Its
+        fatal branch was dead code until the arity fix (it always crashed on the
+        unpack first), so its output shape is pinned here for the first time."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            _git_init(repo)
+            _git_commit(repo, "first")
+            state = os.path.join(tmp, "state.yaml")
+            with open(state, "w") as f:
+                f.write("protocol_stamp: Code-X V1\nproject: x\nproject: y\n")
+            receipt = os.path.join(tmp, "protocol-boot-receipt.yaml")
+            rc, out = run_cx("check", "boot", "--state", state,
+                             "--repo-root", repo, "--out", receipt)
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST exit 1 (not crash exit 2), got {rc}.\n{out}")
+            self.assertIn("[P0]", out)
+            self.assertIn("duplicate key", out.lower())
+            self.assertNotIn("not enough values to unpack", out)
+
+    def test_boot_on_non_mapping_state_reports_p0_not_crash(self):
+        """Second caller against the second early-error branch (non-mapping),
+        so cx check boot is pinned on BOTH fatal paths (GPT-5.5 xfam P3)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            _git_init(repo)
+            _git_commit(repo, "first")
+            state = os.path.join(tmp, "state.yaml")
+            with open(state, "w") as f:
+                f.write("- just\n- a list\n")
+            receipt = os.path.join(tmp, "protocol-boot-receipt.yaml")
+            rc, out = run_cx("check", "boot", "--state", state,
+                             "--repo-root", repo, "--out", receipt)
+            self.assertEqual(rc, 1, f"Expected FIX-FIRST exit 1 (not crash exit 2), got {rc}.\n{out}")
+            self.assertIn("[P0]", out)
+            self.assertIn("not a YAML mapping", out)
+            self.assertNotIn("not enough values to unpack", out)
 
 
 class TestCheckStateSessionStart(unittest.TestCase):
@@ -3381,6 +4263,213 @@ class TestCheckPacketProp023(unittest.TestCase):
         rc, out = run_cx("check", "packet", fix("packet_bad_acceptance_nonstring"))
         self.assertEqual(rc, 1)
         self.assertIn("missing/placeholder/non-string", out)
+
+
+# ---------------------------------------------------------------------------
+# cx check packet — PB-PROP-003 Unit 1 (packet stage): Given/When/Then examples +
+# typed/anchored non_behavioral_exemption.
+# ---------------------------------------------------------------------------
+class TestCheckPacketPBPROP003GWT(unittest.TestCase):
+    def test_good_packet_has_examples_and_passes(self):
+        """Positive control: packet_good's behavioral row now carries a well-formed
+        Given/When/Then example and still PASSes."""
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, f"packet_good should PASS, got {rc}.\n{out}")
+
+    def test_examples_required_on_behavioral_row(self):
+        """A behavioral BUILDING row (no non_behavioral_exemption) with no examples bites."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_missing"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-GWT-EXAMPLE-REQUIRED", out)
+        self.assertIn("examples", out)
+
+    def test_malformed_example_bites(self):
+        """An example with a placeholder 'then' clause is not a well-formed G/W/T item —
+        structure only, never an English-quality judgment."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_malformed"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-GWT-EXAMPLE-MALFORMED", out)
+        self.assertIn("'then'", out.replace('"', "'"))
+
+    def test_valid_exemption_passes_without_examples(self):
+        """A typed + anchored non_behavioral_exemption (reason in the frozen vocabulary,
+        artifact_ref resolving to a real in-packet file) exempts the row — no examples needed."""
+        rc, out = run_cx("check", "packet", fix("packet_good_gwt_exemption"))
+        self.assertEqual(rc, 0, f"valid exemption should PASS, got {rc}.\n{out}")
+
+    def test_untyped_exemption_bites(self):
+        """A bare-string non_behavioral_exemption (not a {reason, artifact_ref} mapping) is
+        the free-text hatch this clause forbids."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_exemption_untyped"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED", out)
+
+    def test_unresolvable_artifact_ref_bites(self):
+        """A well-formed {reason, artifact_ref} whose artifact_ref names neither a real
+        packet file nor a real requirement/module/screen id is a bare claim, not an anchor —
+        and must not be defeated by a naive full-text substring scan of the manifest that
+        declares the ref (self-reference loophole)."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_exemption_unresolved"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED", out)
+
+    def test_self_referential_manifest_artifact_ref_rejected(self):
+        """CX-PB003-003 FIX-FIRST (xfam finding 3, P1): artifact_ref: requirements-manifest.yaml
+        is a REAL, EXISTING file (it's the manifest declaring the exemption) — the naive
+        target.is_file() check used to accept this as a resolved anchor. Must be rejected: an
+        anchor cannot be the manifest (or registry) that carries its own declaration."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_exemption_self_ref"))
+        self.assertEqual(rc, 1, "a manifest-self-referencing artifact_ref must be rejected")
+        self.assertIn("PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED", out)
+
+    def test_lite_relaxes_authoring_standard_enforces(self):
+        """Tier-split proof (§R3): the SAME example-less behavioral row PASSES at LITE and
+        FAILS at STANDARD — authoring is ceremony, not spine."""
+        rc_lite, out_lite = run_cx("check", "packet", fix("packet_good_risk_tier_lite"))
+        self.assertEqual(rc_lite, 0, f"LITE should relax authoring, got {rc_lite}.\n{out_lite}")
+        rc_std, out_std = run_cx("check", "packet", fix("packet_good_risk_tier_standard"))
+        self.assertEqual(rc_std, 1, "STANDARD must enforce authoring on the same row")
+        self.assertIn("PACKET-GWT-EXAMPLE-REQUIRED", out_std)
+
+    def test_malformed_manifest_fails_closed(self):
+        """A requirements-manifest.yaml whose 'requirements' is not a list must FAIL the
+        G/W/T clause (fail-closed), not silently skip it like _check_acceptance_criteria."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_gwt_manifest_malformed"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-GWT-MANIFEST-MALFORMED-FAILS-CLOSED", out)
+
+
+# ---------------------------------------------------------------------------
+# CX-PB003-002 FIX-FIRST (xfam finding 2, P1): the pb_prop_003_wiring marker must be TRI-STATE, not
+# a plain bool that collapses "malformed" (field present but not boolean True, e.g. a quoted
+# "true"/"yes" string) into the same False as genuine "absent" — a packet that TRIED to opt in and
+# botched it must BLOCK, never silently keep the legacy carve-out only real absence deserves.
+# Covers both ends of the marker's lifecycle: freeze-time (cx check packet) and acceptance-time
+# (cx check verify-app / _resolve_pb_prop_003_wiring_state).
+# ---------------------------------------------------------------------------
+class TestCXPB003002MalformedMarkerFailsClosed(unittest.TestCase):
+    def test_packet_freeze_rejects_malformed_marker(self):
+        """cx check packet: a quoted pb_prop_003_wiring: \"true\" trips
+        PACKET-PB-PROP-003-MARKER-WELL-FORMED at freeze time."""
+        rc, out = run_cx("check", "packet", fix("pb_prop_003_malformed_marker_packet"))
+        self.assertEqual(rc, 1)
+        self.assertIn("PACKET-PB-PROP-003-MARKER-WELL-FORMED", out)
+        self.assertIn("not a real boolean true", out)
+
+    def test_packet_freeze_absent_marker_has_no_such_finding(self):
+        """Control: a packet with NO marker field at all (packet_good) never trips this clause —
+        absence is a legitimate non-opt-in, not malformed."""
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("PACKET-PB-PROP-003-MARKER-WELL-FORMED", out)
+
+    def test_verify_app_rejects_malformed_marker(self):
+        """cx check verify-app: the SAME malformed marker BLOCKS at acceptance time — it must NOT
+        silently fall to the non-blocking ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY carve-out."""
+        rc, out = run_cx("check", "verify-app",
+                         "--acceptance", fix("verify_app_malformed_marker.yaml"),
+                         "--packet-dir", fix("pb_prop_003_malformed_marker_packet"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("[P1]", out)
+        self.assertIn("not a real boolean true", out)
+        self.assertNotIn("ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY", out)
+
+    def test_verify_app_absent_marker_keeps_legacy_advisory_nonblocking(self):
+        """Control (unchanged §R5 behavior): genuine absence still gets the non-blocking P2
+        legacy advisory, rc stays 0 — malformed and absent are NOT the same outcome anymore."""
+        rc, out = run_cx("check", "verify-app",
+                         "--acceptance", fix("verify_app_legacy_ok.yaml"),
+                         "--packet-dir", fix("pb_prop_003_legacy_packet"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY", out)
+
+    def test_resolver_tri_state_directly(self):
+        """Unit-test _resolve_pb_prop_003_wiring_state directly: absent / enabled / malformed are
+        3 DISTINCT outcomes, not a collapsed bool."""
+        import cx_module_acceptance
+        self.assertEqual(
+            cx_module_acceptance._resolve_pb_prop_003_wiring_state(fix("pb_prop_003_legacy_packet")),
+            "absent")
+        self.assertEqual(
+            cx_module_acceptance._resolve_pb_prop_003_wiring_state(fix("pb_prop_003_wired_packet")),
+            "enabled")
+        self.assertEqual(
+            cx_module_acceptance._resolve_pb_prop_003_wiring_state(fix("pb_prop_003_malformed_marker_packet")),
+            "malformed")
+        self.assertEqual(cx_module_acceptance._resolve_pb_prop_003_wiring_state(None), "absent")
+
+
+# ---------------------------------------------------------------------------
+# CX-PB003-002 residual (fix re-sweep) — build-turn's verify-app sub-check must THREAD
+# --packet-dir/--module-id (from state.packet_dir / card.module_id) into `cx check verify-app`,
+# not call it bare. Bare-call was the exact gap: a malformed pb_prop_003_wiring marker (or a
+# dangling criteria_ref) has NO packet context to resolve against, so cx_module_acceptance's
+# _validate_criteria_wiring leg never runs and the receipt PASSES on the build-turn rail even
+# though the standalone `cx check verify-app --packet-dir ...` call (TestCXPB003002Malformed-
+# MarkerFailsClosed, above) correctly blocks it. This drives cmd_build_turn end-to-end (real
+# subprocess via run_cx, not a mock) with a card.verify_app_ref + state.packet_dir, exactly the
+# shape the fixed code path reads.
+# ---------------------------------------------------------------------------
+class TestCXPB003002BuildTurnPacketDirThreading(unittest.TestCase):
+    def _repo(self, t, packet_fixture, receipt_fixture, module_id, extra_pkt_files=()):
+        repo = os.path.join(t, "repo")
+        os.makedirs(os.path.join(repo, "pkt"), exist_ok=True)
+        os.makedirs(os.path.join(repo, "acceptance"), exist_ok=True)
+        pkt_src = FIXTURES / packet_fixture
+        (Path(repo) / "pkt" / "requirements-manifest.yaml").write_text(
+            (pkt_src / "requirements-manifest.yaml").read_text())
+        for name in extra_pkt_files:
+            (Path(repo) / "pkt" / name).write_text((pkt_src / name).read_text())
+        (Path(repo) / "acceptance" / "receipt.yaml").write_text(fix_text(receipt_fixture))
+        with open(os.path.join(repo, "card.yaml"), "w") as f:
+            f.write(f"id: BUILD-X\nmode: FIX\nverify_app_ref: acceptance/receipt.yaml\n"
+                    f"module_id: {module_id}\n")
+        state = os.path.join(t, "state.yaml")
+        with open(state, "w") as f:
+            f.write("project: t\nprotocol_stamp: Code-X V1\npacket_dir: pkt\n")
+        return repo, os.path.join(repo, "card.yaml"), state
+
+    def test_build_turn_threads_packet_dir_catches_malformed_marker(self):
+        """POSITIVE (the bite): a build-turn run on a card whose verify_app_ref receipt sits under
+        a packet with a MALFORMED pb_prop_003_wiring marker (string "true", not boolean) must FAIL
+        the verify-app sub-check and surface the CX-PB003-002 finding — proving build-turn now
+        passes state.packet_dir through, not just the standalone verify-app CLI call. Without the
+        fix (bare `cx check verify-app --acceptance <ref>`, no --packet-dir), this sub-check PASSES
+        instead (verified by stashing the fix and re-running: output becomes
+        '[INFO] PASS verify-app') — that is the exact gap CX-PB003-002 closes."""
+        with tempfile.TemporaryDirectory() as t:
+            repo, card, state = self._repo(
+                t, "pb_prop_003_malformed_marker_packet", "verify_app_malformed_marker.yaml",
+                "m_malformed")
+            rc, out = run_cx("check", "build-turn", card, "--state", state, "--repo-root", repo)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("[P1] verify-app", out)
+            self.assertIn("not a real boolean true", out)
+            self.assertIn("CX-PB003-002", out)
+
+    def test_build_turn_threads_packet_dir_control_wired_receipt_passes(self):
+        """CONTROL (no regression / no false-positive): the SAME build-turn shape, but the packet's
+        pb_prop_003_wiring marker is a real boolean true and the receipt's criteria_refs correctly
+        resolves + reverse-covers module m_wired's behavioral requirements — the verify-app
+        sub-check must still PASS through build-turn (threading --packet-dir must not turn a
+        genuinely well-wired receipt into a false failure)."""
+        with tempfile.TemporaryDirectory() as t:
+            repo, card, state = self._repo(
+                t, "pb_prop_003_wired_packet", "verify_app_wired_good.yaml", "m_wired",
+                extra_pkt_files=("MODULE-REGISTRY.yaml",))
+            rc, out = run_cx("check", "build-turn", card, "--state", state, "--repo-root", repo)
+            self.assertIn("[INFO] PASS verify-app", out)
+
+    def test_build_turn_threads_packet_dir_control_legacy_packet_passes(self):
+        """CONTROL variant: a legacy packet (no pb_prop_003_wiring marker at all — the default
+        state of every live packet today) still passes the verify-app sub-check through build-turn
+        (non-blocking advisory only), confirming the threading doesn't retroactively break packets
+        that never opted in."""
+        with tempfile.TemporaryDirectory() as t:
+            repo, card, state = self._repo(
+                t, "pb_prop_003_legacy_packet", "verify_app_legacy_ok.yaml", "m_legacy")
+            rc, out = run_cx("check", "build-turn", card, "--state", state, "--repo-root", repo)
+            self.assertIn("[INFO] PASS verify-app", out)
 
 
 # ---------------------------------------------------------------------------
@@ -3870,6 +4959,38 @@ class TestCheckBlueprint(unittest.TestCase):
         rc, out = self._run(self.GOOD, "home", state="blueprint_bad_state_items_malformed.yaml")
         self.assertEqual(rc, 1)
         self.assertIn("items is missing or not a list", out)
+
+
+class TestBlueprintDepthTierGated(unittest.TestCase):
+    """PBF-PROP-019 Phase 3 (design v2.B row 6, blueprint_depth): LITE drops the control: (full
+    behaviour-contract) anchors from the expected set — nav-map (nav:) + requirements (req:) stay
+    (the "nav-map + done-test" floor; BLUEPRINT-FEATURE-HAS-DONE-TEST is untouched, enforced
+    elsewhere in _validate_module regardless of tier). Unit-tests _derive_expected_anchor_ids
+    directly (cx_blueprint imported in-process, mirrors the cx_kaizen/cx_common precedent above) —
+    the full CLI path is proven unbroken by TestCheckBlueprint's unmodified 465-test pass (no
+    risk_tier field in blueprint_good_packet's manifest -> defaults STRICT, byte-for-byte)."""
+
+    _REG_MODULE = {"requirement_ids": ["REQ-1"]}
+    _CONTRACTS = {"C1": {"control_id": "ctrl-1", "screen": "home"}}
+    _SCREEN_NAV = {"home": ["settings"]}
+
+    def test_lite_drops_control_anchors(self):
+        expected = cx_blueprint._derive_expected_anchor_ids(
+            self._REG_MODULE, "home", "home", "screen", self._CONTRACTS, self._SCREEN_NAV,
+            risk_tier="LITE")
+        self.assertEqual(expected, {"req:REQ-1", "nav:home->settings"})
+
+    def test_default_strict_keeps_control_anchors(self):
+        # default risk_tier param ("STRICT") preserves today's behaviour byte-for-byte.
+        expected = cx_blueprint._derive_expected_anchor_ids(
+            self._REG_MODULE, "home", "home", "screen", self._CONTRACTS, self._SCREEN_NAV)
+        self.assertEqual(expected, {"req:REQ-1", "control:ctrl-1", "nav:home->settings"})
+
+    def test_standard_keeps_control_anchors(self):
+        expected = cx_blueprint._derive_expected_anchor_ids(
+            self._REG_MODULE, "home", "home", "screen", self._CONTRACTS, self._SCREEN_NAV,
+            risk_tier="STANDARD")
+        self.assertEqual(expected, {"req:REQ-1", "control:ctrl-1", "nav:home->settings"})
 
 
 # ---------------------------------------------------------------------------
@@ -4649,6 +5770,35 @@ class TestCheckAudit(unittest.TestCase):
             self.assertIn("AUDIT-STAGE-LAYER-ID-UNPARSEABLE", out)
 
 
+class TestCheckAuditTierGated(unittest.TestCase):
+    """PBF-PROP-019 Phase 3 (design v2.B row 1): LITE drops the SEPARATE formal Audit-STAGE
+    entry requirement; STANDARD/STRICT unchanged. If an audit_dir IS present under LITE, it is
+    still judged in full (proven by test_good_audit_passes / test_no_receipt_fails_entry_required
+    above, which pass no packet_dir and so default STRICT — unaffected by this class)."""
+
+    def test_no_receipt_strict_state_still_fails_entry_required(self):
+        rc, out = run_cx("check", "audit", fix("as_no_audit_receipt"), "--state", fix("audit_state_good.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("AUDIT-STAGE-ENTRY-REQUIRED", out)
+
+    def test_no_receipt_lite_state_drops_entry_required(self):
+        rc, out = run_cx("check", "audit", fix("as_no_audit_receipt"), "--state", fix("audit_state_good_lite.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS (LITE drops the entry requirement), got {rc}.\n{out}")
+
+    def test_good_audit_present_still_judged_in_full_under_lite(self):
+        """A light audit report DOES exist under LITE — facts/hard-rules are never suppressed,
+        it is judged exactly like the STANDARD/STRICT case (as_good already passes both ways)."""
+        rc, out = run_cx("check", "audit", fix("audit_good"), "--state", fix("audit_state_good_lite.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_bad_report_present_under_lite_still_fails(self):
+        """A present-but-broken audit report under LITE still fails its real findings (N/A
+        derivation is never relaxed by tier)."""
+        rc, out = run_cx("check", "audit", fix("as_na_no_fact"), "--state", fix("audit_state_good_lite.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("AUDIT-STAGE-APPLICABILITY-DERIVED", out)
+
+
 class TestCheckFinalReadyAuditStageChain(unittest.TestCase):
     """F1 (v1.22 self-review): AUDIT-STAGE-FINAL-READY-CHAIN — final-ready must not be reachable
     while skipping the Audit stage; wires cx_audit.collect_audit_findings into cx_final_ready."""
@@ -4661,6 +5811,105 @@ class TestCheckFinalReadyAuditStageChain(unittest.TestCase):
         rc, out = run_cx("check", "final-ready", fix("state_final_ready_bad_no_audit_stage.yaml"))
         self.assertEqual(rc, 1)
         self.assertIn("AUDIT-STAGE-FINAL-READY-CHAIN", out)
+
+
+class TestCheckFinalReadyTierGated(unittest.TestCase):
+    """PBF-PROP-019 Phase 3 (design v2.B row 1 + v2.C, CEO ruling 2026-07-05 Option A):
+    audit_stage_final and final_cross_family_receipt both relax under a pure-LITE build with
+    zero high-risk cards fired; STANDARD/STRICT are unchanged; a high-risk card fired during a
+    LITE build still requires the final_cross_family_receipt (invariant c)."""
+
+    def test_pure_lite_no_fcf_no_audit_stage_passes(self):
+        # P0-2 FIX: high_risk_card_fired is now recomputed from the build's real cards
+        # (fail-closed if unresolvable) rather than a proxy field, so the legitimate
+        # pure-LITE fast path must point at a real cards-dir whose cards are all clean.
+        rc, out = run_cx("check", "final-ready", fix("state_good_final_ready_lite_no_fcf.yaml"),
+                         "--cards-dir", fix("final_ready_cards_lite_clean"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_strict_same_omissions_blocks_both(self):
+        rc, out = run_cx("check", "final-ready", fix("state_bad_final_ready_strict_no_fcf.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("final_cross_family_receipt missing", out)
+        self.assertIn("AUDIT-STAGE-FINAL-READY-CHAIN", out)
+
+    def test_lite_high_risk_fired_still_requires_fcf(self):
+        rc, out = run_cx("check", "final-ready", fix("state_bad_final_ready_lite_high_risk_fired_no_fcf.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("final_cross_family_receipt missing", out)
+
+    def test_spine_blocking_never_tier_gated(self):
+        """CRITICAL invariant: the open-findings spine block is NEVER tier-conditional — a
+        state with an open P0/finding still blocks final-ready regardless of risk_tier."""
+        rc, out = run_cx("check", "final-ready", fix("state_bad_final_ready.yaml"))
+        self.assertEqual(rc, 1, out)
+
+
+class TestFinalReadyHighRiskCardRecompute(unittest.TestCase):
+    """PBF-PROP-019 P0-2 FIX (GPT-5.5 xhigh codex 019f32cb cross-family finding): the OLD
+    high_risk_card_fired = bool(state.foundation_checkpoints_passed) proxy was UNSOUND — a
+    TERMINAL high-risk card (no dependents) passes `cx check card` per PB-PROP-002(b)
+    (cx_card.py:1072) WITHOUT ever populating foundation_checkpoints_passed (only a DEPENDENT
+    card's check reads that field, cx_card.py:1080), so a LITE build containing exactly that
+    shape reached final-ready with zero cross-family review. Fixed: cx_final_ready now
+    recomputes high_risk_card_fired by enumerating the build's real compiled cards
+    (--cards-dir, or the conventional <repo-root>/cards) and calling card_high_risk() on each
+    — fail-closed (True) whenever the cards cannot be positively enumerated."""
+
+    STATE = "state_good_final_ready_lite_no_fcf.yaml"  # LITE, no fcf, no foundation_checkpoints_passed
+
+    def test_terminal_high_risk_card_forces_fcf_even_with_no_checkpoint(self):
+        """THE reproduction: the SAME LITE state as the positive control below (no
+        foundation_checkpoints_passed at all — the exact case the old proxy read as False),
+        but the real cards-dir contains one TERMINAL high-risk card. Must now FAIL requiring
+        the final cross-family receipt."""
+        rc, out = run_cx("check", "final-ready", fix(self.STATE),
+                         "--cards-dir", fix("final_ready_cards_terminal_high_risk"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("final_cross_family_receipt missing", out)
+
+    def test_positive_control_all_clean_cards_pure_lite_passes(self):
+        """Positive control: the SAME LITE state, cards enumerated successfully, all
+        non-high-risk — the legitimate pure-LITE self-review-only ship path still works."""
+        rc, out = run_cx("check", "final-ready", fix(self.STATE),
+                         "--cards-dir", fix("final_ready_cards_lite_clean"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_cards_dir_nonexistent_fails_closed(self):
+        """'Can't tell' must never relax the gate: an explicit --cards-dir that does not
+        exist cannot be enumerated -> high_risk_card_fired=True -> receipt required."""
+        rc, out = run_cx("check", "final-ready", fix(self.STATE),
+                         "--cards-dir", fix("final_ready_cards_does_not_exist"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("final_cross_family_receipt missing", out)
+
+    def test_cards_dir_empty_fails_closed(self):
+        """Zero cards found where cards were expected is itself an anomaly — fail closed,
+        never silently treated as 'nothing risky happened'."""
+        with tempfile.TemporaryDirectory() as t:
+            rc, out = run_cx("check", "final-ready", fix(self.STATE), "--cards-dir", t)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("final_cross_family_receipt missing", out)
+
+    def test_no_cards_dir_at_all_fails_closed(self):
+        """No --cards-dir and no --repo-root -> no conventional cards dir discoverable ->
+        fail closed (the P0-2 fix's default posture; mirrors
+        test_lite_high_risk_fired_still_requires_fcf's existing coverage)."""
+        rc, out = run_cx("check", "final-ready", fix(self.STATE))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("final_cross_family_receipt missing", out)
+
+    def test_nonshaped_yaml_dir_fails_closed(self):
+        """Re-sweep hole (GPT-5.5 codex 019f32f9): a NON-EMPTY --cards-dir of YAML that are
+        NOT shaped cards (no security_tripwire mapping — e.g. a packet dir wrongly supplied)
+        must fail closed. Before the shape guard, card_high_risk() returned False on every
+        tripwire-less file and the whole dir read as 'all clean' (unsafe False)."""
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "not-a-card.yaml").write_text(
+                "id: something\nmode: BUILD\nsome_field: value\n", encoding="utf-8")
+            rc, out = run_cx("check", "final-ready", fix(self.STATE), "--cards-dir", t)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("final_cross_family_receipt missing", out)
 
 
 class TestCheckPacketSopCoverageMap(unittest.TestCase):
@@ -4826,6 +6075,554 @@ class TestAcceptedSurface(unittest.TestCase):
         findings = self.cas.validate_shared_surface_coverage(
             card, [(m1, "m1.yaml"), (m2, "m2.yaml")], "card.yaml")
         self.assertTrue(any("SHARED accepted-surface file" in msg for _, _, msg in findings))
+
+
+# ---------------------------------------------------------------------------
+# PBF-PROP-020 — Mockup-First Change Rule (v2, fail-closed-by-default)
+# ---------------------------------------------------------------------------
+class TestPBFPROP020MockupFirst(unittest.TestCase):
+    def test_rule3_lock_acceptance_no_chosen_from_bites(self):
+        rc, out = run_cx("check", "design-fidelity",
+                         "--manifest", fix("ui_lock_manifest_bad_no_chosen_from.yaml"),
+                         "--dom", fix("dom_good.html"),
+                         "--screenshot", fix("screenshot_good.png"))
+        self.assertEqual(rc, 1)
+        self.assertIn("[P1]", out)
+        self.assertIn("LOCK-ACCEPTANCE-CITES-RENDERED", out)
+
+    def test_rule3_lock_acceptance_good_passes(self):
+        rc, out = run_cx("check", "design-fidelity",
+                         "--manifest", fix("ui_lock_manifest_good.yaml"),
+                         "--dom", fix("dom_good.html"),
+                         "--screenshot", fix("screenshot_good.png"),
+                         "--build-vocab", fix("build_vocab_good.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule4_module_demo_no_diff_receipt_bites(self):
+        rc, out = run_cx("check", "module-demo",
+                         "--acceptance", fix("module_demo_no_diff_receipt.yaml"),
+                         "--repo-root", str(FIXTURES))
+        self.assertEqual(rc, 1)
+        self.assertIn("PRESENTED-VISUAL-HAS-DIFF-RECEIPT", out)
+
+    def test_rule4_module_demo_good_passes(self):
+        rc, out = run_cx("check", "module-demo",
+                         "--acceptance", fix("module_acceptance_live_slice_good.yaml"),
+                         "--repo-root", str(FIXTURES))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule4_module_demo_full_omission_bites(self):
+        """FOLD RE-SWEEP FIX (WAVE-TRIGGERED): a live_slice acceptance that OMITS the diff receipt
+        ENTIRELY (no mockup_ref/mockup_hash/diff_score/tolerance) must fail closed — pre-fix the
+        field-triggered check let a full omission pass, the new-work dodge the extra sweep caught."""
+        rc, out = run_cx("check", "module-demo",
+                         "--acceptance", fix("module_demo_full_omission_no_diff.yaml"),
+                         "--repo-root", str(FIXTURES))
+        self.assertEqual(rc, 1)
+        self.assertIn("PRESENTED-VISUAL-HAS-DIFF-RECEIPT", out)
+
+    def test_rule4_legacy_no_diff_carveout_is_advisory_not_blocking(self):
+        """A GENUINE pre-020 live_slice acceptance with NO diff receipt but a typed
+        legacy_no_diff_receipt carve-out is DEMOTED from the blocking P1 to a P2 advisory (migration
+        debt). P2 is non-blocking at the real acceptance walls (has_blocking = {P0, P1}); the
+        standalone module-demo diagnostic still surfaces it, so we assert the SEVERITY demotion."""
+        rc, out = run_cx("check", "module-demo",
+                         "--acceptance", fix("module_demo_legacy_no_diff_carveout.yaml"),
+                         "--repo-root", str(FIXTURES))
+        self.assertIn("[P2]", out, out)
+        self.assertIn("legacy_no_diff_receipt", out)
+        self.assertNotIn("PRESENTED-VISUAL-HAS-DIFF-RECEIPT", out,
+                         f"the carve-out demotes to advisory — the blocking P1 clause must not fire.\n{out}")
+
+    def test_rule6a_two_live_locks_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_two_live_locks"))
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("ONE-LIVE-LOCK-PER-SCREEN", out)
+
+    def test_rule6a_one_live_lock_good_passes(self):
+        rc, out = run_cx("check", "packet", fix("packet_good_one_live_lock"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule5_rule_conflict_no_resolution_bites(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_rule_conflict_no_resolution"))
+        self.assertEqual(rc, 1)
+        self.assertIn("RULE-CONFLICT-IS-OPEN-CLARIFICATION", out)
+
+    def test_rule5_rule_conflict_resolved_good_passes(self):
+        rc, out = run_cx("check", "packet", fix("packet_good_rule_conflict_resolved"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule6b_interactive_chrome_no_contract_bites(self):
+        rc, out = run_cx("check", "blueprint", fix("blueprint_bad_chrome_no_behavior_contract"),
+                         "--module", "home", "--state", fix("blueprint_good_state.yaml"),
+                         "--approval", fix("blueprint_bad_chrome_no_behavior_contract_approval.yaml"))
+        self.assertEqual(rc, 1)
+        self.assertIn("INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT", out)
+
+    def test_rule6b_interactive_chrome_with_contract_good_passes(self):
+        rc, out = run_cx("check", "blueprint", fix("blueprint_good_chrome_with_contract"),
+                         "--module", "home", "--state", fix("blueprint_good_state.yaml"),
+                         "--approval", fix("blueprint_good_chrome_approval.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    _RULE1_STATE = fix("prop020_rule1_repo/state.yaml")
+
+    def test_rule1_prose_only_ui_change_bites(self):
+        rc, out = run_cx("check", "card", fix("card_bad_ui_change_prose_only.yaml"),
+                         "--state", self._RULE1_STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("MOCKUP-FIRST-CHANGE-NEEDS-LOCK", out)
+
+    def test_rule1_registry_lock_good_passes(self):
+        rc, out = run_cx("check", "card", fix("card_good_ui_change_with_registry_lock.yaml"),
+                         "--state", self._RULE1_STATE)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule1_restore_fix_exempt_good_passes(self):
+        rc, out = run_cx("check", "card", fix("card_good_restore_fix.yaml"),
+                         "--state", self._RULE1_STATE)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+
+    def test_rule1_ui_change_no_render_bundle_bites(self):
+        """FOLD RE-SWEEP FIX (CITE-AND-COMPARE): a UI card with a VALID registry lock_ref but NO
+        render_bundle must fail closed — the lock is referenced but never rendered against, the
+        fail-open dodge (build-turn marks render-fidelity NOT_APPLICABLE) the extra sweep caught."""
+        rc, out = run_cx("check", "card", fix("card_bad_ui_change_no_render_bundle.yaml"),
+                         "--state", self._RULE1_STATE)
+        self.assertEqual(rc, 1)
+        self.assertIn("[P0]", out)
+        self.assertIn("no render_bundle", out)
+        self.assertIn("MOCKUP-FIRST-CHANGE-NEEDS-LOCK", out)
+
+
+class TestPBFPROP020GitTouchedScope(unittest.TestCase):
+    """PBF-PROP-020 Rules 2 & 7 — the git-touched CEO-visible screen scope. These need a REAL git
+    repo (a diff vs repo_sha_before) + a MODULE-REGISTRY screen->files binding + a hash-bound lock
+    with pictured_states, so — like the module-acceptance repo_sha_before tests — they are proven
+    to BITE here rather than in the static contract-bite harness. Covered: each of the 3 clauses
+    bites, plus the scoped-not-global posture (untouched screens stay advisory; no repo flags =
+    the rules stay dormant; a fully-covered/pictured touched screen raises no false positive)."""
+
+    def _repo(self, tmp, *, cover_home=True, pictured_state="populated", drift_screen=None,
+              omit_repo_sha=False, legacy_carveout=None):
+        """Build a temp git repo whose HEAD touches templates/home.html vs its baseline, a packet
+        with a registry binding home->that file + a lock carrying pictured_states, and a render
+        bundle. Returns (repo, packet_rel, bundle, head_sha). omit_repo_sha drops repo_sha_before
+        from the bundle (the fold re-sweep fail-open probe); legacy_carveout adds a typed
+        legacy_no_baseline marker (the explicit pre-020 grandfather)."""
+        repo = os.path.join(tmp, "repo")
+        _git_init(repo)
+        os.makedirs(os.path.join(repo, "templates"))
+        with open(os.path.join(repo, "templates", "home.html"), "w") as f:
+            f.write("<h1>one</h1>\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        base = _git_commit(repo, "baseline")
+        with open(os.path.join(repo, "templates", "home.html"), "w") as f:
+            f.write("<h1>two — the look changed</h1>\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        head = _git_commit(repo, "change home look")
+        pkt = os.path.join(repo, "packet")
+        os.makedirs(os.path.join(pkt, "locks"))
+        with open(os.path.join(pkt, "locks", "home.lock.yaml"), "w") as f:
+            f.write(
+                "ui_lock_manifest:\n"
+                "  audit_status: PASS\n"
+                "  ceo_acceptance_ref: CEO-D-FIXTURE\n"
+                "  pictured_states:\n"
+                f"    - {{screen_id: home, content_state: {pictured_state}}}\n")
+        with open(os.path.join(pkt, "MODULE-REGISTRY.yaml"), "w") as f:
+            f.write(
+                "module_registry:\n"
+                "  frozen_packet_hash: p020-r2r7-fixture\n"
+                "  modules:\n"
+                "    - module_id: m_home\n"
+                "      screen_id: home\n"
+                "      kind: screen\n"
+                "      files: [templates/home.html]\n"
+                "      lock_ref: packet/locks/home.lock.yaml\n"
+                "      requirement_ids: []\n"
+                "      dependency_modules: []\n"
+                "      card_ids: [BUILD-1]\n")
+        covered_screen = "home" if cover_home else "other"
+        lines = []
+        if not omit_repo_sha:
+            lines.append(f"repo_sha_before: {base[:12]}")
+        if legacy_carveout:
+            lines.append(f"legacy_no_baseline: {legacy_carveout}")
+        lines += [
+            "coverage_matrix:",
+            "  ui_card: true",
+            "  required_rows:",
+            f"    - screen_id: {covered_screen}",
+            "      viewport_id: phone",
+            "      theme: light",
+            "      content_state: populated",
+        ]
+        if drift_screen:
+            lines += [
+                "golden_drift:",
+                f"  - screen_id: {drift_screen}",
+                "    viewport_id: phone",
+                "    diff_score: 0.9",
+                "    tolerance: 0.1",
+                "    baseline_ref: baseline-shot",
+            ]
+        bundle = os.path.join(tmp, "bundle.yaml")
+        with open(bundle, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        return repo, "packet", bundle, head
+
+    def test_render_covers_git_touched_bites(self):
+        """home is git-touched but omitted from required_rows => RENDER-COVERS-GIT-TOUCHED P0."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=False)
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertIn("RENDER-COVERS-GIT-TOUCHED", out, out)
+            self.assertNotEqual(rc, 0, f"a touched-but-omitted screen must fail closed.\n{out}")
+
+    def test_unpictured_state_is_gap_bites(self):
+        """home touched & covered as 'populated' but the lock pictures only 'empty' =>
+        UNPICTURED-STATE-IS-GAP P0."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=True, pictured_state="empty")
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertIn("UNPICTURED-STATE-IS-GAP", out, out)
+            self.assertNotEqual(rc, 0, out)
+
+    def test_golden_drift_blocks_touched_bites(self):
+        """a golden_drift over tolerance on the git-touched screen => GOLDEN-DRIFT-BLOCKS-TOUCHED P1."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=True, drift_screen="home")
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertIn("GOLDEN-DRIFT-BLOCKS-TOUCHED", out, out)
+            self.assertNotEqual(rc, 0, out)
+
+    def test_golden_drift_untouched_stays_advisory(self):
+        """a golden_drift over tolerance on an UNtouched screen stays advisory WARN — the flip is
+        scoped to touched screens, never global (the bloat the CEO refused)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=True, drift_screen="other")
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertNotIn("GOLDEN-DRIFT-BLOCKS-TOUCHED", out, out)
+
+    def test_rules_2_7_dormant_without_repo_flags(self):
+        """without --repo-root/--packet-dir the git-touched scope is unresolved => Rules 2/7 do NOT
+        apply (scoped-not-global); none of the 3 clauses fire."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=False, drift_screen="home")
+            rc, out = run_cx("check", "render-fidelity", bundle, "--repo-head", "aaaaaaaaaaaa")
+            for clause in ("RENDER-COVERS-GIT-TOUCHED", "UNPICTURED-STATE-IS-GAP",
+                           "GOLDEN-DRIFT-BLOCKS-TOUCHED"):
+                self.assertNotIn(clause, out, f"{clause} must be dormant without repo flags.\n{out}")
+
+    def test_touched_covered_pictured_no_020_finding(self):
+        """home touched, covered, pictured 'populated', drift under tolerance => none of the 3
+        Rule 2/7 clauses fire (no false-positive)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=True, pictured_state="populated")
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            for clause in ("RENDER-COVERS-GIT-TOUCHED", "UNPICTURED-STATE-IS-GAP",
+                           "GOLDEN-DRIFT-BLOCKS-TOUCHED"):
+                self.assertNotIn(clause, out, f"{clause} false-positived.\n{out}")
+
+    def test_missing_repo_sha_before_fails_closed(self):
+        """FOLD RE-SWEEP FIX: repo/packet flags SUPPLIED but the bundle OMITS repo_sha_before must
+        fail CLOSED — omission can no longer make Rules 2/7 go silently dormant (the fail-open
+        new-work dodge the extra xfam sweep caught). Home IS git-touched but omitted from coverage;
+        pre-fix this returned None (no finding), so the touched-but-omitted screen shipped green."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=False, omit_repo_sha=True)
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertIn("no repo_sha_before", out, out)
+            self.assertNotEqual(rc, 0, f"a bundle with repo flags but no repo_sha_before must fail "
+                                       f"closed, not go dormant.\n{out}")
+
+    def test_legacy_no_baseline_carveout_stays_dormant(self):
+        """A GENUINE pre-020 bundle declares the typed legacy_no_baseline carve-out — Rules 2/7 stay
+        dormant (advisory WARN, migration debt), never a blocking finding. This is the ONLY way to
+        omit repo_sha_before with the flags supplied; an untyped omission is the P0 above."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pkt, bundle, head = self._repo(tmp, cover_home=False, omit_repo_sha=True,
+                                                 legacy_carveout="pre-020-migration-debt")
+            rc, out = run_cx("check", "render-fidelity", bundle,
+                             "--repo-root", repo, "--packet-dir", pkt, "--repo-head", head)
+            self.assertIn("legacy_no_baseline", out, out)
+            self.assertNotIn("RENDER-COVERS-GIT-TOUCHED", out,
+                             f"a typed pre-020 carve-out must keep Rules 2/7 dormant.\n{out}")
+
+
+# ---------------------------------------------------------------------------
+# PBF-PROP-019 Phase 5: EVAL-052 — LITE can't skip the SPINE
+# ---------------------------------------------------------------------------
+class TestEval052HighRiskForceAcrossAllTiers(unittest.TestCase):
+    """EVAL-052 headline case: CARD-HIGH-RISK-FORCES-FOUNDATION (Phase 2, mechanical, never reads
+    risk_tier) must reject the SAME high-risk/no-foundation-checkpoint card identically under all
+    three declared tiers — LITE, STANDARD, and STRICT — proving the tier declaration itself has zero
+    effect on this gate. STRICT already runs with no --state at all (TestCardHighRiskForcesFoundation
+    above); this class adds the explicit LITE/STANDARD/STRICT --state triple."""
+
+    _BAD = "card_bad_high_risk_no_foundation_checkpoint.yaml"
+
+    def test_high_risk_no_checkpoint_fails_under_lite(self):
+        rc, out = run_cx("check", "card", fix(self._BAD), "--state", fix("state_pbf019_lite.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("CARD-HIGH-RISK-FORCES-FOUNDATION", out, out)
+
+    def test_high_risk_no_checkpoint_fails_under_standard(self):
+        rc, out = run_cx("check", "card", fix(self._BAD), "--state", fix("state_pbf019_standard.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("CARD-HIGH-RISK-FORCES-FOUNDATION", out, out)
+
+    def test_high_risk_no_checkpoint_fails_under_strict(self):
+        rc, out = run_cx("check", "card", fix(self._BAD), "--state", fix("state_pbf019_strict.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("CARD-HIGH-RISK-FORCES-FOUNDATION", out, out)
+
+
+class TestEval052GoodLiteRelaxesCeremonyOnly(unittest.TestCase):
+    """EVAL-052 mirror case: a legitimate LITE fixture that drops BOTH ceremony rails Phase 3
+    relaxes (CodeRabbit + same-family cross-review) simultaneously, while every SPINE field
+    (source_map, module_id, card_compilation, security_tripwire) stays intact, PASSES clean under
+    LITE and fails BOTH relaxed gates under the STRICT default — proving LITE relaxes ceremony
+    without ever touching the spine."""
+
+    _CARD = "card_good_lite_relaxed_ceremony.yaml"
+
+    def test_strict_default_fails_both_relaxed_gates(self):
+        rc, out = run_cx("check", "card", fix(self._CARD))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("CodeRabbit rail missing", out)
+        self.assertIn("same-family cross-review REJECTED", out)
+
+    def test_lite_passes_clean(self):
+        rc, out = run_cx("check", "card", fix(self._CARD), "--state", fix("state_pbf019_lite.yaml"))
+        self.assertEqual(rc, 0, out)
+
+
+class TestEval052SpineGatesNeverReadRiskTier(unittest.TestCase):
+    """EVAL-052: source-level proof that the remaining named spine gates — deck reverse coverage,
+    the module-start frozen-packet-hash/order wall, scope/allowed-files, and dependency-scan — carry
+    NO risk_tier branch at all, so no declared tier can possibly relax them (structurally, not just
+    by absence of a failing test). Complements the concrete fixture-level proofs above (card spine
+    fields, final-ready open-findings) with a mechanical guarantee against a future regression that
+    silently threads risk_tier into one of these files."""
+
+    _SPINE_MODULES = ["cx_deck.py", "cx_scope.py", "cx_dep_scan.py", "cx_module_start.py"]
+
+    def test_spine_modules_never_reference_risk_tier(self):
+        checkers_dir = Path(__file__).resolve().parent.parent
+        for name in self._SPINE_MODULES:
+            src = (checkers_dir / name).read_text(encoding="utf-8")
+            self.assertNotIn("risk_tier", src,
+                f"{name} must never read risk_tier — it is SPINE (PBF-PROP-019 EVAL-052)")
+
+    def test_source_map_spine_still_fails_under_lite(self):
+        """A concrete companion to the source-grep: the existing CARD-SOURCE-MAP-REQUIRED bad
+        fixture still fails identically when a LITE-tier --state is supplied."""
+        rc, out = run_cx("check", "card", fix("card_bad_missing_source_map.yaml"),
+                         "--state", fix("state_pbf019_lite.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("missing source_map", out)
+
+    def test_final_ready_open_findings_spine_still_fails_under_explicit_lite(self):
+        """The final-ready open_findings block (cx_final_ready.py:64-79) never reads risk_tier_val —
+        an explicit risk_tier: LITE packet_dir with an open P0 finding still blocks final-ready,
+        identically to the tier-absent state_bad_final_ready.yaml case (EVAL-001)."""
+        rc, out = run_cx("check", "final-ready", fix("state_bad_final_ready_lite_open_findings.yaml"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("open_findings.counts.p0=1", out)
+
+
+# ---------------------------------------------------------------------------
+# PBF-PROP-019: risk_tier resolver + packet validator (EVAL-052/053)
+# ---------------------------------------------------------------------------
+import cx_common  # noqa: E402
+
+
+class TestRiskTierResolver(unittest.TestCase):
+    """EVAL-053 — undeclared/unknown tier resolves STRICT; malformed also FAILS
+    PACKET-RISK-TIER-WELL-FORMED at cx check packet. Positive control: explicit
+    STRICT behaves identically to the absent case's resolution."""
+
+    def test_absent_risk_tier_resolves_strict(self):
+        self.assertEqual(cx_common.resolve_risk_tier(fix("packet_good")), "STRICT")
+
+    def test_bogus_risk_tier_resolves_strict(self):
+        # Resolver never raises / never returns anything but STRICT for a bad value —
+        # the loud rejection is cx check packet's job (tested below), not the resolver's.
+        self.assertEqual(cx_common.resolve_risk_tier(fix("packet_bad_risk_tier_invalid")), "STRICT")
+
+    def test_explicit_strict_resolves_strict(self):
+        self.assertEqual(cx_common.resolve_risk_tier(fix("packet_good_risk_tier_strict")), "STRICT")
+
+    def test_declared_lite_resolves_lite(self):
+        self.assertEqual(cx_common.resolve_risk_tier(fix("packet_good_risk_tier_lite")), "LITE")
+
+    def test_missing_packet_dir_resolves_strict(self):
+        self.assertEqual(cx_common.resolve_risk_tier(fix("no-such-packet-dir")), "STRICT")
+
+    def test_bogus_tier_fails_packet_well_formed(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_risk_tier_invalid"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("PACKET-RISK-TIER-WELL-FORMED", out, out)
+
+    def test_lite_without_ceo_ref_fails_packet_well_formed(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_risk_tier_lite_no_ref"))
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("PACKET-RISK-TIER-WELL-FORMED", out, out)
+
+    def test_lite_with_resolving_ceo_ref_passes_packet(self):
+        rc, out = run_cx("check", "packet", fix("packet_good_risk_tier_lite"))
+        self.assertEqual(rc, 0, out)
+
+    def test_explicit_strict_passes_packet_no_ref_needed(self):
+        rc, out = run_cx("check", "packet", fix("packet_good_risk_tier_strict"))
+        self.assertEqual(rc, 0, out)
+
+    def test_absent_risk_tier_still_passes_packet(self):
+        # Positive control: an undeclared tier is not itself a finding (absence -> STRICT
+        # is proven by the resolver test above, not a written flag on the good fixture).
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, out)
+
+
+# ---------------------------------------------------------------------------
+# PBF-PROP-019 Phase 4: graduation hash-bound tier evidence + LITE streak exclusion
+# ---------------------------------------------------------------------------
+import hashlib as _hashlib  # noqa: E402
+import cx_graduation  # noqa: E402
+
+
+class TestGraduationTierEvidence(unittest.TestCase):
+    """Unit-tests `_validate_tier_evidence` directly (in-process, mirrors the cx_blueprint/
+    cx_common precedents above) — the FULL fail-closed direction is the OPPOSITE of
+    cx_common.resolve_risk_tier's packet default: missing/unbindable/malformed tier evidence
+    here REJECTS the entry (tier_ok=False, verified_tier=None), it is never defaulted to
+    STRICT-and-counted. The CLI-level bite (P0 GRADUATION-TIER-EVIDENCE-REQUIRED under
+    --authorize-decision) is proven by the check-contracts.yaml GRADUATION-TIER-EVIDENCE-*
+    clauses; this class proves the underlying helper's exact return contract."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.receipts_dir = Path(self._tmp.name)
+        standard_bytes = b"resolved_risk_tier: STANDARD\n"
+        lite_bytes = b"resolved_risk_tier: LITE\n"
+        (self.receipts_dir / "tier-standard.yaml").write_bytes(standard_bytes)
+        (self.receipts_dir / "tier-lite.yaml").write_bytes(lite_bytes)
+        self.standard_sha = _hashlib.sha256(standard_bytes).hexdigest()
+        self.lite_sha = _hashlib.sha256(lite_bytes).hexdigest()
+        self.manifest_files = {
+            "tier-standard.yaml": self.standard_sha,
+            "tier-lite.yaml": self.lite_sha,
+        }
+
+    def test_missing_risk_tier_field_rejected(self):
+        entry = {"tier_evidence": {"receipt": "tier-standard.yaml", "receipt_sha256": self.standard_sha}}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertFalse(ok)
+        self.assertIsNone(tier)
+        self.assertTrue(any("GRADUATION-TIER-EVIDENCE-REQUIRED" in f[2] for f in findings), findings)
+
+    def test_missing_tier_evidence_block_rejected(self):
+        entry = {"risk_tier": "STANDARD"}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertFalse(ok)
+        self.assertIsNone(tier)
+        self.assertTrue(any("no 'tier_evidence' block" in f[2] for f in findings), findings)
+
+    def test_unbound_receipt_hash_mismatch_rejected(self):
+        entry = {"risk_tier": "STANDARD",
+                  "tier_evidence": {"receipt": "tier-standard.yaml", "receipt_sha256": "f" * 64}}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertFalse(ok)
+        self.assertIsNone(tier)
+        self.assertTrue(any("absent from (or hash-mismatched in)" in f[2] for f in findings), findings)
+
+    def test_standard_claim_over_lite_packet_receipt_rejected(self):
+        # The LITE->STANDARD migration guard (design v2 P1-5): a declared STANDARD claim whose
+        # bound receipt asserts the run was actually built LITE can never retroactively bank it.
+        entry = {"risk_tier": "STANDARD",
+                  "tier_evidence": {"receipt": "tier-lite.yaml", "receipt_sha256": self.lite_sha}}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertFalse(ok)
+        self.assertIsNone(tier)
+        self.assertTrue(any("cannot retroactively bank a run built under a lighter tier" in f[2]
+                             for f in findings), findings)
+
+    def test_well_formed_standard_verified(self):
+        entry = {"risk_tier": "STANDARD",
+                  "tier_evidence": {"receipt": "tier-standard.yaml", "receipt_sha256": self.standard_sha}}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertTrue(ok, findings)
+        self.assertEqual(tier, "STANDARD")
+        self.assertEqual(findings, [])
+
+    def test_well_formed_lite_verified(self):
+        entry = {"risk_tier": "LITE",
+                  "tier_evidence": {"receipt": "tier-lite.yaml", "receipt_sha256": self.lite_sha}}
+        ok, tier, findings = cx_graduation._validate_tier_evidence(
+            entry, True, self.manifest_files, self.receipts_dir, "proj-x", "loc")
+        self.assertTrue(ok, findings)
+        self.assertEqual(tier, "LITE")
+        self.assertEqual(findings, [])
+
+
+class TestGraduationLiteStreakExclusion(unittest.TestCase):
+    """Unit-tests `_recompute_streak`'s LITE-population filter directly: a verified-LITE entry
+    is SKIPPED (neither counts nor resets), same mechanic as 'pending' (design v2 §5/P1-5)."""
+
+    def _status(self, pid, is_clean, is_lite=False, is_pending=False, is_userfacing=True):
+        return {"project_id": pid, "is_clean": is_clean, "is_userfacing": is_userfacing,
+                "is_pending": is_pending, "is_lite": is_lite}
+
+    def test_lite_interleaved_is_skipped_standard_streak_still_counts(self):
+        # oldest->newest: w(clean) x(LITE, dirty if it were evaluated normally) y(clean) z(clean)
+        statuses = [
+            self._status("w", is_clean=True),
+            self._status("x", is_clean=False, is_lite=True),
+            self._status("y", is_clean=True),
+            self._status("z", is_clean=True),
+        ]
+        streak, userfacing, per_project = cx_graduation._recompute_streak(statuses, Path("."), n=3, m=3)
+        self.assertEqual(streak, 3, per_project)
+        self.assertEqual(userfacing, 3, per_project)
+        self.assertEqual(per_project["x"]["project_id"], "x")
+
+    def test_same_shape_without_lite_flag_resets_streak(self):
+        # Contrast control: same dirty-newest-minus-one shape, but x is NOT verified-lite ->
+        # the old behaviour applies — counting stops at x, streak breaks at 2.
+        statuses = [
+            self._status("w", is_clean=True),
+            self._status("x", is_clean=False, is_lite=False),
+            self._status("y", is_clean=True),
+            self._status("z", is_clean=True),
+        ]
+        streak, userfacing, per_project = cx_graduation._recompute_streak(statuses, Path("."), n=3, m=3)
+        self.assertEqual(streak, 2, per_project)
+
+    def test_lite_as_newest_neither_counts_nor_resets(self):
+        statuses = [
+            self._status("w", is_clean=True),
+            self._status("y", is_clean=True),
+            self._status("z", is_clean=True),
+            self._status("newest-lite", is_clean=False, is_lite=True),
+        ]
+        streak, userfacing, per_project = cx_graduation._recompute_streak(statuses, Path("."), n=3, m=3)
+        self.assertEqual(streak, 3, per_project)
 
 
 if __name__ == "__main__":

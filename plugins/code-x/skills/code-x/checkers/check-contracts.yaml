@@ -20,6 +20,18 @@ clauses:
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
+  - id: CARD-HIGH-RISK-FORCES-FOUNDATION
+    check: card
+    kind: gate
+    clause: "a card_high_risk card (security_tripwire touches money/auth/secrets/PII/destructive) with foundation_checkpoint_required not 'yes' rejected — MECHANICAL, regardless of self-declaration or project risk tier (PBF-PROP-019 Phase 2, design v2 P0-1)"
+    source: "PBF-PROP-019 (design-history/pbf-prop-019-tiered-strictness-2026-07-03.md Design Resolution v2, P0-1)"
+    bad:
+      args: ["tests/fixtures/card_bad_high_risk_no_foundation_checkpoint.yaml"]
+      expect_severity: P0
+      expect_contains: "CARD-HIGH-RISK-FORCES-FOUNDATION"
+    good:
+      args: ["tests/fixtures/card_good_high_risk_with_foundation_checkpoint.yaml"]
+
   - id: CARD-MODEL-TIER-NAMED
     check: card
     kind: gate
@@ -312,6 +324,181 @@ clauses:
     good:
       args: ["--module-id=m1", "--state", "tests/fixtures/state_module_accepted_good.yaml", "--acceptance", "tests/fixtures/module_acceptance_good.yaml"]
 
+  # B-PROP-013 Unit 1 forge-parity GUARD (design-history/b-prop-013-forge-parity-design-2026-07-06.md
+  # §2/§7): formalizes the guard's clauses into the bite harness — a prior builder proved these via
+  # checkers/tests/run.py unit tests ONLY, which run_contracts.py does not count (green != enforcing).
+  - id: MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT-VERIFY-APP
+    check: module-acceptance
+    kind: gate
+    clause: "verify_app.repo_sha that is hex-shaped but NOT a real/reachable commit is fabrication — must not grade lighter than an empty field (P0) [B-PROP-013 §2a/§5]"
+    source: "B-PROP-013 §2a (forge-parity acceptance recompute)"
+    git_fixture: forge_parity_bad_verify_app
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT-NOT-ANCESTOR
+    check: module-acceptance
+    kind: gate
+    clause: "verify_app.repo_sha that is a REAL, existing commit on a side branch (never merged) but is NOT an ancestor of HEAD still fails — reachability means ANCESTRY, not mere git-object existence (P0) [B-PROP-013 §2a/§5, xfam FIX-FIRST]"
+    source: "B-PROP-013 §2a (forge-parity acceptance recompute, FIX-FIRST P1 — cat-file -e only checked object existence)"
+    git_fixture: forge_parity_bad_verify_app_not_ancestor
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT-MODULE-DEMO
+    check: module-acceptance
+    kind: gate
+    clause: "module_demo.repo_sha that is hex-shaped but NOT a real/reachable commit is fabrication (P0) [B-PROP-013 §2a/§5]"
+    source: "B-PROP-013 §2a (forge-parity acceptance recompute)"
+    git_fixture: forge_parity_bad_module_demo
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT-LIVE-SLICE-ACCEPT
+    check: module-acceptance
+    kind: gate
+    clause: "live_slice_accept.repo_sha that is hex-shaped but NOT a real/reachable commit is fabrication (P0) [B-PROP-013 §2a/§5]"
+    source: "B-PROP-013 §2a (forge-parity acceptance recompute)"
+    git_fixture: forge_parity_bad_live_slice
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P0
+      expect_contains: "MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: MODULE-ACCEPTANCE-QUALITY-CARD-HASH-DRIFT
+    check: module-acceptance
+    kind: gate
+    clause: "quality_card_hash != recomputed canonical hash of the inline quality_card block is drift, not fabrication — the block and its hash live in the same receipt (honest limit: drift/typo detection only) (P1) [B-PROP-013 §2b/§10.1]"
+    source: "B-PROP-013 §2b (forge-parity acceptance recompute)"
+    git_fixture: forge_parity_bad_qc_drift
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "MODULE-ACCEPTANCE-QUALITY-CARD-HASH-DRIFT"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: MODULE-ACCEPTANCE-FORGE-PARITY-MARKER-MALFORMED
+    check: module-acceptance
+    kind: gate
+    clause: "b_prop_013_forge_parity present but not a real boolean true (e.g. a quoted \"true\") fails closed — a botched opt-in must not silently fall to the legacy carve-out that genuine absence gets (P1) [B-PROP-013 §4/§7]"
+    source: "B-PROP-013 §4 (forge-parity acceptance recompute)"
+    git_fixture: forge_parity_bad_marker_malformed
+    bad:
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "MODULE-ACCEPTANCE-FORGE-PARITY-MARKER-MALFORMED"
+    good:
+      git_fixture: forge_parity_good
+      args: ["--module-id=m1", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
+  - id: PACKET-FORGE-PARITY-MARKER-REQUIRED
+    check: packet
+    kind: gate
+    clause: "a NEW packet's requirements-manifest.yaml without b_prop_013_forge_parity: true FAILS at the WRITING floor — the ships-dark closer; absence would ride the legacy acceptance path forever, making 'on now' on-paper only. --legacy-migration exempts a genuinely in-flight, already-frozen project (P1) [B-PROP-013 §4]"
+    source: "B-PROP-013 §4 (forge-parity acceptance recompute, council fix #1)"
+    bad:
+      args: ["tests/fixtures/packet_bad_forge_parity_marker_absent"]
+      expect_severity: P1
+      expect_contains: "PACKET-FORGE-PARITY-MARKER-REQUIRED"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-FORGE-PARITY-MARKER-LEGACY-MIGRATION-REQUIRES-PROOF
+    check: packet
+    kind: gate
+    clause: "a BARE --legacy-migration with NO --migration-ref and no pre-existing frozen MODULE-REGISTRY.yaml hash does NOT waive — it is not a blanket self-waiver; the marker-required clause still FAILS (P1) [B-PROP-013 §4, xfam FIX-FIRST]"
+    source: "B-PROP-013 §4 (forge-parity acceptance recompute, FIX-FIRST P1 — bare flag was an unconditional self-waiver before)"
+    bad:
+      args: ["tests/fixtures/packet_bad_forge_parity_marker_absent", "--legacy-migration"]
+      expect_severity: P1
+      expect_contains: "PACKET-FORGE-PARITY-MARKER-REQUIRED"
+    good:
+      args: ["tests/fixtures/packet_bad_forge_parity_marker_absent", "--legacy-migration", "--migration-ref", "CEO-D-001"]
+
+  - id: PACKET-FORGE-PARITY-MARKER-LEGACY-MIGRATION-EXEMPT
+    check: packet
+    kind: gate
+    clause: "the SAME marker-absent packet passes with --legacy-migration WHEN it also carries a resolvable --migration-ref (a real MEMORY/CEO-DECISION-LEDGER.md row) — the CEO-locked grandfather carve-out for in-flight already-shipped apps (never for a new packet, and never on a bare unproven flag) [B-PROP-013 §4]"
+    source: "B-PROP-013 §4 (forge-parity acceptance recompute, grandfather carve-out, FIX-FIRST-hardened with proof)"
+    good:
+      args: ["tests/fixtures/packet_bad_forge_parity_marker_absent", "--legacy-migration", "--migration-ref", "CEO-D-001"]
+
+  - id: CX-ACCEPT-NO-CEO-TOKEN
+    check: accept
+    kind: gate
+    clause: "cx-accept refuses to stamp verdict: accepted without a ceo_accept_token embedding the recomputed HEAD prefix — a self-filling stamper must not bypass the human accept that keeps long-autonomous OFF (P0/refuse) [B-PROP-013 §3.2, CHARTER L80-84]"
+    source: "B-PROP-013 §3 (the STAMPER, council fix #4)"
+    git_fixture: cx_accept_no_token
+    bad:
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+      expect_severity: P0
+      expect_contains: "CX-ACCEPT-NO-CEO-TOKEN"
+    good:
+      git_fixture: cx_accept_good_token
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+
+  - id: CX-ACCEPT-NO-CEO-TOKEN-SHORT-PREFIX
+    check: accept
+    kind: gate
+    clause: "a ceo_accept_token embedding only the OLD forgeable 6-char HEAD prefix (auto-<HEAD[:6]>) is refused — 12 hex chars are required, closing the short-substring forge gap (P0/refuse) [B-PROP-013 §3.2, xfam FIX-FIRST]"
+    source: "B-PROP-013 §3.2 (the STAMPER, FIX-FIRST P1 — 6-char substring was forgeable)"
+    git_fixture: cx_accept_short_prefix_token
+    bad:
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+      expect_severity: P0
+      expect_contains: "CX-ACCEPT-NO-CEO-TOKEN"
+    good:
+      git_fixture: cx_accept_good_token
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+
+  - id: CX-ACCEPT-NO-CEO-TOKEN-MISSING-TURN-REF
+    check: accept
+    kind: gate
+    clause: "a full 12-char HEAD-prefix ceo_accept_token with NO ceo_turn_ref on the same block is refused — a token alone is not proof of a real CEO turn (P0/refuse) [B-PROP-013 §3.2, xfam FIX-FIRST]"
+    source: "B-PROP-013 §3.2 (the STAMPER, FIX-FIRST P1 — no ceo_turn_ref requirement before)"
+    git_fixture: cx_accept_token_no_turn_ref
+    bad:
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+      expect_severity: P0
+      expect_contains: "CX-ACCEPT-NO-CEO-TOKEN"
+    good:
+      git_fixture: cx_accept_good_token
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+
+  - id: CX-ACCEPT-NO-CEO-TOKEN-WRONG-BLOCK
+    check: accept
+    kind: gate
+    clause: "a live_slice module's bare TOP-LEVEL ceo_accept_token+ceo_turn_ref (live_slice_accept present but carries no token of its own) is refused — the token must live ON the structured block, not top-level (P0/refuse) [B-PROP-013 §3.2, xfam FIX-FIRST]"
+    source: "B-PROP-013 §3.2 (the STAMPER, FIX-FIRST P1 — no block co-location requirement before)"
+    git_fixture: cx_accept_token_wrong_block
+    bad:
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+      expect_severity: P0
+      expect_contains: "CX-ACCEPT-NO-CEO-TOKEN"
+    good:
+      git_fixture: cx_accept_good_token
+      args: ["--draft", "{REPO}/draft.yaml", "--state", "{STATE}", "--repo-root", "{REPO}", "--out", "{REPO}/out.yaml"]
+
   - id: DESIGN-FIDELITY-SHIPPED-ADVISORY
     check: design-fidelity
     kind: gate
@@ -352,7 +539,7 @@ clauses:
     check: module-quality
     kind: gate
     clause: "module acceptance without a same-family self_review receipt is rejected (P1) — build-card intent is not enough; the module acceptance rail must prove the mandatory self-review ran before acceptance [PROP-042 / v1.21]"
-    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project v1.20 skip class"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); real-project v1.20 skip class"
     bad:
       args: ["--acceptance", "tests/fixtures/module_acceptance_no_self_review.yaml", "--registry", "tests/fixtures/module_registry_good.yaml", "--module-id=m1"]
       expect_severity: P1
@@ -545,12 +732,103 @@ clauses:
     good:
       args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml"]
 
-  # ── PBF-PROP-012 Part E: SEE-AND-TEST gate — module_demo block enforces the show-step (the a real project fix) ──
+  # ── PB-PROP-003 Unit 2: acceptance-stage criteria_refs WIRING (Design Resolution v2) ──
+  - id: ACCEPTANCE-CRITERIA-REFS-RESOLVE
+    check: verify-app
+    kind: gate
+    clause: "verify_app.criteria_refs citing a missing/non-behavioral/example-less requirement id is rejected — every citation must resolve to a real BEHAVIORAL BUILDING requirement carrying >=1 Given/When/Then example in the frozen requirements-manifest (P0, SPINE — every risk tier) [PB-PROP-003 §R3/§R7]"
+    source: "PB-PROP-003 Unit 2 (Design Resolution v2 §R3/§R7); gated on the pb_prop_003_wiring capability marker (§R5)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_dangling_ref.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+      expect_severity: P0
+      expect_contains: "criteria_refs cites"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_good.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+
+  - id: ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED
+    check: verify-app
+    kind: gate
+    clause: "a module's behavioral BUILDING requirement (enumerated from the FROZEN MODULE-REGISTRY.requirement_ids — never card source_map) covered by NO verify_app.criteria_refs entry is rejected — the 'authored but never wired' scar (P1, CEREMONY — relaxed under risk_tier LITE) [PB-PROP-003 §R1/§R3]"
+    source: "PB-PROP-003 Unit 2 (Design Resolution v2 §R1/§R2/§R3); registry is the requirement-coverage authority"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_unwired.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+      expect_severity: P1
+      expect_contains: "ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_good.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+
+  - id: ACCEPTANCE-GWT-WIRING-LITE-RELAXES
+    check: verify-app
+    kind: gate
+    clause: "risk_tier LITE relaxes the required-coverage CEREMONY (ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED) — a LITE module with an example-less behavioral requirement and an empty criteria_refs passes clean, proving the tier boundary against the SAME clause failing at STANDARD [PB-PROP-003 §R3, PBF-PROP-019]"
+    source: "PB-PROP-003 Unit 2 (Design Resolution v2 §R3); mirrors PBF-PROP-019's tier-relax pattern"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_unwired.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+      expect_severity: P1
+      expect_contains: "current tier 'STANDARD'"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_lite_ok.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_lite_packet", "--module-id=m_lite"]
+
+  - id: ACCEPTANCE-PRESENT-EXAMPLE-COVERED
+    check: verify-app
+    kind: gate
+    clause: "any requirement that HAS an authored Given/When/Then example must be covered by verify_app.criteria_refs — SPINE, enforced at every risk tier including LITE (an authored example must never go unexercised) (P1) [PB-PROP-003 §R3]"
+    source: "PB-PROP-003 Unit 2 (Design Resolution v2 §R3); the union of Layer-1 resolution + reverse coverage"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_unwired.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+      expect_severity: P1
+      expect_contains: "ACCEPTANCE-PRESENT-EXAMPLE-COVERED"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_wired_good.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet", "--module-id=m_wired"]
+
+  # ── CX-PB003-001 FIX-FIRST (xfam finding 1, P0): the FINAL/ONLY live_slice module of a marked
+  # packet must trip the SAME criteria_refs wiring/reverse-coverage checks a PRIOR module already
+  # gets via the order wall — via `cx check module-quality --packet-dir`, not just `verify-app`.
+  - id: MODULE-QUALITY-LIVE-SLICE-PACKET-DIR-WIRING
+    check: module-quality
+    kind: gate
+    clause: "a live_slice module (final/only — no later module-start order-wall re-validation ever fires for it) accepted with an unwired behavioral requirement is rejected by `cx check module-quality --packet-dir` (P1, ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED/ACCEPTANCE-PRESENT-EXAMPLE-COVERED) — module-quality is not a legacy no-op path for the wiring gate [PB-PROP-003 CX-PB003-001 FIX-FIRST]"
+    source: "GPT-5.5 xhigh xfam finding CX-PB003-001 (2026-07-06); cx_module_quality.py:130 previously called validate_live_slice_accept with no packet_dir/module_id"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_pb003_wired_live_unwired.yaml", "--registry", "tests/fixtures/pb_prop_003_wired_packet/MODULE-REGISTRY.yaml", "--module-id=m_wired", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet"]
+      expect_severity: P1
+      expect_contains: "ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_pb003_wired_live_good.yaml", "--registry", "tests/fixtures/pb_prop_003_wired_packet/MODULE-REGISTRY.yaml", "--module-id=m_wired", "--packet-dir", "tests/fixtures/pb_prop_003_wired_packet"]
+
+  # good-only (§R5 non-blocking advisory — a rc=1 BAD-must-bite proof does not fit a clause whose
+  # entire point is that it does NOT block; the P2 message + rc==0 pairing is unit-tested directly
+  # in tests/run.py::PBProp003AcceptanceWiringTests.test_legacy_carveout_is_advisory_not_blocking,
+  # mirroring the 3 other pre-existing good-only clauses in this file, e.g. GRADUATION-STATUS-VACUOUS-GREEN)
+  - id: ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY
+    check: verify-app
+    kind: gate
+    clause: "a packet that never declared the pb_prop_003_wiring capability marker keeps the OLD free-text criteria_ref accepted, recorded as a typed non-blocking migration-debt advisory (P2) — rc stays 0 so already-shipped apps and any in-flight project never retroactively breaks at the order wall [PB-PROP-003 §R5]"
+    source: "PB-PROP-003 Unit 2 (Design Resolution v2 §R5); mirrors the legacy_no_baseline carve-out (cx_module_acceptance.py:776-784)"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_legacy_ok.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_legacy_packet"]
+
+  # CX-PB003-002 FIX-FIRST (xfam finding 2, P1): the malformed-marker sibling of the clause above —
+  # a marker that TRIED to opt in and botched it must BLOCK (not the same non-blocking advisory
+  # absence legitimately gets).
+  - id: ACCEPTANCE-PB-PROP-003-MARKER-MALFORMED
+    check: verify-app
+    kind: gate
+    clause: "pb_prop_003_wiring present but not a real boolean true (e.g. a quoted \"true\" string) is rejected (P1) — it must NOT silently fall to the same non-blocking legacy carve-out genuine field absence gets [PB-PROP-003 §R5, xfam finding CX-PB003-002]"
+    source: "GPT-5.5 xhigh xfam finding CX-PB003-002 (2026-07-06); _resolve_pb_prop_003_wiring previously collapsed 'malformed' and 'absent' to the same False"
+    bad:
+      args: ["--acceptance", "tests/fixtures/verify_app_malformed_marker.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_malformed_marker_packet"]
+      expect_severity: P1
+      expect_contains: "not a real boolean true"
+    good:
+      args: ["--acceptance", "tests/fixtures/verify_app_legacy_ok.yaml", "--packet-dir", "tests/fixtures/pb_prop_003_legacy_packet"]
+
+  # ── PBF-PROP-012 Part E: SEE-AND-TEST gate — module_demo block enforces the show-step (the real-project fix) ──
   - id: MODULE-DEMO-MISSING
     check: module-demo
     kind: gate
     clause: "a live_slice module accepted with NO module_demo block is rejected — the SEE-AND-TEST show-step was skipped; the demo block must record the surface, a machine-captured shown screenshot (hash-bound), and the CEO typed accept token before acceptance (P0) [PBF-PROP-012 Part E]"
-    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); fixes the a real project 'ceo_drove ticked without a demo' root cause"
+    source: "PBF-PROP-012 Part E (SEE-AND-TEST gate); fixes the real-project 'ceo_drove ticked without a demo' root cause"
     bad:
       args: ["--acceptance", "tests/fixtures/module_demo_missing.yaml", "--repo-root", "tests/fixtures"]
       expect_severity: P0
@@ -764,6 +1042,20 @@ clauses:
       git_fixture: build_turn_coderabbit_receipt_ref_ok
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
 
+  - id: BUILD-TURN-CODERABBIT-LITE-NOT-REQUIRED
+    check: build-turn
+    kind: gate
+    clause: "build-turn's CodeRabbit rail is MANDATORY on a code-diff card with no coderabbit block when the frozen packet's risk_tier resolves STRICT (default/absent); the SAME card+repo shape PASSES (NOT_APPLICABLE) when the frozen packet declares risk_tier: LITE with a resolving risk_tier_decision_ref — closes the Phase-3 contract gap: cx_build_turn.py's tier-conditional CodeRabbit read (design v2.B row 3) had a run.py integration test but no git-backed check-contracts.yaml bite (PBF-PROP-019 Phase 5, EVAL-052)"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 3, cx_build_turn.py) + Phase 5 contract-gap closure"
+    git_fixture: build_turn_coderabbit_lite_strict
+    bad:
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "CodeRabbit is MANDATORY"
+    good:
+      git_fixture: build_turn_coderabbit_lite_relaxed
+      args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
+
   # ── V1.10 fix-fold (GPT built-code cross-review) — the bypass cases the first fold missed ──
   - id: MODULE-START-PRIOR-NO-RECEIPT
     check: module-start
@@ -936,7 +1228,7 @@ clauses:
     check: card
     kind: gate
     clause: "a MODULE_BUILD / MODE_A_UI code-diff card must declare coderabbit.required: yes; planning cannot omit the CodeRabbit receipt rail [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 real-project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/card_bad_missing_coderabbit.yaml"]
       expect_severity: P1
@@ -1337,7 +1629,7 @@ clauses:
     check: state
     kind: gate
     clause: "a BUILD_FACTORY state with accepted modules may not route directly to final xfam until the Built-App Audit / whole-app self-audit milestone is run and dispositioned [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 real-project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/state_bad_final_xfam_without_built_app_audit.yaml"]
       expect_severity: P1
@@ -1794,6 +2086,100 @@ clauses:
       args: ["tests/fixtures/packet_good"]
 
   # ──────────────────────────────────────────────────────────────
+  # PB-PROP-003 Unit 1 (packet stage): Given/When/Then executable acceptance examples.
+  # ──────────────────────────────────────────────────────────────
+  - id: PACKET-GWT-EXAMPLE-REQUIRED
+    check: packet
+    kind: gate
+    clause: "a behavioral BUILDING requirement (no non_behavioral_exemption) with no well-formed acceptance_criterion.examples rejected — structure only, never an English-quality judgment"
+    source: "PB-PROP-003 (G/W/T shape, Design Resolution v2)"
+    bad:
+      args: ["tests/fixtures/packet_bad_gwt_missing"]
+      expect_severity: P1
+      expect_contains: "PACKET-GWT-EXAMPLE-REQUIRED"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-GWT-EXAMPLE-MALFORMED
+    check: packet
+    kind: gate
+    clause: "an acceptance_criterion.examples item missing given/when/then, or carrying a placeholder/non-string value, rejected"
+    source: "PB-PROP-003 (G/W/T shape, Design Resolution v2)"
+    bad:
+      args: ["tests/fixtures/packet_bad_gwt_malformed"]
+      expect_severity: P1
+      expect_contains: "PACKET-GWT-EXAMPLE-MALFORMED"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED
+    check: packet
+    kind: gate
+    clause: "a non_behavioral_exemption that is not a {reason, artifact_ref} mapping, or whose reason is outside the frozen 6-value vocabulary, or whose artifact_ref does not resolve to a real in-packet anchor, rejected — no bare-claim hatch"
+    source: "PB-PROP-003 §R4 (Design Resolution v2)"
+    bad:
+      args: ["tests/fixtures/packet_bad_gwt_exemption_untyped"]
+      expect_severity: P1
+      expect_contains: "PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED"
+    good:
+      args: ["tests/fixtures/packet_good_gwt_exemption"]
+
+  # CX-PB003-003 FIX-FIRST (xfam finding 3, P1): the self-reference sibling of the clause above —
+  # an artifact_ref pointing at the manifest (or registry) that DECLARES the exemption is a real,
+  # existing file, so a naive target.is_file() check wrongly "resolved" it against itself.
+  - id: PACKET-EXEMPTION-SELF-REFERENCE-REJECTED
+    check: packet
+    kind: gate
+    clause: "a non_behavioral_exemption.artifact_ref pointing at requirements-manifest.yaml (or MODULE-REGISTRY.yaml) — the manifest/registry that CARRIES the declaration — is rejected as a bare/self-referential claim, never accepted as an anchor just because the file genuinely exists"
+    source: "GPT-5.5 xhigh xfam finding CX-PB003-003 (2026-07-06); _gwt_artifact_ref_resolves previously accepted any existing packet file, including the manifest itself"
+    bad:
+      args: ["tests/fixtures/packet_bad_gwt_exemption_self_ref"]
+      expect_severity: P1
+      expect_contains: "PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED"
+    good:
+      args: ["tests/fixtures/packet_good_gwt_exemption"]
+
+  - id: PACKET-GWT-LITE-RELAXES-AUTHORING
+    check: packet
+    kind: gate
+    clause: "authoring examples on a behavioral BUILDING requirement is LITE-relaxable ceremony — the identical example-less row PASSES at risk_tier LITE and FAILS (PACKET-GWT-EXAMPLE-REQUIRED) at STANDARD"
+    source: "PB-PROP-003 §R3 (Design Resolution v2, tier-boundary proof)"
+    bad:
+      args: ["tests/fixtures/packet_good_risk_tier_standard"]
+      expect_severity: P1
+      expect_contains: "PACKET-GWT-EXAMPLE-REQUIRED"
+    good:
+      args: ["tests/fixtures/packet_good_risk_tier_lite"]
+
+  - id: PACKET-GWT-MANIFEST-MALFORMED-FAILS-CLOSED
+    check: packet
+    kind: gate
+    clause: "a requirements-manifest.yaml whose 'requirements' is not a list FAILS CLOSED with a G/W/T finding, rather than silently skipping the clause (unlike _check_acceptance_criteria's silent return, which defers malformed content to cx check deck)"
+    source: "PB-PROP-003 §R8 (Design Resolution v2)"
+    bad:
+      args: ["tests/fixtures/packet_bad_gwt_manifest_malformed"]
+      expect_severity: P1
+      expect_contains: "PACKET-GWT-MANIFEST-MALFORMED-FAILS-CLOSED"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  # CX-PB003-002 FIX-FIRST (xfam finding 2, P1): the pb_prop_003_wiring marker, if present, must be
+  # a real boolean true — caught at freeze time so a malformed marker never reaches acceptance-time
+  # and silently falls to the legacy carve-out there (see the ACCEPTANCE-PB-PROP-003-MARKER-
+  # MALFORMED sibling clause on the verify-app side).
+  - id: PACKET-PB-PROP-003-MARKER-WELL-FORMED
+    check: packet
+    kind: gate
+    clause: "pb_prop_003_wiring present but not a real boolean true (e.g. a quoted \"true\"/\"yes\") is rejected — only genuine field ABSENCE is a legitimate non-opt-in; a botched opt-in attempt must fail closed, not fall to the same legacy carve-out as absence"
+    source: "PB-PROP-003 §R5 fail-closed vocabulary; xfam finding CX-PB003-002"
+    bad:
+      args: ["tests/fixtures/pb_prop_003_malformed_marker_packet"]
+      expect_severity: P1
+      expect_contains: "PACKET-PB-PROP-003-MARKER-WELL-FORMED"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  # ──────────────────────────────────────────────────────────────
   # PBF-PROP-009 fold (2026-06-10): review-dispatch three-leg ask — [RULE:review-three-leg-ask]
   # ──────────────────────────────────────────────────────────────
 
@@ -1997,7 +2383,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state must declare CodeRabbit before self-review as yes; not_applicable/no is a planning-stage skip [PROP-042 / v1.21]"
-    source: "PROP-042 / v1.21 a real project review-routing hardening (CEO-D-033)"
+    source: "PROP-042 / v1.21 real-project review-routing hardening (CEO-D-033)"
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_coderabbit_na.yaml"]
       expect_severity: P1
@@ -2009,7 +2395,7 @@ clauses:
     check: state
     kind: gate
     clause: "BUILD_FACTORY MODULE_BUILD/MODE_A_UI state with self_review_boundary: final is rejected — module self-review is mandatory at the module acceptance gate; final Built-App Audit is additional, not a replacement [PROP-042 / v1.21]"
-    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); a real project v1.20 skip class"
+    source: "PBF-PROP-012 v1.21 review-routing hardening (locked CEO-D-033); real-project v1.20 skip class"
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_self_final.yaml"]
       expect_severity: P1
@@ -2723,7 +3109,7 @@ clauses:
   # ──────────────────────────────────────────────────────────────
   # v1.19 — P-PROP-006 whole-packet cross-family INTEGRATION review (G7 build-authorization, EVAL-036).
   # The cross-document coherence pass the per-card audit + the deterministic checker structurally cannot
-  # provide (the a real project TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
+  # provide (the real-project TRD-vs-stack-lock drift class). A current, PASS, opposite-family review of the
   # WHOLE frozen packet, recorded as a hash-bound receipt OUTSIDE the packet, required before any module.
   # ──────────────────────────────────────────────────────────────
 
@@ -3276,7 +3662,7 @@ clauses:
   - id: RENDER-FIT-OVERFLOW
     check: render-fidelity
     kind: gate
-    clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production money app m6 Meat)"
+    clause: "a render measured wider than its viewport (617px content on a 390px phone) rejected — the layout-drift defect that passed 37/37 g6 (a live-production app m6 Meat)"
     source: GATES.md G6 / B-PROP-009 §4.4
     bad:
       args: ["tests/fixtures/render_bad_overflow.yaml", "--repo-head=aaaaaaaaaaaa"]
@@ -4785,6 +5171,60 @@ clauses:
     good:
       args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
 
+  # ── PBF-PROP-019 Phase 4 (design v2 P1-5): hash-bound tier evidence + LITE streak exclusion.
+  #    FAIL-CLOSED DIRECTION IS THE OPPOSITE of the packet resolver (cx_common.resolve_risk_tier
+  #    defaults an absent tier to STRICT): here, missing/unbindable/malformed tier evidence
+  #    REJECTS the entry from the streak (P0), never defaults it to STRICT-and-counted. The
+  #    LITE-population-exclusion mechanic itself (a verified-LITE entry neither counts nor resets
+  #    the streak, even interleaved between STANDARD entries) is unit-proven precisely against
+  #    `_recompute_streak`/`_validate_tier_evidence` directly in run.py
+  #    (TestGraduationTierEvidence / TestGraduationLiteStreakExclusion) — the CLI harness here
+  #    proves the three P0 rejection paths bite end-to-end. ──
+
+  - id: GRADUATION-TIER-EVIDENCE-MISSING
+    check: graduation
+    kind: gate
+    clause: "an entry with no risk_tier field (or blank/unknown value) is REJECTED from the streak population P0 — a graduation entry may never be silent on tier, never defaulted to STRICT-and-counted (PBF-PROP-019 Phase 4, design v2 P1-5)"
+    source: "design-history/pbf-prop-019-tiered-strictness-2026-07-03.md Design Resolution v2 P1-5"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_tier_missing.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "GRADUATION-TIER-EVIDENCE-REQUIRED: entry 'proj-gamma' 'risk_tier' is missing/blank"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-TIER-EVIDENCE-UNBOUND
+    check: graduation
+    kind: gate
+    clause: "an entry's tier_evidence.receipt_sha256 that does not match its own evidence manifest's declared hash for that receipt is an unbindable tier claim — P0, mirrors the criteria-receipt manifest cross-check (PBF-PROP-019 Phase 4, design v2 P1-5)"
+    source: "design-history/pbf-prop-019-tiered-strictness-2026-07-03.md Design Resolution v2 P1-5"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_tier_unbound.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "tier_evidence receipt 'graduation_receipts/clean/tier-standard.yaml' is absent from (or hash-mismatched in)"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-TIER-EVIDENCE-MISMATCH
+    check: graduation
+    kind: gate
+    clause: "a declared risk_tier: STANDARD/STRICT whose hash-bound tier receipt asserts the packet actually resolved to LITE is REJECTED P0 — the LITE->STANDARD migration guard: a later tier claim cannot retroactively bank a run built under a lighter tier (PBF-PROP-019 Phase 4, design v2 P1-5)"
+    source: "design-history/pbf-prop-019-tiered-strictness-2026-07-03.md Design Resolution v2 P1-5"
+    bad:
+      args: ["--ledger", "tests/fixtures/graduation_bad_tier_mismatch.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+      expect_severity: P0
+      expect_contains: "cannot retroactively bank a run built under a lighter tier"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_authorized.md", "--decision-ledger", "tests/fixtures/graduation_decision_ledger_authorized.md", "--authorize-decision", "CEO-D-901"]
+
+  - id: GRADUATION-LITE-EXCLUDED-STATUS-READOUT
+    check: graduation
+    kind: gate
+    clause: "a verified-LITE entry interleaved between STANDARD entries prints as excluded (○, GRADUATION-LITE-EXCLUDED) in the --status readout and the streak counts only the STANDARD entries either side — exact streak arithmetic is unit-proven against _recompute_streak directly (run.py TestGraduationLiteStreakExclusion); this clause proves the CLI path renders it without crashing (PBF-PROP-019 Phase 4, design v2 §5/P1-5)"
+    source: "design-history/pbf-prop-019-tiered-strictness-2026-07-03.md Design Resolution v2 §5"
+    good:
+      args: ["--ledger", "tests/fixtures/graduation_good_lite_interleaved.md", "--status"]
+
   # ──────────────────────────────────────────────────────────────
   # check: audit / packet  (A-PROP-001 + PBAF-PROP-001 — the Audit stage + SOP bind)
   # 12 clauses (9 original + 2 F2 hard-rule fixes + 1 F7 final-xfam-required, v1.22 self-review);
@@ -5194,3 +5634,237 @@ clauses:
     good:
       git_fixture: as_good
       args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  # ──────────────────────────────────────────────────────────────
+  # PBF-PROP-020 — Mockup-First Change Rule (v2, fail-closed-by-default)
+  # ──────────────────────────────────────────────────────────────
+
+  - id: DESIGN-FIDELITY-LOCK-ACCEPTANCE-CITES-RENDERED
+    check: design-fidelity
+    kind: gate
+    clause: "a ui_lock_manifest with no chosen_from (>=2 hash-matched rendered artifacts) rejected — a worded/numbered option list is not a rendered pick (PBF-PROP-020 Rule 3)"
+    source: "PBF-PROP-020 Rule 3 (LOCK-ACCEPTANCE-CITES-RENDERED)"
+    bad:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_bad_no_chosen_from.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+      expect_severity: P1
+      expect_contains: "LOCK-ACCEPTANCE-CITES-RENDERED"
+    good:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--build-vocab", "tests/fixtures/build_vocab_good.yaml"]
+
+  - id: MODULE-DEMO-PRESENTED-VISUAL-HAS-DIFF-RECEIPT
+    check: module-demo
+    kind: gate
+    clause: "a CEO-visible module_demo with no rendered-vs-mockup diff receipt (mockup_ref + diff_score/tolerance) rejected — a free-text 'confirmed' is not a mechanical comparison (PBF-PROP-020 Rule 4)"
+    source: "PBF-PROP-020 Rule 4 (PRESENTED-VISUAL-HAS-DIFF-RECEIPT)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_no_diff_receipt.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P1
+      expect_contains: "PRESENTED-VISUAL-HAS-DIFF-RECEIPT"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: MODULE-DEMO-DIFF-RECEIPT-REQUIRED-WAVE-TRIGGERED
+    check: module-demo
+    kind: gate
+    clause: "a live_slice/CEO-visible module_demo that OMITS the diff receipt ENTIRELY (no mockup_ref/mockup_hash/diff_score/tolerance) rejected — the receipt is wave-triggered (required on every live_slice acceptance), not merely validated-if-declared; a full omission was the fail-open dodge (PBF-PROP-020 Rule 4, fold re-sweep 2026-07-05)"
+    source: "PBF-PROP-020 Rule 4 (PRESENTED-VISUAL-HAS-DIFF-RECEIPT, wave-triggered)"
+    bad:
+      args: ["--acceptance", "tests/fixtures/module_demo_full_omission_no_diff.yaml", "--repo-root", "tests/fixtures"]
+      expect_severity: P1
+      expect_contains: "PRESENTED-VISUAL-HAS-DIFF-RECEIPT"
+    good:
+      args: ["--acceptance", "tests/fixtures/module_acceptance_live_slice_good.yaml", "--repo-root", "tests/fixtures"]
+
+  - id: PACKET-MODULE-REGISTRY-ONE-LIVE-LOCK-PER-SCREEN
+    check: packet
+    kind: gate
+    clause: "a packet MODULE-REGISTRY.yaml with TWO live lock_refs for the same screen_id rejected — era-layered locks (light+dark+nav-shell all 'live') are P0; a superseded lock must carry superseded_by + tombstoned (PBF-PROP-020 Rule 6a)"
+    source: "PBF-PROP-020 Rule 6a (ONE-LIVE-LOCK-PER-SCREEN)"
+    bad:
+      args: ["tests/fixtures/packet_bad_two_live_locks"]
+      expect_severity: P0
+      expect_contains: "ONE-LIVE-LOCK-PER-SCREEN"
+    good:
+      args: ["tests/fixtures/packet_good_one_live_lock"]
+
+  - id: PACKET-RISK-TIER-WELL-FORMED-INVALID-VALUE
+    check: packet
+    kind: gate
+    clause: "a present-but-invalid risk_tier value (not LITE/STANDARD/STRICT) rejected — never silently coerced to a default (PBF-PROP-019, design v2 §1)"
+    source: "PBF-PROP-019 (PACKET-RISK-TIER-WELL-FORMED)"
+    bad:
+      args: ["tests/fixtures/packet_bad_risk_tier_invalid"]
+      expect_severity: P0
+      expect_contains: "PACKET-RISK-TIER-WELL-FORMED"
+    good:
+      args: ["tests/fixtures/packet_good_risk_tier_strict"]
+
+  - id: PACKET-RISK-TIER-WELL-FORMED-CEO-REF
+    check: packet
+    kind: gate
+    clause: "risk_tier: LITE or STANDARD declared without a resolving risk_tier_decision_ref rejected — choosing a lighter-than-STRICT tier is a CEO decision (PBF-PROP-019, design v2 §1)"
+    source: "PBF-PROP-019 (PACKET-RISK-TIER-WELL-FORMED)"
+    bad:
+      args: ["tests/fixtures/packet_bad_risk_tier_lite_no_ref"]
+      expect_severity: P0
+      expect_contains: "PACKET-RISK-TIER-WELL-FORMED"
+    good:
+      args: ["tests/fixtures/packet_good_risk_tier_lite"]
+
+  - id: PACKET-RULE-CONFLICT-IS-OPEN-CLARIFICATION
+    check: packet
+    kind: gate
+    clause: "a rule-conflict clarification-sweep item with no resolution_lock_ref rejected — a rule-conflict resolves only with a mockup showing the resolved look, never CEO decision text alone (PBF-PROP-020 Rule 5)"
+    source: "PBF-PROP-020 Rule 5 (RULE-CONFLICT-IS-OPEN-CLARIFICATION)"
+    bad:
+      args: ["tests/fixtures/packet_bad_rule_conflict_no_resolution"]
+      expect_severity: P1
+      expect_contains: "RULE-CONFLICT-IS-OPEN-CLARIFICATION"
+    good:
+      args: ["tests/fixtures/packet_good_rule_conflict_resolved"]
+
+  - id: BLUEPRINT-INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT
+    check: blueprint
+    kind: gate
+    clause: "a screen lock flagged interactive_chrome: yes with no behavior_contract {fixed, scrolls, bounces} rejected — the feel of a nav shell/scroll strip/sticky bar must be written down (PBF-PROP-020 Rule 6b)"
+    source: "PBF-PROP-020 Rule 6b (INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT)"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_chrome_no_behavior_contract", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_chrome_no_behavior_contract_approval.yaml"]
+      expect_severity: P1
+      expect_contains: "INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT"
+    good:
+      args: ["tests/fixtures/blueprint_good_chrome_with_contract", "--module", "home", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_chrome_approval.yaml"]
+
+  - id: CARD-MOCKUP-FIRST-CHANGE-NEEDS-LOCK
+    check: card
+    kind: gate
+    clause: "a UI-touching card (not a RESTORE fix) whose module_id resolves to a registered screen with no ui_contract.lock_ref resolving to the registry's CURRENT LIVE lock rejected — prose-only/stale/missing lock is fail-closed P0, no opt-in flag (PBF-PROP-020 Rule 1)"
+    source: "PBF-PROP-020 Rule 1 (MOCKUP-FIRST-CHANGE-NEEDS-LOCK)"
+    bad:
+      args: ["tests/fixtures/card_bad_ui_change_prose_only.yaml", "--state", "tests/fixtures/prop020_rule1_repo/state.yaml"]
+      expect_severity: P0
+      expect_contains: "MOCKUP-FIRST-CHANGE-NEEDS-LOCK"
+    good:
+      args: ["tests/fixtures/card_good_ui_change_with_registry_lock.yaml", "--state", "tests/fixtures/prop020_rule1_repo/state.yaml"]
+
+  - id: CARD-MOCKUP-FIRST-RESTORE-FIX-EXEMPT
+    check: card
+    kind: gate
+    clause: "a mode: FIX + deviation_class: RESTORE card touching UI on a registered screen needs NO new Rule 1 ceremony — zero-ceremony exemption, existing B-PROP-003 ui_contract requirement unchanged (PBF-PROP-020 Rule 1)"
+    source: "PBF-PROP-020 Rule 1 (MOCKUP-FIRST-CHANGE-NEEDS-LOCK, RESTORE exemption)"
+    good:
+      args: ["tests/fixtures/card_good_restore_fix.yaml", "--state", "tests/fixtures/prop020_rule1_repo/state.yaml"]
+
+  - id: CARD-MOCKUP-FIRST-CITE-AND-COMPARE-NEEDS-RENDER-BUNDLE
+    check: card
+    kind: gate
+    clause: "a UI-touching card (not a RESTORE fix) on a registered screen with a VALID ui_contract.lock_ref but NO render_bundle rejected — the cited lock must be COMPARED against a render (Rules 2/7), not merely referenced; omitting render_bundle made build-turn mark render-fidelity NOT_APPLICABLE, a fail-open dodge (PBF-PROP-020 Rule 1, fold re-sweep 2026-07-05)"
+    source: "PBF-PROP-020 Rule 1 (MOCKUP-FIRST-CHANGE-NEEDS-LOCK, CITE-AND-COMPARE)"
+    bad:
+      args: ["tests/fixtures/card_bad_ui_change_no_render_bundle.yaml", "--state", "tests/fixtures/prop020_rule1_repo/state.yaml"]
+      expect_severity: P0
+      expect_contains: "no render_bundle"
+    good:
+      args: ["tests/fixtures/card_good_ui_change_with_registry_lock.yaml", "--state", "tests/fixtures/prop020_rule1_repo/state.yaml"]
+
+  - id: CARD-CODERABBIT-LITE-NOT-REQUIRED
+    check: card
+    kind: gate
+    clause: "a MODULE_BUILD/MODE_A_UI card with no CodeRabbit rail rejected under the default/STRICT risk_tier; a risk_tier: LITE project (via --state.packet_dir) drops the CodeRabbit requirement (PBF-PROP-019 Phase 3, design v2.B row 3)"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 3, cx_card._check_coderabbit_required_for_code_diff)"
+    bad:
+      args: ["tests/fixtures/card_good_no_coderabbit.yaml"]
+      expect_severity: P1
+      expect_contains: "CodeRabbit rail missing"
+    good:
+      args: ["tests/fixtures/card_good_no_coderabbit.yaml", "--state", "tests/fixtures/state_pbf019_lite.yaml"]
+
+  - id: CARD-CROSS-REVIEW-LITE-SELF-REVIEW-OK
+    check: card
+    kind: gate
+    clause: "a same-family (self) cross_review rejected under the default/STRICT risk_tier; a risk_tier: LITE project relaxes the per-module cross-family floor to self-review only when the card is NOT high-risk (PBF-PROP-019 Phase 3, design v2.B row 2)"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 2, cx_card actor_record.cross_review tier read)"
+    bad:
+      args: ["tests/fixtures/card_good_lite_self_review.yaml"]
+      expect_severity: P0
+      expect_contains: "same-family cross-review REJECTED"
+    good:
+      args: ["tests/fixtures/card_good_lite_self_review.yaml", "--state", "tests/fixtures/state_pbf019_lite.yaml"]
+
+  - id: CARD-HIGH-RISK-NOT-RELAXED-BY-LITE-TIER
+    check: card
+    kind: gate
+    clause: "a high-risk (money-touching) card with a same-family cross_review is STILL rejected even under risk_tier: LITE — the LITE self-review-only relaxation never overrides the Phase-2 mechanical high-risk force (PBF-PROP-019 Phase 3 invariant c)"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 2 footnote 1; CARD-HIGH-RISK-FORCES-FOUNDATION interaction)"
+    bad:
+      args: ["tests/fixtures/card_bad_high_risk_same_family_lite_not_relaxed.yaml", "--state", "tests/fixtures/state_pbf019_lite.yaml"]
+      expect_severity: P0
+      expect_contains: "same-family cross-review REJECTED"
+    good:
+      args: ["tests/fixtures/card_good_high_risk_with_foundation_checkpoint.yaml", "--state", "tests/fixtures/state_pbf019_lite.yaml"]
+
+  - id: EGRESS-TIER-MONEY-PII-ONLY
+    check: egress
+    kind: gate
+    clause: "a non-money/PII card's egress scrub is required under risk_tier STRICT but NOT required under risk_tier LITE — LITE/STANDARD only require the scrub when a card touches money/PII (PBF-PROP-019 Phase 3, design v2.B row 4); omitting --card/--state preserves the pre-existing always-required behaviour byte-for-byte"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 4, cx_egress tier + money/PII read)"
+    bad:
+      args: ["tests/fixtures/egress_diff_clean.txt", "--target", "coderabbit", "--card", "tests/fixtures/egress_card_non_money.yaml", "--state", "tests/fixtures/state_pbf019_strict.yaml"]
+      expect_severity: P0
+      expect_contains: "NO scrub receipt and NO local-only carve-out"
+    good:
+      args: ["tests/fixtures/egress_diff_clean.txt", "--target", "coderabbit", "--card", "tests/fixtures/egress_card_non_money.yaml", "--state", "tests/fixtures/state_pbf019_lite.yaml"]
+
+  - id: AUDIT-STAGE-LITE-DROPS-FORMAL-STAGE
+    check: audit
+    kind: gate
+    clause: "a missing formal Audit-STAGE entry (no AUDIT-SUMMARY.md) is rejected under the default/STRICT risk_tier; a risk_tier: LITE project (via --state.packet_dir) drops the separate formal Audit-STAGE ceremony requirement — a light audit report present anyway is still judged in full (PBF-PROP-019 Phase 3, design v2.B row 1)"
+    source: "PBF-PROP-019 Phase 3 (design v2.B row 1, cx_audit.collect_audit_findings tier read)"
+    bad:
+      args: ["tests/fixtures/as_no_audit_receipt", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-ENTRY-REQUIRED"
+    good:
+      args: ["tests/fixtures/as_no_audit_receipt", "--state", "tests/fixtures/audit_state_good_lite.yaml"]
+
+  - id: FINAL-READY-XFAM-LITE-NOT-REQUIRED
+    check: final-ready
+    kind: gate
+    clause: "final_cross_family_receipt (+ audit_stage_final) missing is rejected under the default/STRICT risk_tier; a pure risk_tier: LITE build with ZERO high-risk cards fired does not require either — ships on self-review only (PBF-PROP-019 Phase 3, design v2.C CEO ruling 2026-07-05 Option A)"
+    source: "PBF-PROP-019 Phase 3 (design v2.C, cx_final_ready tier + high-risk-fired read)"
+    bad:
+      args: ["tests/fixtures/state_bad_final_ready_strict_no_fcf.yaml"]
+      expect_severity: P0
+      expect_contains: "final_cross_family_receipt missing"
+    good:
+      # P0-2 FIX: high_risk_card_fired is recomputed from the build's real cards (fail-closed
+      # if unresolvable) rather than a proxy field — the legitimate pure-LITE fast path must
+      # point --cards-dir at a real, non-empty, all-clean cards directory.
+      args: ["tests/fixtures/state_good_final_ready_lite_no_fcf.yaml",
+             "--cards-dir", "tests/fixtures/final_ready_cards_lite_clean"]
+
+  - id: FINAL-READY-XFAM-HIGH-RISK-FORCES-REQUIREMENT-EVEN-LITE
+    check: final-ready
+    kind: gate
+    clause: "a risk_tier: LITE build in which a high-risk card fired (foundation_checkpoints_passed non-empty) STILL requires final_cross_family_receipt — the pure-LITE self-review-only ship path is for a build with ZERO high-risk cards only (PBF-PROP-019 Phase 3 invariant c)"
+    source: "PBF-PROP-019 Phase 3 (design v2.C invariant c)"
+    bad:
+      args: ["tests/fixtures/state_bad_final_ready_lite_high_risk_fired_no_fcf.yaml"]
+      expect_severity: P0
+      expect_contains: "final_cross_family_receipt missing"
+    good:
+      args: ["tests/fixtures/state_good_final_ready.yaml"]
+
+  - id: FINAL-READY-HIGH-RISK-CARD-RECOMPUTE-NOT-CHECKPOINT-PROXY
+    check: final-ready
+    kind: gate
+    clause: "high_risk_card_fired is recomputed by enumerating the build's real compiled cards (--cards-dir / conventional <repo-root>/cards) via card_high_risk(), NOT the foundation_checkpoints_passed proxy — a LITE build containing a TERMINAL high-risk card (no dependents, so PB-PROP-002(b) never populates a checkpoint entry for it) still requires final_cross_family_receipt (P0-2 fix, cross-family finding 019f32cb)"
+    source: "PBF-PROP-019 P0-2 FIX (GPT-5.5 xhigh codex 019f32cb built-code cross-review)"
+    bad:
+      args: ["tests/fixtures/state_good_final_ready_lite_no_fcf.yaml",
+             "--cards-dir", "tests/fixtures/final_ready_cards_terminal_high_risk"]
+      expect_severity: P0
+      expect_contains: "final_cross_family_receipt missing"
+    good:
+      args: ["tests/fixtures/state_good_final_ready_lite_no_fcf.yaml",
+             "--cards-dir", "tests/fixtures/final_ready_cards_lite_clean"]

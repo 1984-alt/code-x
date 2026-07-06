@@ -1,0 +1,11 @@
+# BAD (CX-PB003-002 FIX-FIRST, xfam finding 2, P1): the packet declares pb_prop_003_wiring: "true"
+# (a quoted string, not a real boolean) — malformed. Even though this receipt carries an old-style
+# free-text criteria_ref that would satisfy the LEGACY carve-out, the malformed marker must BLOCK
+# rather than silently granting that carve-out (PACKET-EXEMPTION-style fail-closed vocabulary).
+module_acceptance:
+  module_id: m_malformed
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_ref: cards/m_malformed-card.yaml#acceptance_criteria

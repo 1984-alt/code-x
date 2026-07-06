@@ -22,7 +22,7 @@ graduation_evidence_manifest:
     - path: screenshot_good.png
       sha256: e878950f8091ec010cf5cc723bdea027a8539cf7147cfea199c2f666232dcd4e
     - path: ui_lock_manifest_good.yaml
-      sha256: 861df675a6d2c2e583f65661565c1ce720fabf9993fdb385e8ba5f6180a3fb61
+      sha256: 2c8db48ae1aa6fa74dc88dff794d84aa43f53cec1f78eab90646bf42d98b03fb
     - path: graduation_receipts/clean/dir-anchor-packet.yaml
       sha256: c1304e0a5abb163b7a82e0302c8053b5a252e6d57578cba5eed9757035821b13
     - path: graduation_receipts/clean/dir-anchor-approval.yaml
@@ -35,3 +35,8 @@ graduation_evidence_manifest:
       sha256: e8c629294ae11602fc30fecf52ff7fc29a3325103e206ec5c93b8590ab6eca4e
     - path: egress_scrub_good.yaml
       sha256: 2b8175917c8d7dff592a3897a04e9cc20ac33d5b37afc1c77ceeb991abb5ef04
+    # PBF-PROP-019 Phase 4 tier-evidence receipts (hash-bound risk_tier assertions).
+    - path: graduation_receipts/clean/tier-standard.yaml
+      sha256: e750d7cd467245edee8660a769076cc046090068d3a87e79661324af943675a0
+    - path: graduation_receipts/clean/tier-lite.yaml
+      sha256: ed2a223e150d5e08ab633892cbef60b5fc11a105db4f7cb12d97c13ca85a2ac0

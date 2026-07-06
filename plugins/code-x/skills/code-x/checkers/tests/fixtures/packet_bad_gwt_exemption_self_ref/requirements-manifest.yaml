@@ -1,0 +1,18 @@
+# requirements-manifest.yaml — inside the frozen packet hash (PROP-007).
+# Dispositions: BUILDING | NOT_BUILDING | NOT_APPLICABLE | CEO_DEFERRED.
+# NOT_BUILDING / CEO_DEFERRED rows need a ceo_decision_ref resolving to a ledger row.
+#
+# CX-PB003-003 FIX-FIRST fixture (xfam finding 3, P1): artifact_ref points at THIS SAME manifest
+# file — the manifest that DECLARES the exemption "anchoring" against itself. A naive
+# target.is_file() check "resolves" this (the file genuinely exists), so the behavioral
+# requirement would wrongly skip its required G/W/T examples. Must be REJECTED.
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+    non_behavioral_exemption:
+      reason: visual
+      artifact_ref: "requirements-manifest.yaml"
+    acceptance_criterion:
+      pass_condition: "Submitting valid credentials on the login screen lands on the dashboard and creates a session cookie."
+      evidence_type: automated_test
+      verification_ref: "tests/test_login.py::test_valid_login_lands_dashboard"

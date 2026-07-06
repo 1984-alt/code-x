@@ -5,30 +5,44 @@
 #   1b. identifies its module — non-empty module_id EXACTLY equal to the requested module (a
 #       sha-bound but module-LESS receipt would 'accept' ANY module; V1.10 R4, GPT R10),
 #   2. verdict == accepted,
-#   3. generator-stamped — non-empty generated_by (the receipt names its generator; /cx-accept once
-#      that runner exists — enforced as non-empty TODAY; a receipt with no generator is bare text),
+#   3. generator-stamped — non-empty generated_by (the receipt names its generator; `cx check accept`
+#      is that generator today — enforced as non-empty; a receipt with no generator is bare text),
 #   4. binding-fields present — non-empty state_sha_before + quality_card_hash, and
 #   5. bound to state by sha — state.accepted_modules[module_id].acceptance_sha12 must equal the
 #      receipt file's sha12 (swapping / hand-editing the recorded acceptance is rejected).
 #
-# HONEST SCOPE (V1.10, deferred-runner era): the receipt FILE is genuinely sha12-bound to state
-# (clause 5) — a swapped or hand-edited recorded acceptance is rejected. The receipt's INTERNAL
-# claims (state_sha_before, quality_card_hash) are PRESENCE-asserted today (clause 4) + the receipt
-# must name its generator (clause 3). Full forge-parity with `cx check boot` (RECOMPUTING the prior
-# state sha + hashing the quality-card artifact + binding repo head) lands when `/cx-accept` is built
-# (CHARTER §4 forbids a full runner until V1 proves on 2-3 projects). Tracked as acceptance-binding debt.
+# SHIPPED (B-PROP-013, design-history/b-prop-013-forge-parity-design-2026-07-06.md — was tracked as
+# acceptance-binding debt through V1.10; the debt is CLOSED, not merely presence-asserted anymore):
+# the receipt FILE is sha12-bound to state (clause 5) — a swapped or hand-edited recorded acceptance
+# is rejected. Clause 4's binding fields are now RECOMPUTED, not just presence-asserted:
+# `forge_parity_findings` below (gated on the packet's `b_prop_013_forge_parity` marker, §4) reaches
+# behind clause 4 to recompute verify_app/module_demo/live_slice_accept.repo_sha reachability
+# against the real commit graph (§2a) and quality_card_hash against the recomputed canonical hash of
+# the inline quality_card block (§2b, drift-detection honest limit — see its docstring).
+# `state_sha_before` stays a generation-honest ceiling (§2c) — captured once, at stamp time, by
+# `cx check accept` (cx_accept.py, the STAMPER); it is not later re-derivable, symmetric with
+# `cx check boot`'s own repo_head ceiling. HONEST FRAMING (do not overclaim): the stamper is
+# ergonomics + the one honest capture moment, NOT the wall — a hand-authored receipt can still skip
+# it entirely. THE WALL is this file's recompute + the state<->file sha12 seal (clause 5).
 #
 #   cx check module-acceptance --module-id <id> --state <CODE-X-STATE.yaml> \
 #       [--acceptance <MODULE-ACCEPTANCE.yaml>] [--repo-root <dir>]
 #
-# READ-ONLY: never builds, routes actors, edits source, or generates the receipt (that is /cx-accept).
+# READ-ONLY: never builds, routes actors, edits source, or generates the receipt (that is
+# `cx check accept`, cx_accept.py).
 import hashlib
+import json
 import os
 import re
 import subprocess
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, nested_get
+from cx_common import findings_report, load_yaml, nested_get, resolve_risk_tier
+from cx_lock_fidelity import resolve_in_repo
+# Read-only reuse of the packet-stage manifest filename constant (PB-PROP-003 Unit 2) — never
+# imports FROM cx_module_acceptance into cx_packet, so no cycle; cx_packet only ever reads this
+# module's exports for tests, never at runtime.
+from cx_packet import MANIFEST_FILE as _MANIFEST_FILE
 
 # BF-PROP-006: phantom-completion guard. A module accepted whose build baseline (repo_sha_before)
 # is identical to HEAD (zero files changed) shipped NO real code — the receipt is green but the
@@ -54,7 +68,7 @@ def has_blocking(findings) -> bool:
 
 # B-PROP-008 (Live Slice Delivery): a live_slice module (a user-facing PAGE slice, flagged in the
 # FROZEN registry) must carry a typed live_slice_accept block proving the CEO DROVE the running
-# build live on the local machine — not a Mode A screenshot/shell accept or a module-level batch. Presence +
+# build live on the Mac — not a Mode A screenshot/shell accept or a module-level batch. Presence +
 # shape ONLY: the checker proves the running build existed (live_url) and the CEO recorded driving
 # it; whether it FELT right stays the CEO's accept (no over-claiming the experience — the cardinal sin).
 _LIVE_SLICE_ACCEPT_STRING_FIELDS = ("live_url", "ceo_turn_ref", "repo_sha")
@@ -182,6 +196,92 @@ def validate_module_demo(ma, receipt_loc, base=None):
                 findings.append(("P0", receipt_loc,
                     f"module_demo.shown_screenshot_path '{shot_path}' cannot be resolved"))
 
+    # PRESENTED-VISUAL-HAS-DIFF-RECEIPT (P1, PBF-PROP-020 Rule 4) — FORWARD-SCOPE (CEO-D-046
+    # grandfather, 2026-07-05): enforced only when the demo DECLARES any 020 diff field
+    # (mockup_ref / diff_score / tolerance). A pre-020 receipt that carries none is grandfathered
+    # (untouched — never retro-broken). When ANY is present the FULL receipt is required (no
+    # half-filled dodge): a HASH-BOUND mockup (mockup_ref + mockup_hash == sha12 of real bytes) +
+    # a passing diff (diff_score <= tolerance). The mechanical proof the comparison was RUN — never
+    # a free-text 'confirmed', nor a mockup_ref pointed at any image (own-eyes stays honest-scope).
+    mockup_ref = _s("mockup_ref")
+    _diff_declared = bool(mockup_ref) or ("diff_score" in md) or ("tolerance" in md)
+    if not _diff_declared:
+        # FOLD RE-SWEEP FIX (WAVE-TRIGGERED, not field-triggered): validate_module_demo runs ONLY
+        # on live_slice / CEO-visible acceptances — all three callers (validate_live_slice_accept,
+        # graduation _crit_c1, module-quality) guard on the FROZEN registry live_slice flag — so the
+        # rendered-vs-mockup diff receipt is REQUIRED here, not merely validated-if-declared. Omitting
+        # all three fields was the fail-open dodge the extra xfam sweep caught (EVAL-051 already claims
+        # 'every CEO-visible acceptance'). A GENUINE pre-020 receipt declares a typed
+        # legacy_no_diff_receipt carve-out (advisory, migration debt); a bare omission fails closed.
+        _carveout = _s("legacy_no_diff_receipt")
+        if _carveout:
+            findings.append(("P2", receipt_loc,
+                f"module_demo has no rendered-vs-mockup diff receipt (legacy_no_diff_receipt: "
+                f"{_carveout}) — pre-020 grandfather, migration debt (PBF-PROP-020 Rule 4)"))
+        else:
+            findings.append(("P1", receipt_loc,
+                "module_demo on a CEO-visible/live_slice acceptance has NO rendered-vs-mockup diff "
+                "receipt — a live-drive acceptance must carry a hash-bound mockup + passing diff "
+                "(mockup_ref + mockup_hash + diff_score <= tolerance), or a typed legacy_no_diff_receipt "
+                "carve-out for a genuine pre-020 receipt; a free-text 'confirmed' / omission no longer "
+                "satisfies acceptance (PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+    if _diff_declared:
+        if not mockup_ref:
+            findings.append(("P1", receipt_loc,
+                "module_demo declares a diff field but mockup_ref is missing/blank — a 020-era "
+                "diff receipt must be complete: a hash-bound mockup the screenshot was diffed "
+                "against (PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+        else:
+            mr = Path(mockup_ref)
+            if mr.is_absolute() or ".." in mr.parts:
+                findings.append(("P1", receipt_loc,
+                    f"module_demo.mockup_ref '{mockup_ref}' is an absolute path or contains '..' — "
+                    "only repo-relative paths are accepted (PBF-PROP-020 Rule 4)"))
+            else:
+                full_mr = base_dir / mr
+                try:
+                    if full_mr.is_symlink() or not full_mr.resolve().is_relative_to(base_dir.resolve()):
+                        findings.append(("P1", receipt_loc,
+                            f"module_demo.mockup_ref '{mockup_ref}' is a symlink or resolves outside "
+                            "the repo (PBF-PROP-020 Rule 4)"))
+                    elif not full_mr.is_file():
+                        findings.append(("P1", receipt_loc,
+                            f"module_demo.mockup_ref '{mockup_ref}' does not exist — the mockup the "
+                            "shown screenshot was diffed against must be a committed in-repo file "
+                            "(PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+                    else:
+                        # HASH-BINDING (built-code xfam P1): the mockup bytes must match a declared
+                        # mockup_hash — a receipt that can point mockup_ref at ANY image is not a
+                        # real comparison. Same _sha12 anti-forgery anchor as shown_screenshot_hash.
+                        declared_mh = _s("mockup_hash")
+                        real_mh = _sha12(str(full_mr))
+                        if not declared_mh:
+                            findings.append(("P1", receipt_loc,
+                                "module_demo.mockup_hash missing — the diffed mockup must be hash-bound "
+                                "(mockup_hash == sha12 of the mockup bytes), else mockup_ref could point "
+                                "at any image (PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+                        elif real_mh is not None and declared_mh != real_mh:
+                            findings.append(("P1", receipt_loc,
+                                f"module_demo.mockup_hash '{declared_mh}' != recomputed sha12 '{real_mh}' "
+                                "of the mockup bytes — the diff receipt is not bound to the shown mockup "
+                                "(PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+                except OSError:
+                    findings.append(("P1", receipt_loc,
+                        f"module_demo.mockup_ref '{mockup_ref}' cannot be resolved"))
+        diff_score = md.get("diff_score")
+        tolerance = md.get("tolerance")
+        if not isinstance(diff_score, (int, float)) or isinstance(diff_score, bool) \
+                or not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool):
+            findings.append(("P1", receipt_loc,
+                "module_demo.diff_score/tolerance missing or not numeric — the rendered-vs-mockup "
+                "comparison must be a recorded MACHINE result, not implied "
+                "(PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+        elif diff_score > tolerance:
+            findings.append(("P1", receipt_loc,
+                f"module_demo.diff_score {diff_score} > tolerance {tolerance} — the shown screen does "
+                "not match its mockup within tolerance; a CEO-visible acceptance cannot ship on a "
+                "failing rendered-vs-mockup diff (PRESENTED-VISUAL-HAS-DIFF-RECEIPT, PBF-PROP-020 Rule 4)"))
+
     # 7. Cross-field surface guard (surface-appropriate evidence)
     if surface == "web":
         if not _s("live_url"):
@@ -280,7 +380,7 @@ def validate_module_demo(ma, receipt_loc, base=None):
     return findings
 
 
-def validate_live_slice_accept(ma, receipt_loc, base=None):
+def validate_live_slice_accept(ma, receipt_loc, base=None, packet_dir=None, module_id=None):
     """Validate the live_slice_accept block on a live_slice module's acceptance receipt. Returns a
     list of findings — EMPTY means the CEO live-drive accept is well-formed. Shared by the order
     wall (via validate_accepted_module's require_live_slice path) and cx check module-quality (B-PROP-008).
@@ -293,16 +393,24 @@ def validate_live_slice_accept(ma, receipt_loc, base=None):
     PBF-PROP-012 Part E: a well-formed module_demo block is also a PRECONDITION — validate_module_demo
     runs in BOTH return paths so a live_slice module cannot be accepted without the SEE-AND-TEST
     show-step evidence (surface-aware, screenshot-bound, CEO-token-bound). base = repo root for
-    screenshot path-safety resolution."""
-    va_findings = validate_verify_app(ma, receipt_loc)
+    screenshot path-safety resolution.
+
+    PB-PROP-003 Unit 2 (acceptance-stage wiring, Design Resolution v2): packet_dir + module_id (both
+    optional, caller-supplied) enable the criteria_refs wiring/reverse-coverage checks — see
+    validate_verify_app (Layer 1 resolution) and _reverse_coverage_findings (Layer 2, registry-
+    enumerated). Either omitted -> those checks silently do not run (the caller had no packet context
+    to prove them against); this never widens what is REQUIRED, it only widens what CAN be checked."""
+    va_findings = validate_verify_app(ma, receipt_loc, packet_dir=packet_dir)
     demo_findings = validate_module_demo(ma, receipt_loc, base)   # PBF-PROP-012 Part E precondition
     lsa = ma.get("live_slice_accept") if isinstance(ma, dict) else None
     if not isinstance(lsa, dict):
         return va_findings + demo_findings + [("P0", receipt_loc,
             "live_slice module accepted with NO typed live_slice_accept block "
             "{live_url, ceo_drove, ceo_turn_ref, repo_sha} — a Mode A screenshot/shell accept or a "
-            "module-level batch is not proof the CEO DROVE the running build live on the local machine (B-PROP-008)")]
+            "module-level batch is not proof the CEO DROVE the running build live on the Mac (B-PROP-008)")]
     findings = list(va_findings) + list(demo_findings)
+    if module_id:
+        findings.extend(_reverse_coverage_findings(ma, receipt_loc, packet_dir, module_id))
 
     def _s(key):
         v = lsa.get(key, "")
@@ -340,14 +448,407 @@ def validate_live_slice_accept(ma, receipt_loc, base=None):
 # verify repo_sha is HEAD / a real commit (no commit-graph check, mirroring live_slice_accept.repo_sha),
 # and never claims the behavior was perfect (the CEO live-drive still judges the experience — no
 # over-claiming, the cardinal sin per B-PROP-008).
-_VERIFY_APP_STRING_FIELDS = ("repo_sha", "generated_by", "criteria_ref")
+# criteria_ref(s) grammar/resolution is validated SEPARATELY (_validate_criteria_wiring, PB-PROP-003
+# Unit 2) — its required shape depends on the packet's pb_prop_003_wiring marker (§R5), unlike these
+# two which are unconditionally required on every verify_app block.
+_VERIFY_APP_STRING_FIELDS = ("repo_sha", "generated_by")
+# PB-PROP-003 Unit 2 (§R5): the frozen packet declares this top-level requirements-manifest.yaml
+# field to opt IN to the new resolving criteria_refs wiring/reverse-coverage. A packet's ABSENCE of
+# this marker (the default — every pre-existing packet) keeps the OLD free-text criteria_ref accepted
+# under a non-blocking legacy advisory, so already-shipped apps and any other in-flight project never
+# retroactively breaks at the order wall.
+_PB_PROP_003_MARKER_FIELD = "pb_prop_003_wiring"
+_REGISTRY_FILE = "MODULE-REGISTRY.yaml"
+
+# B-PROP-013 (forge-parity acceptance recompute, design-history/b-prop-013-forge-parity-design-
+# 2026-07-06.md): a NEW capability marker in the frozen requirements-manifest.yaml. Tri-state
+# resolver mirrors _resolve_pb_prop_003_wiring_state exactly (§4 activation): "absent" (no
+# packet_dir / unreadable manifest / field genuinely missing) -> legacy presence-only path,
+# non-blocking (grandfathers in-flight already-shipped apps); "enabled" (real boolean True) -> the §2
+# recompute legs below run; "malformed" (present but not real bool True) -> P1 fail-closed (a
+# packet that TRIED to opt in and botched it must not silently fall to the legacy carve-out).
+FORGE_PARITY_MARKER_FIELD = "b_prop_013_forge_parity"
 
 
-def validate_verify_app(ma, receipt_loc):
+def _resolve_forge_parity_marker_state(packet_dir) -> str:
+    """B-PROP-013 §4 — tri-state marker resolver, same read pattern + vocabulary as
+    _resolve_pb_prop_003_wiring_state (kept as a separate function, not a generic helper: the two
+    markers gate unrelated capabilities and must be free to diverge later)."""
+    if not packet_dir:
+        return "absent"
+    data, err = load_yaml(str(Path(packet_dir) / _MANIFEST_FILE))
+    if err or not isinstance(data, dict):
+        return "absent"
+    if FORGE_PARITY_MARKER_FIELD not in data:
+        return "absent"
+    return "enabled" if data.get(FORGE_PARITY_MARKER_FIELD) is True else "malformed"
+
+
+def _canonicalize_quality_card_hash(qc: dict) -> str:
+    """B-PROP-013 §2b: deterministic canonicalization of the INLINE quality_card block (stable key
+    order + normalized scalars via json's sort_keys) hashed with the same sha12 convention as the
+    rest of this file (first 12 hex chars of a sha256). HONEST LIMIT (must travel with every caller
+    of this function): the block and its hash both live in the same receipt, so this recompute is
+    drift/typo detection, not forge resistance — a forger who edits the block just re-hashes it
+    (design §2b/§10.1). It exists to catch accidental drift, not to be sold as an anti-forge wall."""
+    canonical = json.dumps(qc, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+
+
+def _repo_sha_reachability_finding(repo_root, sha: str, field_label: str, receipt_loc) -> tuple | None:
+    """B-PROP-013 §2a: a hex-shaped repo_sha that is not a real ANCESTOR commit of HEAD is
+    fabrication (P0) — consistent with the existing non-hex=P0 / empty=P0 grades on these same
+    fields. Reuses the ACTUAL BF-PROP-006 git leg verbatim: `merge-base --is-ancestor <sha> HEAD`
+    (cx_module_acceptance.py's own repo_sha_before check, ~L1151) — NOT `cat-file -e <sha>^{commit}`,
+    which only proves the object exists in the repo's object database (a real commit authored on an
+    unrelated side branch, or any dangling object, satisfies cat-file -e while never having been on
+    this history at all — FIX-FIRST closed this exact gap, B-PROP-013 xfam P1). Returns None when
+    the field is blank / non-hex (already graded by the caller's shape check), or when reachability
+    genuinely cannot be determined (no repo_root, no git repo) — this function never widens what is
+    REQUIRED, only what CAN be checked, mirroring the rest of this file.
+    HONEST LIMIT (§10.4): ancestry proves the commit is really on THIS branch's history, not that it
+    was the exact HEAD the human drove — the ceo_accept_token<->HEAD tie enforced by /cx-accept (§3)
+    is what binds identity to the precise commit; this guard's job is only to reject non-real /
+    off-history (fabricated) commits."""
+    if not sha or not _HEX12_RE.match(sha):
+        return None
+    if sha == _FRESH_CLONE_TEST_SENTINEL and os.environ.get("CODE_X_TEST_MODE") == "1":
+        return None  # fresh-clone test fixture — no real commit graph to bind to (mirrors BF-PROP-006)
+    if not repo_root:
+        return None
+    if _git(str(repo_root), "rev-parse", "--git-dir")[0] != 0:
+        return ("P1", receipt_loc,
+            f"no git repo / git unavailable at '{repo_root}' — cannot verify {field_label}.repo_sha "
+            f"'{sha}' is a real ancestor commit of HEAD; the B-PROP-013 forge-parity guard cannot run "
+            "(MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT, B-PROP-013 §2a)")
+    if _git(str(repo_root), "merge-base", "--is-ancestor", sha, "HEAD")[0] != 0:
+        return ("P0", receipt_loc,
+            f"{field_label}.repo_sha '{sha}' is hex-shaped but is NOT a real commit that is an "
+            f"ancestor of HEAD in '{repo_root}' — fabrication (a forged or off-history/side-branch "
+            "commit id must not grade lighter than an empty field; mere object EXISTENCE is not "
+            "enough — a real commit from an unrelated branch must still be rejected); ancestry "
+            "proves the commit is really on this history, not that it was HEAD when driven — the "
+            "ceo_accept_token<->HEAD tie in /cx-accept is what binds identity to the exact commit "
+            "(MODULE-ACCEPTANCE-REPO-SHA-NOT-A-COMMIT, B-PROP-013 §2a/§5)")
+    return None
+
+
+def forge_parity_findings(ma: dict, receipt_loc, packet_dir, repo_root,
+                          state_has_module_registry_ref: bool = False) -> list:
+    """B-PROP-013 Unit 1 — the GUARD (the real forge-parity wall). Called once from
+    validate_accepted_module for EVERY module (live_slice or not), gated by the §4 activation
+    marker so a legacy packet (marker absent) rides the pre-existing presence-only path unchanged
+    (grandfather carve-out — in-flight already-shipped apps never break).
+
+    Checks, ONLY when the marker resolves "enabled":
+      - §2a: verify_app.repo_sha / module_demo.repo_sha / live_slice_accept.repo_sha each must be a
+        real reachable commit (per-field P0 fabrication finding; blocks that are simply absent on a
+        non-live_slice module are silently skipped — nothing to check).
+      - §2b: quality_card_hash must equal the recomputed canonical hash of the inline quality_card
+        block (P1 drift; skipped if quality_card itself is missing — cx_module_quality already
+        grades that absence separately, this is not the place to duplicate it).
+    A "malformed" marker state fires its own P1 regardless of the rest (fail-closed marker
+    vocabulary, §4/§7 MODULE-ACCEPTANCE-FORGE-PARITY-MARKER-MALFORMED).
+
+    FIX-FIRST (B-PROP-013 xfam P1, packet_dir-omission fail-open): a packet_dir that is simply
+    MISSING from state resolves "absent" here exactly like a genuinely legacy no-packet project —
+    that leniency is REQUIRED (judge ruling: failing closed on absent packet_dir would break
+    grandfathered already-shipped apps). But when state ALSO carries module_registry_ref — the same
+    field cx_build_turn.py's order wall uses to REQUIRE a frozen packet_dir for a module-advancing
+    build (cx_build_turn.py ~L100-113) — a state with a registry ref but no packet_dir is an
+    anomaly, not genuine legacy: something clearly bound this project to the packet system, yet
+    THIS acceptance check has no packet context to resolve the marker against. That is a real,
+    named risk, so it fires a NON-BLOCKING P2 ADVISORY (never P0/P1 — the carve-out stays lenient
+    exactly as ruled). Mitigation for the residual risk: Fix 3's required-true WRITING-floor
+    marker (a NEW packet cannot freeze without declaring the marker) + the pre-existing frozen-
+    manifest hash binding (module-start content-binds the card to the frozen packet)."""
+    state = _resolve_forge_parity_marker_state(packet_dir)
+    if state == "malformed":
+        return [("P1", receipt_loc,
+            f"the frozen packet's requirements-manifest.yaml declares '{FORGE_PARITY_MARKER_FIELD}' "
+            "but its value is not a real boolean true — a marker that TRIED to opt into the "
+            "B-PROP-013 forge-parity guard and botched it must NOT silently fall to the legacy "
+            "carve-out (that carve-out is for packets that never declared the marker at all); fix "
+            "the manifest to a real `true`, or remove the field entirely (fail-closed marker "
+            "vocabulary, MODULE-ACCEPTANCE-FORGE-PARITY-MARKER-MALFORMED, B-PROP-013 §4/§7)")]
+    if state != "enabled":
+        if not packet_dir and state_has_module_registry_ref:
+            return [("P2", receipt_loc,
+                "state carries module_registry_ref (the SAME signal cx_build_turn.py's order wall "
+                "uses to REQUIRE a frozen packet_dir for a module-advancing build) but this "
+                "acceptance check received no packet_dir — the B-PROP-013 forge-parity marker "
+                "cannot be resolved without packet context, so the guard silently rides the "
+                "legacy carve-out; this is an ADVISORY, non-blocking (P0/P1 would break the "
+                "CEO-locked grandfather carve-out for genuinely packet-less legacy projects) — "
+                "mitigated by Fix 3's required-true WRITING-floor marker + the frozen-manifest "
+                "hash binding (MODULE-ACCEPTANCE-FORGE-PARITY-PACKET-CONTEXT-MISSING, "
+                "B-PROP-013 §4 FIX-FIRST)")]
+        return []
+
+    findings = []
+    for block_key, field_label in (("verify_app", "verify_app"),
+                                    ("module_demo", "module_demo"),
+                                    ("live_slice_accept", "live_slice_accept")):
+        block = ma.get(block_key) if isinstance(ma, dict) else None
+        sha = block.get("repo_sha", "") if isinstance(block, dict) else ""
+        sha = sha.strip() if isinstance(sha, str) else ""
+        finding = _repo_sha_reachability_finding(repo_root, sha, field_label, receipt_loc)
+        if finding:
+            findings.append(finding)
+
+    qc = ma.get("quality_card") if isinstance(ma, dict) else None
+    recorded_hash = ma.get("quality_card_hash", "") if isinstance(ma, dict) else ""
+    recorded_hash = recorded_hash.strip() if isinstance(recorded_hash, str) else ""
+    if isinstance(qc, dict) and qc and recorded_hash:
+        recomputed = _canonicalize_quality_card_hash(qc)
+        if recorded_hash != recomputed:
+            findings.append(("P1", receipt_loc,
+                f"quality_card_hash '{recorded_hash}' != recomputed canonical hash '{recomputed}' of "
+                "the inline quality_card block — drift between the recorded hash and the block's "
+                "real content (HONEST LIMIT: this is drift/typo detection, not forge resistance — "
+                "the block and its hash live in the same receipt, so a forger who edits the block "
+                "just re-hashes it; the real cover for the whole receipt is the state<->file sha12 "
+                "seal) (MODULE-ACCEPTANCE-QUALITY-CARD-HASH-DRIFT, B-PROP-013 §2b/§10.1)"))
+    return findings
+
+
+def _resolve_pb_prop_003_wiring_state(packet_dir) -> str:
+    """CX-PB003-002 FIX-FIRST (xfam finding 2, P1): TRI-STATE marker resolver — mirrors
+    cx_common.resolve_risk_tier's read pattern (frozen packet's requirements-manifest.yaml
+    top-level field), but distinguishes 3 states instead of collapsing to a bool (§R5 fail-closed):
+      - "absent"    — no packet_dir, unreadable/malformed manifest, or the field genuinely missing
+                      -> the legacy carve-out is legitimate (this packet never tried to opt in).
+      - "enabled"   — the field IS present and is a real boolean True -> full wiring ON.
+      - "malformed" — the field IS present but is anything else (a string 'true'/'yes', 1, etc.)
+                      -> the packet TRIED to opt in but botched it; this must NOT silently resolve
+                      to the same legacy carve-out as genuine absence (the bug this fixes: a plain
+                      bool collapsed 'malformed' and 'absent' to the same False)."""
+    if not packet_dir:
+        return "absent"
+    data, err = load_yaml(str(Path(packet_dir) / _MANIFEST_FILE))
+    if err or not isinstance(data, dict):
+        return "absent"
+    if _PB_PROP_003_MARKER_FIELD not in data:
+        return "absent"
+    return "enabled" if data.get(_PB_PROP_003_MARKER_FIELD) is True else "malformed"
+
+
+def _resolve_pb_prop_003_wiring(packet_dir) -> bool:
+    """PB-PROP-003 §R5 capability-gate resolver — back-compat bool view of
+    _resolve_pb_prop_003_wiring_state: True only for the "enabled" state. A "malformed" marker is
+    NOT "enabled" here (callers that only check this bool still safely skip the full wiring gate),
+    but _validate_criteria_wiring separately reads the tri-state to block "malformed" instead of
+    silently granting it the "absent" legacy carve-out."""
+    return _resolve_pb_prop_003_wiring_state(packet_dir) == "enabled"
+
+
+def _manifest_requirement_index(manifest_path) -> tuple:
+    """PB-PROP-003 Unit 2: load requirements-manifest.yaml and return (index, err).
+    index = {requirement_id: {"behavioral": bool, "has_examples": bool}} for every BUILDING row —
+    'behavioral' = no non_behavioral_exemption declared (mirrors cx_packet's default-behavioral
+    crux); 'has_examples' = acceptance_criterion.examples is a non-empty list. Fails CLOSED
+    (None, err) on a malformed/unreadable manifest — mirrors PACKET-GWT-MANIFEST-MALFORMED-FAILS-
+    CLOSED (§R8): a malformed manifest must never let a citation silently resolve or a coverage
+    check silently skip."""
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict) or not isinstance(data.get("requirements"), list):
+        return None, err or "no requirements list"
+    index = {}
+    for row in data["requirements"]:
+        if not isinstance(row, dict) or str(row.get("disposition", "")).strip() != "BUILDING":
+            continue
+        rid = str(row.get("id", "")).strip()
+        if not rid:
+            continue
+        behavioral = row.get("non_behavioral_exemption") is None
+        ac = row.get("acceptance_criterion")
+        examples = ac.get("examples") if isinstance(ac, dict) else None
+        index[rid] = {"behavioral": behavioral,
+                      "has_examples": isinstance(examples, list) and len(examples) > 0}
+    return index, None
+
+
+def _registry_module_requirement_ids(registry_path, module_id) -> tuple:
+    """PB-PROP-003 Unit 2 §R1: load the FROZEN MODULE-REGISTRY.yaml at registry_path and return
+    (requirement_ids, err) for module_id's row — the authority for 'which requirements belong to
+    this module' (cx_packet.py PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS, NOT card source_map)."""
+    registry, gerr = load_yaml(str(registry_path))
+    if gerr or not isinstance(registry, dict):
+        return None, gerr or "registry not a mapping"
+    mr = nested_get(registry, "module_registry")
+    modules = mr.get("modules") if isinstance(mr, dict) else None
+    if not isinstance(modules, list):
+        return None, "module_registry.modules missing/not a list"
+    mod = next((m for m in modules if isinstance(m, dict)
+                and str(m.get("module_id", "")).strip() == module_id), None)
+    if mod is None:
+        return None, f"module '{module_id}' not found in the frozen registry"
+    ids = mod.get("requirement_ids") or []
+    if not isinstance(ids, list):
+        return None, f"module '{module_id}' requirement_ids is not a list"
+    return {str(r).strip() for r in ids if str(r).strip()}, None
+
+
+def _validate_criteria_wiring(va, receipt_loc, packet_dir):
+    """PB-PROP-003 Unit 2 (Design Resolution v2 §R3/§R5/§R7) — Layer 1: criteria_refs GRAMMAR +
+    RESOLUTION. Returns a list of findings; EMPTY means either (a) a well-formed new-grammar
+    citation set (every id resolves to a real behavioral requirement carrying >=1 example), or
+    (b) a legitimate legacy fall-through (no marker declared -> old free-text criteria_ref accepted
+    under a typed, non-blocking migration-debt advisory).
+
+    HONESTY (§R6): resolution proves the reference chain is shape-checked + receipt-bound — NOT a
+    freshness/forge proof; it does not re-run the app (unchanged B-PROP-010 scope).
+
+    CX-PB003-002 FIX-FIRST (xfam finding 2, P1): a MALFORMED marker (the field is present but not
+    a real boolean True — e.g. a quoted `pb_prop_003_wiring: "true"`) is REJECTED here, not
+    silently granted the "absent" legacy carve-out (§R5's fail-closed vocabulary: only genuine
+    absence is a legitimate non-opt-in)."""
+    refs = va.get("criteria_refs")
+    legacy_ref = va.get("criteria_ref")
+    wiring_state = _resolve_pb_prop_003_wiring_state(packet_dir)
+
+    if wiring_state == "malformed":
+        return [("P1", receipt_loc,
+            f"the frozen packet's requirements-manifest.yaml declares "
+            f"'{_PB_PROP_003_MARKER_FIELD}' but its value is not a real boolean true — a marker "
+            "that TRIED to opt into the PB-PROP-003 wiring gate and botched it must NOT silently "
+            "fall to the legacy carve-out (that carve-out is for packets that never declared the "
+            "marker at all); fix the manifest to a real `true`, or remove the field entirely "
+            "(fail-closed marker vocabulary, PB-PROP-003 §R5, xfam finding CX-PB003-002)")]
+
+    if wiring_state != "enabled":
+        # §R5 legacy carve-out: a packet that never declared the marker keeps the OLD free-text
+        # field, recorded as migration debt (P2, non-blocking) rather than a hard requirement to
+        # rewrite every in-flight project's receipts overnight.
+        legacy_val = legacy_ref.strip() if isinstance(legacy_ref, str) and legacy_ref.strip() else ""
+        has_refs_anyway = isinstance(refs, list) and bool(refs)
+        if not legacy_val and not has_refs_anyway:
+            return [("P0", receipt_loc,
+                "verify_app has neither criteria_ref nor criteria_refs — 'where the checked "
+                "acceptance criteria came from' must be recorded as a non-empty string (B-PROP-010)")]
+        return [("P2", receipt_loc,
+            f"verify_app uses the pre-PB-PROP-003 free-text criteria_ref "
+            f"('{legacy_val or refs}') — this packet has not declared the '{_PB_PROP_003_MARKER_FIELD}' "
+            "capability marker, so the resolving criteria_refs wiring + reverse-coverage gate is not "
+            "enforced here; recorded as migration debt, non-blocking "
+            "(ACCEPTANCE-LEGACY-CRITERIA-REF-ADVISORY, PB-PROP-003 §R5)")]
+
+    # Wiring ON (§R7 grammar, spine — every tier): criteria_refs must be PRESENT as a list (an EMPTY
+    # list is valid — a LITE module with zero present-example behavioral requirements legitimately
+    # cites nothing; reverse coverage, not this grammar check, is what proves nothing was left
+    # unwired). Every entry must be a unique, non-blank string resolving to a BEHAVIORAL BUILDING
+    # requirement carrying >=1 example.
+    if refs is None:
+        return [("P0", receipt_loc,
+            "verify_app.criteria_refs missing — this packet declares "
+            f"'{_PB_PROP_003_MARKER_FIELD}', so the OLD free-text criteria_ref no longer satisfies "
+            "the gate; criteria_refs must be declared as a list (empty if this module cites no "
+            "requirement) of the requirement id(s) the verify-app agent exercised "
+            "(ACCEPTANCE-CRITERIA-REFS-RESOLVE, PB-PROP-003 §R7)")]
+    if not isinstance(refs, list):
+        return [("P0", receipt_loc,
+            f"verify_app.criteria_refs is not a list (got {type(refs).__name__}) "
+            "(ACCEPTANCE-CRITERIA-REFS-RESOLVE, PB-PROP-003 §R7)")]
+    bad_shape = [r for r in refs if not isinstance(r, str) or not r.strip()]
+    if bad_shape:
+        return [("P0", receipt_loc,
+            f"verify_app.criteria_refs contains non-string/blank entries {bad_shape!r} — every entry "
+            "must be a non-empty requirement id string (ACCEPTANCE-CRITERIA-REFS-RESOLVE, "
+            "PB-PROP-003 §R7)")]
+    clean = [r.strip() for r in refs]
+    dupes = sorted({r for r in clean if clean.count(r) > 1})
+    if dupes:
+        return [("P0", receipt_loc,
+            f"verify_app.criteria_refs contains duplicate id(s) {dupes} — each cited requirement "
+            "id must be listed once (ACCEPTANCE-CRITERIA-REFS-RESOLVE, PB-PROP-003 §R7)")]
+    if not clean:
+        return []  # empty-but-present list is valid grammar; reverse coverage judges sufficiency
+
+    index, ierr = _manifest_requirement_index(Path(packet_dir) / _MANIFEST_FILE)
+    if ierr:
+        return [("P0", receipt_loc,
+            f"verify_app.criteria_refs cannot be resolved — the frozen requirements-manifest at "
+            f"'{packet_dir}' is unreadable/malformed ({ierr}); the gate fails CLOSED rather than "
+            "silently passing an unresolvable citation (ACCEPTANCE-CRITERIA-REFS-RESOLVE, "
+            "PB-PROP-003 §R7/§R8)")]
+    bad_refs = sorted(r for r in clean
+                       if not (index.get(r, {}).get("behavioral") and index.get(r, {}).get("has_examples")))
+    if bad_refs:
+        return [("P0", receipt_loc,
+            f"verify_app.criteria_refs cites {bad_refs} — each id must resolve to a BEHAVIORAL "
+            "BUILDING requirement carrying >=1 Given/When/Then example in the frozen requirements-"
+            "manifest; a dangling, non-behavioral/exempt, or example-less id cannot be cited as "
+            "behavior the verify-app agent exercised (ACCEPTANCE-CRITERIA-REFS-RESOLVE, "
+            "PB-PROP-003 §R3/§R7)")]
+    return []
+
+
+def _reverse_coverage_findings(ma, receipt_loc, packet_dir, module_id):
+    """PB-PROP-003 Unit 2 (Design Resolution v2 §R1/§R2/§R3) — Layer 2: REVERSE coverage. Enumerates
+    the module's behavioral BUILDING requirements from the FROZEN MODULE-REGISTRY row's
+    requirement_ids (the authority — cx_packet.py:822-841 PACKET-MODULE-REGISTRY-COVERS-
+    REQUIREMENTS — never card source_map), intersected with the manifest's behavioral rows, and
+    checks verify_app.criteria_refs covers them. Two teeth, split by tier (§R3):
+      - ACCEPTANCE-PRESENT-EXAMPLE-COVERED (P1, SPINE — every tier): any requirement that HAS an
+        authored example must be covered by some citation.
+      - ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED (P1, CEREMONY — relaxed under LITE): every behavioral
+        requirement of the module (whether or not it carries examples) must be covered.
+    Gated on the pb_prop_003_wiring marker (§R5) — a legacy packet gets NO reverse-coverage
+    findings here (its own advisory already fires from _validate_criteria_wiring)."""
+    if not _resolve_pb_prop_003_wiring(packet_dir):
+        return []
+    reg_ids, rerr = _registry_module_requirement_ids(Path(packet_dir) / _REGISTRY_FILE, module_id)
+    if rerr:
+        return [("P1", receipt_loc,
+            f"cannot compute PB-PROP-003 reverse coverage for module '{module_id}' — {rerr}; the "
+            "frozen registry is the requirement-coverage authority and must be readable "
+            "(ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED, PB-PROP-003 §R1)")]
+    index, ierr = _manifest_requirement_index(Path(packet_dir) / _MANIFEST_FILE)
+    if ierr:
+        return [("P1", receipt_loc,
+            f"cannot compute PB-PROP-003 reverse coverage — the frozen requirements-manifest is "
+            f"unreadable/malformed ({ierr}) (ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED, PB-PROP-003 §R1)")]
+
+    va = ma.get("verify_app") if isinstance(ma, dict) else None
+    raw_refs = va.get("criteria_refs") if isinstance(va, dict) else None
+    covered = ({r.strip() for r in raw_refs if isinstance(r, str) and r.strip()}
+               if isinstance(raw_refs, list) else set())
+
+    behavioral_ids = {rid for rid in reg_ids if index.get(rid, {}).get("behavioral")}
+    present_example_ids = {rid for rid in behavioral_ids if index[rid]["has_examples"]}
+
+    findings = []
+    uncovered_present = sorted(present_example_ids - covered)
+    if uncovered_present:
+        findings.append(("P1", receipt_loc,
+            f"module '{module_id}' has an AUTHORED Given/When/Then example on requirement(s) "
+            f"{uncovered_present} that NO verify_app.criteria_refs entry covers — an authored "
+            "example must never go unexercised, at ANY risk tier (ACCEPTANCE-PRESENT-EXAMPLE-"
+            "COVERED, PB-PROP-003 §R3)"))
+
+    tier = resolve_risk_tier(packet_dir)
+    if tier != "LITE":
+        uncovered_behavioral = sorted(behavioral_ids - covered)
+        if uncovered_behavioral:
+            findings.append(("P1", receipt_loc,
+                f"module '{module_id}' behavioral BUILDING requirement(s) {uncovered_behavioral} "
+                "(from the frozen MODULE-REGISTRY.requirement_ids, PACKET-MODULE-REGISTRY-COVERS-"
+                "REQUIREMENTS authority) are covered by NO verify_app.criteria_refs entry — authored"
+                "-but-never-wired at module acceptance (ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED, "
+                f"PB-PROP-003 §R1/§R3; ceremony — relaxed at LITE tier, current tier '{tier}')"))
+    return findings
+
+
+def validate_verify_app(ma, receipt_loc, packet_dir=None):
     """Validate the verify_app block on a live_slice module's acceptance receipt (B-PROP-010). Returns a
     list of findings — EMPTY means the verify-app runtime gate passed. Called from
     validate_live_slice_accept so the order wall AND cx check module-quality enforce it at the SAME
-    chokepoint as the CEO live-drive accept, making a passing verify_app a precondition to acceptance."""
+    chokepoint as the CEO live-drive accept, making a passing verify_app a precondition to acceptance.
+
+    PB-PROP-003 Unit 2: packet_dir (optional) enables the criteria_refs wiring/resolution check
+    (_validate_criteria_wiring) — omitted (e.g. a bare `cx check verify-app --acceptance` with no
+    --packet-dir), the OLD free-text criteria_ref is accepted with no grammar/resolution check at
+    all (there is no packet to resolve against; the legacy-vs-wired distinction needs one)."""
     va = ma.get("verify_app") if isinstance(ma, dict) else None
     if not isinstance(va, dict):
         return [("P0", receipt_loc,
@@ -366,9 +867,9 @@ def validate_verify_app(ma, receipt_loc):
     if missing:
         findings.append(("P0", receipt_loc,
             f"verify_app missing/blank {missing} — repo_sha (the build commit the agent drove, recorded "
-            "in a hex-shaped field) + generated_by (the verify-app runner, machine-stamped) + criteria_ref "
-            "(where the checked acceptance criteria came from) must each be a non-empty string; a verify_app "
-            "block with no recorded binding is model-authored text, not a runtime gate (B-PROP-010)"))
+            "in a hex-shaped field) + generated_by (the verify-app runner, machine-stamped) must each be "
+            "a non-empty string; a verify_app block with no recorded binding is model-authored text, "
+            "not a runtime gate (B-PROP-010)"))
     elif not _HEX12_RE.match(_s("repo_sha")):
         # HONEST SCOPE (B-PROP-010 xfam, GPT-5.5): presence + hex SHAPE only — the checker does NOT verify
         # repo_sha is HEAD or a real commit (no commit-graph/ancestry check), mirroring
@@ -379,6 +880,17 @@ def validate_verify_app(ma, receipt_loc):
             f"verify_app.repo_sha '{_s('repo_sha')}' is not a hex commit id of >=12 chars — the receipt "
             "does not even RECORD which build the agent drove in a commit-shaped field (hex shape only; "
             "the checker does not verify it is HEAD or a real commit) (B-PROP-010)"))
+
+    # PB-PROP-003 Unit 2: criteria_ref(s) grammar + resolution, gated on packet_dir being supplied at
+    # all (a bare standalone call with no packet context cannot distinguish legacy-vs-wired, so it
+    # skips this leg entirely rather than guessing — unchanged pre-existing behavior for that case).
+    if packet_dir:
+        findings.extend(_validate_criteria_wiring(va, receipt_loc, packet_dir))
+    elif not (isinstance(va.get("criteria_refs"), list) and va.get("criteria_refs")) \
+            and not (isinstance(va.get("criteria_ref"), str) and va.get("criteria_ref").strip()):
+        findings.append(("P0", receipt_loc,
+            "verify_app has neither criteria_ref nor criteria_refs — 'where the checked acceptance "
+            "criteria came from' must be recorded as a non-empty string (B-PROP-010)"))
 
     # verify_app.passed is a MACHINE verdict (the receipt is generated_by a verify-app runner) — NOT a
     # human attestation like live_slice_accept.ceo_drove, so it must be a real boolean True, not a
@@ -493,7 +1005,7 @@ def validate_registry_build_shape(modules: list, loc: str, require_frozen_hash: 
     # every earlier row as a required prior (cx_module_start: required_prior = deps ∪ ordered_ids[:idx]),
     # so a dependency on a SAME-or-LATER module is a guaranteed module-start deadlock even though the
     # dependency graph is itself a valid DAG. Every dependency must reference a module ordered strictly
-    # EARLIER — that makes registry order a valid build order (closes a real project's "authorized-yet-
+    # EARLIER — that makes registry order a valid build order (closes the real-project "authorized-yet-
     # faceplants-at-module-start" class that Kahn alone does not catch).
     index_of = {mid: i for i, mid in enumerate(ordered_ids)}
     forward = [(mid, d) for mid in ordered_ids for d in deps[mid]
@@ -697,6 +1209,22 @@ def validate_accepted_module(module_id, state, state_loc, repo_root=None, accept
                 "needed to prove a real change shipped is absent (add it, or a typed "
                 "legacy_no_baseline carve-out reason) (BF-PROP-006)"))
 
+    # Resolve the frozen packet dir from state.packet_dir ONCE — used both by the B-PROP-008
+    # live-slice block below (PB-PROP-003 Unit 2 wiring) and by the B-PROP-013 forge-parity guard
+    # (every module, live_slice or not). Path-safety mirrors every other model-authored ref this
+    # wall reads (resolve_in_repo — absolute/'..'/symlink/outside-repo rejected).
+    packet_dir_full = None
+    pkt_rel = str((state.get("packet_dir") if isinstance(state, dict) else "") or "").strip()
+    if pkt_rel:
+        base_for_pkt = repo_root if repo_root else str(Path(state_loc).resolve().parent)
+        resolved_pkt, perr = resolve_in_repo(base_for_pkt, pkt_rel)
+        if perr:
+            findings.append(("P1", state_loc,
+                f"state.packet_dir {perr} — cannot resolve the frozen packet for the PB-PROP-003 "
+                "acceptance-stage wiring checks (fails closed rather than skipping them silently)"))
+        else:
+            packet_dir_full = str(resolved_pkt)
+
     # ── B-PROP-008: live-slice CEO live-drive accept ──────────────────────────────────────────────
     # require_live_slice is set by the order wall (cx check module-start) from the FROZEN registry's
     # live_slice flag — so a live_slice prior with no valid live_slice_accept block is NOT validly
@@ -706,7 +1234,19 @@ def validate_accepted_module(module_id, state, state_loc, repo_root=None, accept
         # PBF-PROP-012 Part E: pass repo_root as base so validate_module_demo can resolve
         # shown_screenshot_path and ceo_turn_ref (screenshot + turn artifact must be in-repo).
         base_for_demo = repo_root if repo_root else str(Path(receipt_path).resolve().parent)
-        findings.extend(validate_live_slice_accept(ma, receipt_path, base=base_for_demo))
+        findings.extend(validate_live_slice_accept(ma, receipt_path, base=base_for_demo,
+                                                    packet_dir=packet_dir_full, module_id=module_id))
+
+    # ── B-PROP-013: forge-parity acceptance recompute (Unit 1 GUARD) ────────────────────────────────
+    # Runs for EVERY module (live_slice or not) — gated internally on the §4 activation marker so a
+    # legacy packet (marker absent) is unaffected. repo_for_git is the SAME resolved repo root the
+    # BF-PROP-006 phantom-completion guard above already uses. FIX-FIRST: thread whether state
+    # carries module_registry_ref (cx_build_turn.py's own "this is a module-advancing/packet-bound
+    # build" signal) so forge_parity_findings can tell a genuinely packet-less legacy state apart
+    # from an anomalous one that should have had packet_dir but doesn't (P2 advisory, never P0/P1).
+    _reg_ref = str((state.get("module_registry_ref") if isinstance(state, dict) else "") or "").strip()
+    findings.extend(forge_parity_findings(ma, receipt_path, packet_dir_full, repo_for_git,
+                                          state_has_module_registry_ref=bool(_reg_ref)))
 
     # ── BF-PROP-007 Lever B/C: an OPEN lock_deviation row blocks module-acceptance ──────────────────
     # A logged AMBIGUITY/scope deviation surfaced at the Andon wall must be CEO_REVIEWED before the
@@ -810,8 +1350,14 @@ def cmd_verify_app(args) -> int:
     live_slice slice completes — after the verify-app agent drives the running build, before the CEO
     live-drive — so a malformed/forged/failing verify_app receipt is caught at slice completion, not
     only later at the Andon wall. Reuses validate_verify_app (single source of truth with the
-    precondition enforced inside validate_live_slice_accept). READ-ONLY: never runs the app itself."""
+    precondition enforced inside validate_live_slice_accept). READ-ONLY: never runs the app itself.
+
+    PB-PROP-003 Unit 2: --packet-dir (optional) enables the criteria_refs wiring/resolution check;
+    --module-id (optional, needs --packet-dir too) additionally enables the registry-enumerated
+    reverse-coverage check. Both omitted preserves the pre-existing standalone behavior exactly."""
     acceptance_path = getattr(args, "acceptance", None)
+    packet_dir = getattr(args, "packet_dir", None)
+    module_id = str(getattr(args, "module_id", "") or "").strip()
     if not acceptance_path:
         print("FIX-FIRST\n  [P0] --acceptance required for cx check verify-app")
         return 1
@@ -827,14 +1373,20 @@ def cmd_verify_app(args) -> int:
             return 1
     else:
         ma = receipt
-    findings = validate_verify_app(ma, acceptance_path)
+    findings = validate_verify_app(ma, acceptance_path, packet_dir=packet_dir)
+    if module_id and packet_dir:
+        findings.extend(_reverse_coverage_findings(ma, acceptance_path, packet_dir, module_id))
     if not findings:
         print("PASS")
         print("  [INFO] verify_app receipt present, generator-stamped, repo_sha hex-shaped (recorded, "
               "not freshness-verified), passed:true — the verify-app agent drove the running build and "
               "its acceptance-criteria check passed")
         return 0
-    return findings_report(findings)
+    # PB-PROP-003 §R5: a findings set with ONLY advisories (P2/P3 — e.g. legacy_criteria_ref
+    # migration debt) is non-blocking, mirroring cmd_module_acceptance's has_blocking() gate — the
+    # standalone command must not turn a genuine non-blocking carve-out into a hard FIX-FIRST.
+    rc = findings_report(findings)
+    return rc if has_blocking(findings) else 0
 
 
 def cmd_module_demo(args) -> int:

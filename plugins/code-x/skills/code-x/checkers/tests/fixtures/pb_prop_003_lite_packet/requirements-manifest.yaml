@@ -1,0 +1,12 @@
+# PB-PROP-003 Unit 2 fixture packet — LITE risk tier, marker declared. Proves the tier-split
+# (§R3): authoring examples is CEREMONY (LITE-relaxable — REQ-101 carries none), but a LITE module
+# with nothing citable legitimately declares an EMPTY criteria_refs (nothing to wire).
+pb_prop_003_wiring: true
+risk_tier: LITE
+requirements:
+  - id: REQ-101
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Spike screen renders without crashing."
+      evidence_type: automated_test
+      verification_ref: "tests/test_spike.py::test_renders"

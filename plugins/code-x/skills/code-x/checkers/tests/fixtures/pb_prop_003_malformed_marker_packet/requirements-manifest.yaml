@@ -1,0 +1,13 @@
+# CX-PB003-002 FIX-FIRST fixture (xfam finding 2, P1): pb_prop_003_wiring is PRESENT but a quoted
+# STRING "true", not a real boolean true. A packet that malforms the marker like this must NOT
+# silently fall to the legacy carve-out (pb_prop_003_legacy_packet, which has NO field at all) —
+# it must be rejected, both at freeze (cx check packet) and at acceptance (cx check verify-app).
+pb_prop_003_wiring: "true"
+risk_tier: STANDARD
+requirements:
+  - id: REQ-301
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Malformed-marker screen shows the imported total."
+      evidence_type: automated_test
+      verification_ref: "tests/test_malformed.py::test_shows_total"

@@ -28,13 +28,19 @@ Contract (canon: PACKET-CONTENTS.md):
     a structured acceptance_criterion {pass_condition, evidence_type,
     verification_ref}, present + non-placeholder STRING. PRESENCE/structure only —
     the cold-reader completeness audit judges whether the criterion is testable.
+  - Given/When/Then examples (PB-PROP-003 Unit 1): a BUILDING requirement's
+    acceptance_criterion carries >=1 well-formed {given, when, then} example UNLESS
+    the row declares a typed + anchored non_behavioral_exemption {reason, artifact_ref}
+    (reason in a frozen 6-value vocabulary; artifact_ref resolves to a real in-packet
+    file/manifest/registry anchor). Authoring examples is LITE-relaxable ceremony;
+    exemption validity + shape of any present examples are enforced at every tier.
 """
 
 import hashlib
 import re
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml
+from cx_common import VALID_RISK_TIERS, findings_report, load_yaml, resolve_risk_tier
 
 # The 20 V1 coverage categories (PACKET-CONTENTS.md is canon; ids are stable).
 REQUIRED_CATEGORY_IDS = set(range(1, 21))
@@ -334,6 +340,159 @@ def _check_style_direction(packet_dir: Path, findings: list) -> None:
             "'NOT_APPLICABLE (why: ...)'"))
 
 
+# PBF-PROP-019 (design v2 §1, P2-6): risk_tier is declared as a top-level scalar in
+# requirements-manifest.yaml (the one packet doc every project has, UI or not — unlike
+# the optional PRODUCT-TASTE-LOCK). This is its OWN explicit parser+validator — it does
+# NOT reuse _check_style_direction (that precedent gives enum-validation + ledger-ref
+# resolution ONLY, per the v2 design note; absent->STRICT is written explicitly here).
+RISK_TIER_DECISION_REF_FIELD = "risk_tier_decision_ref"
+
+
+def _check_risk_tier(packet_dir: Path, findings: list) -> None:
+    """PACKET-RISK-TIER-WELL-FORMED (P0): a present-but-invalid risk_tier value fails;
+    a declared LITE/STANDARD without a resolving risk_tier_decision_ref fails. STRICT
+    (declared or defaulted) needs no ref. PACKET-RISK-TIER-DEFAULTS-STRICT: absence
+    resolves STRICT — proven by cx_common.resolve_risk_tier + the tier-dodge eval, not
+    a written flag here (an absent field is NOT a finding)."""
+    manifest_path = packet_dir / MANIFEST_FILE
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict):
+        return  # manifest missing/malformed is already flagged elsewhere in cmd_packet
+    if "risk_tier" not in data or data.get("risk_tier") is None:
+        return  # absent — resolves STRICT, no error (PACKET-RISK-TIER-DEFAULTS-STRICT)
+
+    raw = data.get("risk_tier")
+    val = str(raw).strip().upper() if isinstance(raw, str) else None
+    if val not in VALID_RISK_TIERS:
+        findings.append(("P0", str(manifest_path),
+            f"risk_tier '{raw!r}' is not one of LITE/STANDARD/STRICT — a present-but-invalid "
+            "risk tier is never silently coerced to a default "
+            "(PACKET-RISK-TIER-WELL-FORMED, PBF-PROP-019)"))
+        return
+
+    if val in ("LITE", "STANDARD"):
+        ref = str(data.get(RISK_TIER_DECISION_REF_FIELD, "") or "").strip()
+        ledger_ids = _ledger_row_ids(packet_dir)
+        if not _LEDGER_ROW_ID_RE.fullmatch(ref) or ref not in ledger_ids:
+            findings.append(("P0", str(manifest_path),
+                f"risk_tier: {val} declared without a resolving {RISK_TIER_DECISION_REF_FIELD} — "
+                "choosing a lighter-than-STRICT tier is a CEO decision and must resolve to a real "
+                f"{LEDGER_FILE} row id (CEO-D-NNN), never inline free text "
+                "(PACKET-RISK-TIER-WELL-FORMED, PBF-PROP-019)"))
+
+
+# CX-PB003-002 FIX-FIRST (xfam finding 2, P1): the PB-PROP-003 §R5 capability marker — mirrors
+# cx_module_acceptance._PB_PROP_003_MARKER_FIELD (same field, same manifest, checked at the OTHER
+# end of its lifecycle: freeze-time here vs acceptance-time there).
+PB_PROP_003_WIRING_FIELD = "pb_prop_003_wiring"
+
+
+def _check_pb_prop_003_wiring_marker(packet_dir: Path, findings: list) -> None:
+    """PACKET-PB-PROP-003-MARKER-WELL-FORMED (P1): mirrors _check_risk_tier's "absence is fine,
+    a present-but-invalid value is not" precedent. A packet that never declares the marker gets
+    the legacy carve-out at acceptance time (fine, no finding here). A packet that DOES declare it
+    but with a non-boolean-true value (a quoted "true"/"yes", 1, etc.) is malformed — caught here
+    at freeze so it never reaches acceptance-time and silently falls to the legacy carve-out there
+    (the exact bug xfam finding CX-PB003-002 closes)."""
+    manifest_path = packet_dir / MANIFEST_FILE
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict):
+        return  # manifest missing/malformed is already flagged elsewhere in cmd_packet
+    if PB_PROP_003_WIRING_FIELD not in data:
+        return  # absent — legitimate legacy carve-out, no finding
+    if data.get(PB_PROP_003_WIRING_FIELD) is not True:
+        findings.append(("P1", str(manifest_path),
+            f"{PB_PROP_003_WIRING_FIELD}: {data.get(PB_PROP_003_WIRING_FIELD)!r} is present but not "
+            "a real boolean true — a packet that TRIED to opt into the PB-PROP-003 wiring gate and "
+            "botched the marker must fail closed at freeze, not silently fall to the legacy "
+            "carve-out at acceptance time (only genuine ABSENCE of this field is a legitimate "
+            "non-opt-in) (PACKET-PB-PROP-003-MARKER-WELL-FORMED, PB-PROP-003 §R5, xfam finding "
+            "CX-PB003-002)"))
+
+
+# B-PROP-013 §4 (design-history/b-prop-013-forge-parity-design-2026-07-06.md, the "ships-dark
+# fix" — council fix #1): mirrors cx_module_acceptance.FORGE_PARITY_MARKER_FIELD (same field,
+# same manifest, checked at the OTHER end of the lifecycle: freeze here vs acceptance there).
+# UNLIKE PB_PROP_003_WIRING_FIELD above (where absence is a legitimate legacy carve-out), this
+# marker is REQUIRED-TRUE for every NEW packet — a marker left absent would ride the legacy
+# presence-only acceptance path forever, making "on now" on-paper only. --legacy-migration is
+# the SAME escape hatch cx_design_fidelity.py already uses for a genuinely in-flight project's
+# documented migration debt (already-shipped apps) — never for a new packet.
+FORGE_PARITY_MARKER_FIELD = "b_prop_013_forge_parity"
+
+# FIX-FIRST (B-PROP-013 xfam P1): --legacy-migration used to be a BLANKET self-waiver — any NEW
+# packet could pass the bare flag and skip the required-true marker forever, defeating the
+# ships-dark closer §4 was built to close. It must now carry a TYPED, resolvable proof:
+#   (a) --migration-ref <CEO-D-NNN> resolving to a REAL row in the PROTOCOL-level
+#       MEMORY/CEO-DECISION-LEDGER.md (repo-root, NOT the packet's own ledger — a migration
+#       waiver is a protocol-level decision) — a ref that merely LOOKS like an id but names no
+#       real row does not count (mirrors _check_clarification_sweep's ledger-resolution
+#       precedent), or
+#   (b) the packet already carries a pre-existing frozen MODULE-REGISTRY.yaml with a non-empty
+#       module_registry.frozen_packet_hash — proof the packet was ALREADY frozen (genuinely
+#       in-flight), not merely asserted by the flag.
+# A bare --legacy-migration with neither proof does NOT waive — it falls through to the same
+# marker-required check a packet with no flag at all gets.
+_THIS_DIR = Path(__file__).resolve().parent
+
+
+def _protocol_ledger_row_ids() -> set:
+    """Real CEO-D-NNN row ids in the PROTOCOL-level MEMORY/CEO-DECISION-LEDGER.md (repo root) —
+    distinct from _ledger_row_ids, which reads the PACKET's own ledger file."""
+    led = _THIS_DIR.parent / "MEMORY" / LEDGER_FILE
+    if not led.is_file():
+        return set()
+    return set(_LEDGER_ROW_ID_RE.findall(led.read_text(encoding="utf-8", errors="replace")))
+
+
+def _legacy_migration_proven(packet_dir: Path, migration_ref: str) -> bool:
+    """FIX-FIRST (B-PROP-013 §4): True only when --legacy-migration carries one of the two typed
+    proofs documented above. See module-level comment for the full rationale."""
+    ref = str(migration_ref or "").strip()
+    if ref and _LEDGER_ROW_ID_RE.fullmatch(ref) and ref in _protocol_ledger_row_ids():
+        return True
+    reg_path = packet_dir / REGISTRY_FILE
+    if reg_path.is_file():
+        rdata, rerr = load_yaml(str(reg_path))
+        mr = rdata.get("module_registry") if isinstance(rdata, dict) else None
+        fph = str(mr.get("frozen_packet_hash", "") or "").strip() if isinstance(mr, dict) else ""
+        if not rerr and fph:
+            return True
+    return False
+
+
+def _check_forge_parity_marker_required(packet_dir: Path, findings: list, legacy_migration: bool,
+                                        migration_ref: str = "") -> None:
+    """PACKET-FORGE-PARITY-MARKER-REQUIRED (P1): a NEW packet's requirements-manifest.yaml must
+    declare b_prop_013_forge_parity: true (a real boolean true) — absence OR a botched value
+    (quoted "true"/"yes", 1, etc.) both fail here for a new packet. --legacy-migration exempts a
+    genuinely in-flight, already-frozen project ONLY when it carries a typed, resolvable proof
+    (--migration-ref resolving to a real protocol ledger row, OR a pre-existing frozen
+    MODULE-REGISTRY.yaml hash) — a bare --legacy-migration with no proof does NOT waive (FIX-FIRST:
+    was previously an unconditional self-waiver, closed per xfam P1)."""
+    if legacy_migration and _legacy_migration_proven(packet_dir, migration_ref):
+        return  # grandfathered in-flight packet WITH resolvable proof — exempt
+    manifest_path = packet_dir / MANIFEST_FILE
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict):
+        return  # manifest missing/malformed is already flagged elsewhere in cmd_packet
+    if data.get(FORGE_PARITY_MARKER_FIELD) is not True:
+        proof_note = (
+            " (--legacy-migration was passed but carries NO resolvable proof — a bare flag is "
+            "not a waiver; supply --migration-ref <CEO-D-NNN> resolving to a real MEMORY/"
+            "CEO-DECISION-LEDGER.md row, or freeze the packet with a pre-existing MODULE-"
+            "REGISTRY.yaml frozen_packet_hash)"
+        ) if legacy_migration else ""
+        findings.append(("P1", str(manifest_path),
+            f"{FORGE_PARITY_MARKER_FIELD} is not declared as a real boolean true{proof_note} — "
+            "every NEW packet must opt into the B-PROP-013 forge-parity acceptance-recompute "
+            "guard at the WRITING floor (a marker left absent rides the legacy presence-only "
+            "acceptance path forever, making 'on now' on-paper only, the ships-dark hole "
+            "B-PROP-013 §4 closes); pass --legacy-migration WITH resolvable proof ONLY for a "
+            "genuinely in-flight project's documented migration debt, never for a new packet "
+            "(PACKET-FORGE-PARITY-MARKER-REQUIRED, B-PROP-013 §4)"))
+
+
 # P-PROP-004: external-visual-reference must be captured + locked.
 SCREENS_FILE = "screens-manifest.yaml"
 EXTERNAL_REF_FILE = "external-visual-references.yaml"
@@ -560,6 +719,11 @@ _LEDGER_ROW_ID_RE = re.compile(r"\bCEO-D-[A-Z0-9][A-Z0-9-]*\b")
 # actually testable. A literal "is this measurable" checker would over-claim — the cardinal sin.
 ACCEPTANCE_FIELD = "acceptance_criterion"
 ACCEPTANCE_KEYS = ("pass_condition", "evidence_type", "verification_ref")
+# PB-PROP-003 Unit 1 (packet stage, Design Resolution v2 §R4): a BUILDING requirement's
+# non_behavioral_exemption reason, frozen vocabulary — no free-text hatch. Deliberately excludes
+# accessibility/performance (those are runtime-testable behavior, not exempt).
+NON_BEHAVIORAL_EXEMPTION_REASONS = {"visual", "data_shape", "config", "content",
+                                     "operational", "security_invariant"}
 # Obvious non-answers — a blank or placeholder is not a filled-in criterion.
 _AC_PLACEHOLDER_TOKENS = {"", "tbd", "tba", "todo", "fixme", "n/a", "na", "none", "null",
                          "?", "??", "???", ".", "..", "...", "-", "x", "xxx",
@@ -624,6 +788,20 @@ def _check_clarification_sweep(packet_dir: Path, findings: list) -> None:
                         "a ref that merely looks valid but names no real row is the self-exemption "
                         "escape hatch P-PROP-003 rejects (P-PROP-003a)"))
 
+                # RULE-CONFLICT-IS-OPEN-CLARIFICATION (PBF-PROP-020 Rule 5): a rule-conflict
+                # clarification resolves only with BOTH a resolution_lock_ref (a mockup showing
+                # the resolved look, ties to Rule 6 replace) AND a resolved ceo_decision_ref
+                # (checked above) — no loose list, this rides the SAME sweep machinery.
+                if str(row.get("kind", "") or "").strip() == "rule-conflict":
+                    rlr = str(row.get("resolution_lock_ref", "") or "").strip()
+                    target = _resolve_inside(packet_dir, rlr) if rlr else None
+                    if not rlr or target is None or not target.is_file():
+                        findings.append(("P1", row_loc,
+                            "rule-conflict clarification has no resolving resolution_lock_ref — a "
+                            "rule-conflict resolves only with a mockup showing the resolved look "
+                            "(ties to Rule 6 replace), never CEO decision text alone "
+                            "(RULE-CONFLICT-IS-OPEN-CLARIFICATION, PBF-PROP-020 Rule 5)"))
+
     # Any unresolved marker in a CONTENT doc blocks freeze. Only the ROOT sweep file is excluded
     # (by resolved path — a nested sub/clarification-sweep.yaml hiding a marker cannot pass).
     sweep_resolved = sweep_path.resolve()
@@ -667,6 +845,138 @@ def _check_acceptance_criteria(packet_dir: Path, findings: list) -> None:
                 "audit judges testability (P-PROP-003b)"))
 
 
+def _gwt_artifact_ref_resolves(packet_dir: Path, ref: str) -> bool:
+    """PB-PROP-003 §R4: general (reason-agnostic) in-packet anchor resolution for a
+    non_behavioral_exemption.artifact_ref — an existing file path under packet_dir, OR a
+    requirement/module/screen id already declared in the packet's manifest/registry.
+    Deliberately kept GENERAL (presence + resolves-in-packet) — a per-reason-type resolver is
+    out of scope (simplicity-first; the whole-packet cold-reader review audits whether the
+    reason itself fits, this only proves the ref is not a dangling/bare claim).
+
+    NOT a raw full-text substring scan of the manifest: the artifact_ref is itself WRITTEN
+    inside requirements-manifest.yaml, so a blind substring search would trivially "resolve"
+    any string against the very field declaring it. Matching against structured id fields
+    (requirement id / module_id / screen_id) closes that self-reference loophole.
+
+    CX-PB003-003 FIX-FIRST (xfam finding 3, P1): the SAME self-reference hole existed one layer
+    down — a file-path artifact_ref pointing at the manifest ITSELF (or the module registry) is
+    a real, existing file, so the naive `target.is_file()` check "resolved" it too (e.g.
+    artifact_ref: requirements-manifest.yaml "anchoring" against the very manifest that declares
+    the exemption). An anchor must be a DIFFERENT in-packet artifact (a real screen/ui-lock/
+    schema/config/content file, or a declared requirement/module/screen id) — never the manifest
+    or registry that CARRIES the declaration. Rejected by resolved-absolute-path comparison, kept
+    general (not a per-reason-type resolver)."""
+    target = _resolve_inside(packet_dir, ref)
+    if target is not None and target.is_file():
+        manifest_path = (packet_dir / MANIFEST_FILE).resolve()
+        registry_path = (packet_dir / REGISTRY_FILE).resolve()
+        if target == manifest_path or target == registry_path:
+            return False
+        return True
+
+    anchors: set = set()
+    mdata, _ = load_yaml(str(packet_dir / MANIFEST_FILE))
+    if isinstance(mdata, dict) and isinstance(mdata.get("requirements"), list):
+        for row in mdata["requirements"]:
+            if isinstance(row, dict) and row.get("id"):
+                anchors.add(str(row["id"]).strip())
+    reg_path = packet_dir / REGISTRY_FILE
+    if reg_path.is_file():
+        rdata, _ = load_yaml(str(reg_path))
+        mr = rdata.get("module_registry") if isinstance(rdata, dict) else None
+        rows = mr.get("modules") if isinstance(mr, dict) else None
+        if isinstance(rows, list):
+            for m in rows:
+                if not isinstance(m, dict):
+                    continue
+                for key in ("module_id", "screen_id"):
+                    if m.get(key):
+                        anchors.add(str(m[key]).strip())
+    return ref in anchors
+
+
+def _check_gwt_examples(packet_dir: Path, findings: list) -> None:
+    """PB-PROP-003 Unit 1 (packet stage): a BUILDING requirement's acceptance_criterion carries
+    >=1 well-formed Given/When/Then example UNLESS the row declares a typed + anchored
+    non_behavioral_exemption (absence of the exemption = behavioral, fail-closed default per
+    Design v1 "the crux"). Structure-only shape-check — reuses _ac_is_placeholder; NEVER an
+    English-quality judgment (same constitutional line as _check_acceptance_criteria, :598-601).
+
+    Tier split (Design Resolution v2 §R3): only the "examples must be AUTHORED" requirement is
+    ceremony (LITE-relaxable, PACKET-GWT-LITE-RELAXES-AUTHORING); exemption validity and the
+    shape of any examples that ARE present are SPINE — enforced at every tier.
+
+    Fails CLOSED on a malformed/unreadable manifest (PACKET-GWT-MANIFEST-MALFORMED-FAILS-CLOSED,
+    §R8) — unlike _check_acceptance_criteria's silent return (that clause defers malformed YAML
+    to `cx check deck`; this one must not let malformed YAML dodge the G/W/T gate)."""
+    manifest = packet_dir / MANIFEST_FILE
+    if not manifest.is_file():
+        return  # the manifest-missing P1 already fires in cmd_packet
+    data, err = load_yaml(str(manifest))
+    if err or not isinstance(data, dict) or not isinstance(data.get("requirements"), list):
+        findings.append(("P1", str(manifest),
+            f"{MANIFEST_FILE} unreadable/malformed ({err or 'no requirements list'}) — the G/W/T "
+            "check fails CLOSED rather than silently skipping the clause (PACKET-GWT-MANIFEST-"
+            "MALFORMED-FAILS-CLOSED, PB-PROP-003)"))
+        return
+
+    tier = resolve_risk_tier(packet_dir)
+
+    for i, row in enumerate(data["requirements"]):
+        if not isinstance(row, dict) or str(row.get("disposition", "")).strip() != "BUILDING":
+            continue
+        rid = str(row.get("id", "?"))
+        row_loc = f"{manifest}#requirements[{i}]"
+        exemption = row.get("non_behavioral_exemption")
+
+        if exemption is not None:
+            reason = exemption.get("reason") if isinstance(exemption, dict) else None
+            artifact_ref = exemption.get("artifact_ref") if isinstance(exemption, dict) else None
+            reason_ok = isinstance(reason, str) and reason.strip() in NON_BEHAVIORAL_EXEMPTION_REASONS
+            ref_ok = (not _ac_is_placeholder(artifact_ref)
+                      and _gwt_artifact_ref_resolves(packet_dir, str(artifact_ref).strip()))
+            if not isinstance(exemption, dict) or not reason_ok or not ref_ok:
+                findings.append(("P1", row_loc,
+                    f"BUILDING requirement '{rid}' non_behavioral_exemption is untyped or "
+                    "unanchored — must be a mapping {reason, artifact_ref} with reason in "
+                    f"{sorted(NON_BEHAVIORAL_EXEMPTION_REASONS)} and artifact_ref RESOLVING to a "
+                    "real in-packet file / manifest / registry anchor, not a bare claim "
+                    "(PACKET-EXEMPTION-UNTYPED-OR-UNANCHORED, PB-PROP-003)"))
+            continue  # exempt row (valid or not) — never required to carry examples
+
+        # Behavioral (no exemption declared). Authoring examples is CEREMONY (LITE-relaxable);
+        # shape-checking anything present is SPINE regardless of tier.
+        ac = row.get(ACCEPTANCE_FIELD)
+        examples = ac.get("examples") if isinstance(ac, dict) else None
+        if not examples:
+            if tier != "LITE":
+                findings.append(("P1", row_loc,
+                    f"BUILDING requirement '{rid}' is behavioral (no non_behavioral_exemption) but "
+                    f"'{ACCEPTANCE_FIELD}.examples' is missing/empty — a behavioral requirement "
+                    "needs >=1 Given/When/Then example (PACKET-GWT-EXAMPLE-REQUIRED, PB-PROP-003)"))
+            continue
+
+        if not isinstance(examples, list):
+            findings.append(("P1", row_loc,
+                f"BUILDING requirement '{rid}' {ACCEPTANCE_FIELD}.examples is not a list "
+                "(PACKET-GWT-EXAMPLE-MALFORMED, PB-PROP-003)"))
+            continue
+
+        for j, ex in enumerate(examples):
+            ex_loc = f"{row_loc}.{ACCEPTANCE_FIELD}.examples[{j}]"
+            if not isinstance(ex, dict):
+                findings.append(("P1", ex_loc,
+                    f"BUILDING requirement '{rid}' example is not a mapping {{given, when, then}} "
+                    "(PACKET-GWT-EXAMPLE-MALFORMED, PB-PROP-003)"))
+                continue
+            bad_keys = [k for k in ("given", "when", "then") if _ac_is_placeholder(ex.get(k))]
+            if bad_keys:
+                findings.append(("P1", ex_loc,
+                    f"BUILDING requirement '{rid}' example missing/placeholder/non-string "
+                    f"{bad_keys} — structure only, never an English-quality judgment "
+                    "(PACKET-GWT-EXAMPLE-MALFORMED, PB-PROP-003)"))
+
+
 # P-PROP-005 (v1.18): packet-floor registry coverage. For a screen/module-first project (a planning
 # MODULE-REGISTRY.yaml drafted in the packet), the registry must cover every screen/shared module +
 # every BUILDING requirement id BEFORE the packet freezes — so the freeze→G1 sequence binds a registry
@@ -708,6 +1018,45 @@ def _check_module_registry_coverage(packet_dir: Path, findings: list) -> None:
     registry_screens = {str(m.get("screen_id")).strip() for m in rows
                        if isinstance(m, dict) and m.get("screen_id")
                        and str(m.get("kind", "")).strip() == "screen"}
+
+    # ── ONE-LIVE-LOCK-PER-SCREEN (P0, PBF-PROP-020 Rule 6a) ─────────────────────────────────────
+    # Each screen_id must have exactly ONE live (non-tombstoned) lock_ref. A superseded lock is
+    # recorded with superseded_by + tombstoned (reuses the cx_accepted_surface superseded_by_lock_ref
+    # pattern) — era-layered locks (e.g. light+dark+nav-shell all claiming "live") is the P0-3 hole
+    # this closes. A live lock_ref reused as another screen's live lock is the same P0 class.
+    by_screen: dict = {}
+    for m in rows:
+        if not isinstance(m, dict):
+            continue
+        sid = str(m.get("screen_id", "") or "").strip()
+        if not sid:
+            continue
+        lr = str(m.get("lock_ref", "") or "").strip()
+        if not lr:
+            # Forward-scope (built-code xfam P0-2 resolution): a screen row with NO lock_ref is
+            # skipped, not failed — Rule 6a's job is "no era-layered MULTIPLE live locks", never
+            # "every screen must own a lock" (that would retro-break pre-020 registries). The
+            # "a look-CHANGE needs a current lock" requirement is Rule 1's fail-closed card-time gate.
+            continue
+        tombstoned = bool(str(m.get("tombstoned", "") or "").strip())
+        by_screen.setdefault(sid, []).append((lr, tombstoned))
+    lock_owner: dict = {}
+    for sid, entries in by_screen.items():
+        live = [lr for lr, tomb in entries if not tomb]
+        if len(set(live)) > 1:
+            findings.append(("P0", str(reg_path),
+                f"screen_id '{sid}' has MULTIPLE live lock_refs {sorted(set(live))} in "
+                f"{REGISTRY_FILE} — era-layered locks (e.g. light+dark+nav-shell all claiming "
+                "live) are P0; a superseded lock must carry superseded_by + tombstoned "
+                "(ONE-LIVE-LOCK-PER-SCREEN, PBF-PROP-020 Rule 6a)"))
+        for lr in set(live):
+            if lr in lock_owner and lock_owner[lr] != sid:
+                findings.append(("P0", str(reg_path),
+                    f"lock_ref '{lr}' is the live lock for BOTH screen_id '{lock_owner[lr]}' and "
+                    f"'{sid}' in {REGISTRY_FILE} — a live lock file must belong to exactly one "
+                    "screen (ONE-LIVE-LOCK-PER-SCREEN, PBF-PROP-020 Rule 6a)"))
+            else:
+                lock_owner[lr] = sid
 
     # ── PACKET-MODULE-REGISTRY-COVERS-SCREENS (P1) ──────────────────────────────────────────────
     screens_path = packet_dir / SCREENS_MANIFEST_FILE
@@ -768,7 +1117,12 @@ def cmd_packet(args) -> int:
     _check_audit(packet_dir, findings)
     _check_clarification_sweep(packet_dir, findings)
     _check_acceptance_criteria(packet_dir, findings)
+    _check_gwt_examples(packet_dir, findings)
     _check_style_direction(packet_dir, findings)
+    _check_risk_tier(packet_dir, findings)
+    _check_pb_prop_003_wiring_marker(packet_dir, findings)
+    _check_forge_parity_marker_required(packet_dir, findings, getattr(args, "legacy_migration", False),
+                                        getattr(args, "migration_ref", ""))
     _check_visual_provenance(packet_dir, findings)
     _check_module_registry_coverage(packet_dir, findings)
     _check_sop_coverage_map(packet_dir, findings)
@@ -779,5 +1133,5 @@ def cmd_packet(args) -> int:
     print("PASS")
     print(f"  coverage: {done} categories DONE, {na} written-N/A (all 20 accounted for)")
     print(f"  floor: {COVERAGE_FILE} · {MANIFEST_FILE} · {LEDGER_FILE} (asks+decisions) · {AUDIT_FILE}")
-    print(f"  writing-stage: {SWEEP_FILE} (ledger-bound clarify-before-freeze) · BUILDING acceptance_criterion present")
+    print(f"  writing-stage: {SWEEP_FILE} (ledger-bound clarify-before-freeze) · BUILDING acceptance_criterion present · G/W/T examples or typed exemption")
     return 0

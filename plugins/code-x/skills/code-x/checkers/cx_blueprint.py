@@ -33,7 +33,7 @@
 import hashlib
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, nested_get, safe_repo_ref
+from cx_common import findings_report, load_yaml, nested_get, safe_repo_ref, resolve_risk_tier
 from cx_deck import _compute_packet_hash
 
 MANIFEST_NAME = "blueprint-manifest.yaml"
@@ -123,7 +123,7 @@ def _span_hash(packet_dir: Path, file_rel, line) -> tuple[str | None, str | None
 
 
 def _derive_expected_anchor_ids(reg_module: dict, mid: str, screen_id: str, kind: str,
-                                contracts: dict, screen_nav: dict) -> set:
+                                contracts: dict, screen_nav: dict, risk_tier: str = "STRICT") -> set:
     """The EXPECTED anchor-id set for a module, DERIVED from sources INDEPENDENT of the manifest field
     being validated (CXBP-001 — the circularity fix). NEVER reads module.controls / module.nav (those
     are exactly what coverage must prove complete):
@@ -135,7 +135,13 @@ def _derive_expected_anchor_ids(reg_module: dict, mid: str, screen_id: str, kind
         (screen_nav[screen_id] = list of to_screen ids). A manifest that omits a declared nav row fails.
     The manifest's declared anchor set must EQUAL this (no missing, no extra). Anchor ids:
     req:<id> / control:<id> / nav:<from>-><to>. Coverage is only as complete as these independent
-    sources (honest limit)."""
+    sources (honest limit).
+
+    PBF-PROP-019 Phase 3 (design v2.B row 6, blueprint_depth): a LITE-tier project's expected set
+    keeps req:/nav: (the "nav-map + done-test" floor) but DROPS control: — the full behaviour-contract
+    anchors — since LITE also does not require BLUEPRINT-CONTROL-HAS-CONTRACT (see _validate_module).
+    STANDARD/STRICT are unchanged (risk_tier default "STRICT" preserves today's behaviour byte-for-byte
+    for any caller that doesn't pass risk_tier)."""
     expected = set()
     # requirements are CANONICAL: derived from the frozen registry row, not the manifest.
     for rid in (reg_module.get("requirement_ids") or []):
@@ -145,14 +151,15 @@ def _derive_expected_anchor_ids(reg_module: dict, mid: str, screen_id: str, kind
         scope_ids = {mid}
         if screen_id:
             scope_ids.add(screen_id)
-        # controls: INDEPENDENT — from the behaviour-contracts source, scoped to this screen/module.
-        for ctr in contracts.values():
-            if not isinstance(ctr, dict):
-                continue
-            scope = str(ctr.get("screen", "") or ctr.get("module_id", "") or "").strip()
-            cid = str(ctr.get("control_id", "") or "").strip()
-            if cid and scope in scope_ids:
-                expected.add(f"control:{cid}")
+        if risk_tier != "LITE":
+            # controls: INDEPENDENT — from the behaviour-contracts source, scoped to this screen/module.
+            for ctr in contracts.values():
+                if not isinstance(ctr, dict):
+                    continue
+                scope = str(ctr.get("screen", "") or ctr.get("module_id", "") or "").strip()
+                cid = str(ctr.get("control_id", "") or "").strip()
+                if cid and scope in scope_ids:
+                    expected.add(f"control:{cid}")
         # nav: INDEPENDENT — from the screens-manifest's declared edges for this screen.
         sid = screen_id or mid
         for to in (screen_nav.get(sid) or []):
@@ -165,8 +172,11 @@ def _derive_expected_anchor_ids(reg_module: dict, mid: str, screen_id: str, kind
 def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                      reg_module: dict, approval_block, state, findings: list,
                      reg_index: dict, screen_nav: dict, builder_family: str,
-                     approval_root: Path) -> None:
-    """Recompute + validate ONE module against canonical sources. Appends findings."""
+                     approval_root: Path, risk_tier: str = "STRICT") -> None:
+    """Recompute + validate ONE module against canonical sources. Appends findings.
+
+    risk_tier (PBF-PROP-019 Phase 3, design v2.B row 6): default "STRICT" preserves today's
+    behaviour byte-for-byte for any caller that doesn't pass it."""
     mid = str(module.get("module_id", "") or "").strip()
     kind = str(module.get("kind", "") or "").strip()
     screen_id = str(module.get("screen_id", "") or "").strip()
@@ -236,7 +246,7 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
         findings.append(("P0", mloc,
             f"module '{mid}' has duplicate anchor_id(s) {dupes} — a duplicate lets an incomplete "
             "manifest still hash cleanly (BLUEPRINT-ANCHOR-COVERAGE, P-PROP-005)"))
-    expected = _derive_expected_anchor_ids(reg_module, mid, screen_id, kind, contracts, screen_nav)
+    expected = _derive_expected_anchor_ids(reg_module, mid, screen_id, kind, contracts, screen_nav, risk_tier)
     declared_set = set(declared_ids)
     missing_anchors = sorted(expected - declared_set)
     if missing_anchors:
@@ -270,6 +280,26 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                     f"screen module '{mid}' ui_lock_hash mismatch: declared {declared_lock[:12] or '(missing)'}…, "
                     f"actual {actual_lock[:12]}… — the locked design is not hash-bound to the manifest "
                     "(BLUEPRINT-SCREEN-DESIGN-LOCKED, P-PROP-005)"))
+            else:
+                # INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT (P1, PBF-PROP-020 Rule 6b): a lock
+                # flagged interactive_chrome: yes (nav shells, scroll strips, sticky bars) must
+                # carry a behavior_contract {fixed, scrolls, bounces} — "feel never written down"
+                # is the a live-production app's nav-shell drift cause this closes.
+                lock_raw, _lock_err = load_yaml(str(lock_target))
+                lock_body = (lock_raw.get("ui_lock_manifest") if isinstance(lock_raw, dict)
+                            and isinstance(lock_raw.get("ui_lock_manifest"), dict) else lock_raw)
+                interactive = isinstance(lock_body, dict) and str(
+                    lock_body.get("interactive_chrome", "") or "").strip().lower() in ("yes", "true")
+                if interactive:
+                    bc = lock_body.get("behavior_contract")
+                    if not isinstance(bc, dict) or not all(
+                            _is_str(bc.get(k)) for k in ("fixed", "scrolls", "bounces")):
+                        findings.append(("P1", mloc,
+                            f"screen module '{mid}' lock '{lock_ref}' is flagged interactive_chrome: "
+                            "yes but carries no complete behavior_contract {fixed, scrolls, bounces} "
+                            "— the feel of a nav shell/scroll strip/sticky bar must be written down, "
+                            "not left to builder judgment "
+                            "(INTERACTIVE-CHROME-HAS-BEHAVIOR-CONTRACT, PBF-PROP-020 Rule 6b)"))
 
     # ── BLUEPRINT-NAV-COMPLETE (P1): every nav to_screen resolves to a screen REGISTERED IN THE FROZEN
     #    REGISTRY (or the independent screens-manifest) — NEVER a manifest-only row (CXBP-002). A fake
@@ -294,7 +324,11 @@ def _validate_module(packet_dir: Path, manifest: dict, module: dict, mloc: str,
                     "row never satisfies it) (BLUEPRINT-NAV-COMPLETE, P-PROP-005)"))
 
     # ── BLUEPRINT-CONTROL-HAS-CONTRACT (P1): every control_id resolves to a full behaviour contract ──
-    if kind == "screen":
+    # PBF-PROP-019 Phase 3 (design v2.B row 6, blueprint_depth): LITE drops the full behaviour-
+    # contract requirement (nav-map + done-test is the LITE floor, enforced separately below by
+    # BLUEPRINT-NAV-COMPLETE + BLUEPRINT-FEATURE-HAS-DONE-TEST, which this tier read does NOT touch).
+    # STANDARD/STRICT are unchanged.
+    if kind == "screen" and risk_tier != "LITE":
         for c in (module.get("controls") or []):
             if not isinstance(c, dict):
                 continue
@@ -604,6 +638,10 @@ def cmd_blueprint(args) -> int:
         print(f"FIX-FIRST\n  [P0] {packet_dir_arg} — packet-dir is a symlink (fail-closed, P-PROP-005)")
         return 1
 
+    # PBF-PROP-019 Phase 3 (design v2.B row 6, blueprint_depth): resolve the project risk_tier
+    # directly from the same packet_dir the whole gate already reads (no new CLI wiring needed).
+    risk_tier_val = resolve_risk_tier(packet_dir)
+
     module_arg = getattr(args, "module", None)
     do_all = getattr(args, "all", False)
     if not module_arg and not do_all:
@@ -713,7 +751,7 @@ def cmd_blueprint(args) -> int:
                 "are derived from the canonical registry, never the manifest alone (P-PROP-005)"))
             continue
         _validate_module(packet_dir, bp, m, mloc, reg_module, approval_block, state, findings,
-                         reg_index, screen_nav, builder_family, approval_root)
+                         reg_index, screen_nav, builder_family, approval_root, risk_tier_val)
 
     if not findings:
         print("PASS")

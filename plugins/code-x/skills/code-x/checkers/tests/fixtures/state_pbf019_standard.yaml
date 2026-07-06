@@ -1,0 +1,8 @@
+# PBF-PROP-019 Phase 5 (EVAL-052): minimal state whose packet_dir resolves risk_tier: STANDARD
+# (via packet_good_risk_tier_standard/requirements-manifest.yaml). Used as the third-tier positive
+# control proving a spine gate (e.g. CARD-HIGH-RISK-FORCES-FOUNDATION) ignores risk_tier across
+# ALL THREE declared values, not merely the LITE/STRICT pair Phase 3 already covered.
+project: cx-pbf019-phase5-test
+protocol_stamp: Code-X V1
+packet_dir: packet_good_risk_tier_standard
+current_card:

@@ -1,0 +1,11 @@
+# PB-PROP-003 Unit 2 fixture packet — pre-existing packet that NEVER declared the
+# pb_prop_003_wiring capability marker (the default state of every live packet today: real-project, a live-production app,
+# Sample). Proves §R5's migration boundary: the old free-text criteria_ref keeps working here,
+# recorded as a non-blocking advisory, never a retroactive break.
+requirements:
+  - id: REQ-201
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Legacy screen shows the imported total."
+      evidence_type: automated_test
+      verification_ref: "tests/test_legacy.py::test_shows_total"

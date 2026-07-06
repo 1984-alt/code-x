@@ -33,6 +33,7 @@ from cx_consistency import cmd_consistency
 from cx_deck import cmd_deck
 from cx_packet import cmd_packet
 from cx_boot import cmd_boot
+from cx_accept import cmd_accept
 from cx_build_turn import cmd_build_turn
 from cx_close_turn import cmd_close_turn
 from cx_evals import cmd_evals
@@ -111,6 +112,10 @@ def main():
     p_fr.add_argument("--card", help="Optional: path to WORK-ORDER YAML for evidence check", default=None)
     p_fr.add_argument("--repo-root", dest="repo_root", default=None,
                       help="Repo root to resolve the final cross-family receipt path (default: state file's dir)")
+    p_fr.add_argument("--cards-dir", dest="cards_dir", default=None,
+                      help="Directory of compiled work-order card YAMLs (the live deck) — enables the "
+                           "PBF-PROP-019 P0-2 recompute of 'did a high-risk card fire in this build' "
+                           "(default: <repo-root>/cards if that conventional dir exists)")
 
     # consistency
     p_con = check_sub.add_parser("consistency", help="Check all registry rules are present in their appears_in files")
@@ -138,6 +143,17 @@ def main():
         help="Packet-contents floor (PROP-014): coverage map + ledger + completeness audit present and non-thin"
     )
     p_packet.add_argument("packet_dir", help="Frozen packet directory")
+    p_packet.add_argument("--legacy-migration", dest="legacy_migration", action="store_true", default=False,
+                          help="Exempt a genuinely in-flight, already-frozen project from the "
+                               "B-PROP-013 forge-parity WRITING-floor marker requirement "
+                               "(PACKET-FORGE-PARITY-MARKER-REQUIRED) — never for a new packet. "
+                               "REQUIRES typed proof: --migration-ref, or a pre-existing frozen "
+                               "MODULE-REGISTRY.yaml hash — a bare flag alone does NOT waive "
+                               "(FIX-FIRST, B-PROP-013 xfam P1)")
+    p_packet.add_argument("--migration-ref", dest="migration_ref", default="",
+                          help="CEO-D-NNN row id in MEMORY/CEO-DECISION-LEDGER.md proving "
+                               "--legacy-migration's grandfather claim is a real, ratified "
+                               "decision (FIX-FIRST, B-PROP-013 §4)")
 
     # boot (PROP-018: generates the machine-authored boot receipt)
     p_boot = check_sub.add_parser("boot", help="Generate the session boot receipt (machine-hashed canon + state check)")
@@ -147,6 +163,24 @@ def main():
     p_boot.add_argument("--handoffs-dir", dest="handoffs_dir", default=None,
                         help="Handoffs directory (default: <repo-root>/handoffs)")
     p_boot.add_argument("--profiles", help="Path to BUILD-ENGINE-PROFILES.yaml (CX_PROFILES env overrides for test pinning)", default=None)
+
+    # accept (B-PROP-013 Unit 2: the STAMPER — ergonomics + honest state_sha_before capture +
+    # ceo_accept_token<->HEAD refusal; NOT a forge wall — see cx_accept.py module docstring)
+    p_accept = check_sub.add_parser(
+        "accept",
+        help="Generate a MODULE-ACCEPTANCE receipt from a draft: recomputes state_sha_before + "
+             "repo_sha (HEAD) + quality_card_hash, refuses verdict: accepted without a "
+             "ceo_accept_token embedding the recomputed HEAD prefix (B-PROP-013 §3)"
+    )
+    p_accept.add_argument("--draft", required=True,
+                          help="Path to the draft MODULE-ACCEPTANCE YAML (hand-authored content: "
+                               "module_id, quality_card, self_review, build_validation, anti_slop, "
+                               "verdict, ceo_accept_token, ...)")
+    p_accept.add_argument("--state", required=True, help="Path to CODE-X-STATE.yaml")
+    p_accept.add_argument("--repo-root", dest="repo_root", required=True,
+                          help="Path to the git repo root (HEAD resolves here)")
+    p_accept.add_argument("--out", default=None,
+                          help="Receipt path (default: MODULE-ACCEPTANCE.yaml next to the draft)")
 
     # build-turn (PROP-018: every-card aggregate gate; check/receipt-only, never a runner)
     p_bt = check_sub.add_parser("build-turn", help="Aggregate per-card gate: card+scope+stale-allowed-files+evidence+consistency+tests+CodeRabbit receipt")
@@ -204,6 +238,8 @@ def main():
     p_mq.add_argument("--acceptance", default=None, help="Path to the MODULE-ACCEPTANCE.yaml receipt")
     p_mq.add_argument("--registry", default=None, help="Path to the frozen MODULE-REGISTRY YAML (risk_flags + touches_shared_shell)")
     p_mq.add_argument("--module-id", dest="module_id", default=None, help="The registry module_id whose quality bar is checked")
+    p_mq.add_argument("--packet-dir", dest="packet_dir", default=None,
+                      help="(PB-PROP-003 Unit 2, optional) Path to the frozen packet dir — enables the criteria_refs wiring/reverse-coverage checks on a live_slice module's verify_app block (validate_live_slice_accept); omitted, those checks silently do not run (fail-closed omission, not fail-open)")
 
     # dep-scan (PROP-027: pre-build supply-chain gate — typed dependency_scan receipt)
     p_ds = check_sub.add_parser("dep-scan",
@@ -219,6 +255,15 @@ def main():
     p_eg.add_argument("--target", required=True, help="The external reviewer target (e.g. coderabbit)")
     p_eg.add_argument("--receipt", default=None,
                       help="Path to the egress receipt (egress_scrub OR sensitive_code_carveout)")
+    p_eg.add_argument("--card", default=None,
+                      help="(PBF-PROP-019, optional) path to the card whose diff this is — reads "
+                           "security_tripwire to detect a money/PII touch; omitting it preserves the "
+                           "pre-existing always-required behaviour")
+    p_eg.add_argument("--state", default=None,
+                      help="(PBF-PROP-019, optional) path to CODE-X-STATE.yaml — resolves the project "
+                           "risk_tier via state.packet_dir; omitting it defaults to STRICT (always required)")
+    p_eg.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="(PBF-PROP-019, optional) repo root for resolving --state's packet_dir")
 
     # class-sweep (PROP-026: the anti-whack-a-mole self-audit that resolves a whole class without re-review)
     p_cs = check_sub.add_parser("class-sweep",
@@ -231,11 +276,19 @@ def main():
     p_rf.add_argument("bundle", help="Path to the render bundle YAML (render_profile, coverage_matrix, render_evidence, optional golden_drift)")
     p_rf.add_argument("--repo-head", dest="repo_head", required=True,
                       help="The AUTHORITATIVE live repo HEAD (git rev-parse HEAD), supplied by the rail — every evidence row's repo_head must equal this. Freshness is proven against the live head, never against the bundle's own self-declared current_repo_head (PROP-033 xfam FIX 1)")
+    p_rf.add_argument("--repo-root", dest="repo_root", default=None,
+                      help="[PBF-PROP-020] Repo root — enables the git-touched-screen scope (Rule 2 RENDER-COVERS-GIT-TOUCHED / GOLDEN-DRIFT-BLOCKS-TOUCHED, Rule 7 UNPICTURED-STATE-IS-GAP). Requires --packet-dir + bundle.repo_sha_before.")
+    p_rf.add_argument("--packet-dir", dest="packet_dir", default=None,
+                      help="[PBF-PROP-020] Frozen packet dir (repo-relative) carrying MODULE-REGISTRY.yaml — the screen->file binding + per-screen live lock_ref source for the git-touched scope.")
 
     # verify-app (PROP-036: runtime behavior gate — the verify-app agent's receipt for a live_slice slice)
     p_va = check_sub.add_parser("verify-app",
                                 help="Validate a verify_app receipt: the verify-app agent drove the running build and its runtime acceptance-criteria check passed (bound by repo_sha, generator-stamped). Fires once per completed live_slice slice; a passing receipt is a PRECONDITION to the CEO live-drive accept (PROP-036)")
     p_va.add_argument("--acceptance", required=True, help="Path to the MODULE-ACCEPTANCE.yaml receipt carrying the verify_app block")
+    p_va.add_argument("--packet-dir", dest="packet_dir", default=None,
+                      help="(PB-PROP-003 Unit 2, optional) Frozen packet dir carrying requirements-manifest.yaml + MODULE-REGISTRY.yaml — enables the criteria_refs wiring/resolution check; omitting it preserves the pre-existing standalone behavior")
+    p_va.add_argument("--module-id", dest="module_id", default=None,
+                      help="(PB-PROP-003 Unit 2, optional, needs --packet-dir) The registry module_id whose behavioral requirements are reverse-coverage-checked against verify_app.criteria_refs")
 
     # module-demo (PROP-042 Part E: SEE-AND-TEST gate — the demo show-step receipt for a live_slice slice)
     p_md = check_sub.add_parser("module-demo",
@@ -397,6 +450,7 @@ def main():
         "deck": cmd_deck,
         "packet": cmd_packet,
         "boot": cmd_boot,
+        "accept": cmd_accept,
         "build-turn": cmd_build_turn,
         "close-turn": cmd_close_turn,
         "evals": cmd_evals,

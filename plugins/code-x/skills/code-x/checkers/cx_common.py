@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.22.4"          # LOCKED CANONICAL 2026-07-03 (CEO-D-042) — PBF-PROP-017 one-line installer: pinned trust-root shell installer, fail-closed manifest pins (patch). Prior: v1.22.3 (CEO-D-041) PBF-PROP-018 accepted-surface preserve posture; v1.22.2 (CEO-D-040) P-PROP-007 blueprint visual parity; v1.22.1 (CEO-D-039) PBF-PROP-016 public CI runs the full eval gate; v1.22 (CEO-D-038) A-PROP-001 Audit Stage + PBAF-PROP-001 SOP asset bind; v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
+PROTOCOL_VERSION = "1.22.5"          # LOCKED CANONICAL 2026-07-06 (CEO-D-050) — v1.22.5 BUNDLE, 5 folds: PBF-PROP-015 (cx_state arity) · PBF-PROP-020 (mockup-first) · PBF-PROP-019 (risk tiers) · PB-PROP-003 (G/W/T wiring) · B-PROP-013 (forge-parity acceptance recompute). Prior: v1.22.4 (CEO-D-042) PBF-PROP-017 one-line installer (patch). Prior: v1.22.3 (CEO-D-041) PBF-PROP-018 accepted-surface preserve posture; v1.22.2 (CEO-D-040) P-PROP-007 blueprint visual parity; v1.22.1 (CEO-D-039) PBF-PROP-016 public CI runs the full eval gate; v1.22 (CEO-D-038) A-PROP-001 Audit Stage + PBAF-PROP-001 SOP asset bind; v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
@@ -23,6 +23,11 @@ VALID_RESULTS = {"PASS", "FIX_FIRST", "STOP"}
 VALID_REVIEW_MODES = {"NONE", "SCAN", "DELTA", "SLICE", "FULL"}
 VALID_WASTE_FLAGS = {"over_read", "repeated_review", "loop", "wrong_model_tier",
                      "unclear_card", "missing_evidence"}
+
+# PBF-PROP-019: per-project risk tier (LITE/STANDARD/STRICT), declared in the frozen
+# packet's requirements-manifest.yaml (top-level `risk_tier` field).
+VALID_RISK_TIERS = {"LITE", "STANDARD", "STRICT"}
+_RISK_TIER_MANIFEST_FILE = "requirements-manifest.yaml"
 
 # --- BUILD-ENGINE-PROFILES enforcement (PBF-PROP-008) -------------------------
 # Canonical profiles file lives at Code-X-V1 root (one level up from checkers/).
@@ -209,6 +214,33 @@ def safe_repo_ref(ref: str, root) -> tuple[Path | None, str | None]:
                       "external bytes as an in-repo artifact (path-safety, mirrors the Andon wall's "
                       "acceptance_ref guard)")
     return rp, None
+
+
+def resolve_risk_tier(packet_dir) -> str:
+    """PBF-PROP-019: fail-closed per-project risk-tier resolution (design v2 §1).
+
+    Reads the frozen packet's `requirements-manifest.yaml` top-level `risk_tier`
+    field (mirrors how `cx_packet._style_block_values` extracts `locked_style_direction`
+    from the taste lock — same mirror-the-precedent pattern, different file).
+
+    - field ABSENT (missing file, unreadable YAML, or no `risk_tier` key) -> "STRICT"
+      (no error; this is the safety default, never a silent LITE).
+    - field present and one of LITE/STANDARD/STRICT (case-insensitive) -> that value,
+      normalised to uppercase.
+    - ANY other/invalid value -> "STRICT" (the loud P0 rejection of a malformed
+      declaration is `cx_packet`'s `PACKET-RISK-TIER-WELL-FORMED` validator's job,
+      not this resolver's — this helper only ever needs to answer "what ceremony
+      applies right now", so it never raises).
+    """
+    manifest_path = Path(packet_dir) / _RISK_TIER_MANIFEST_FILE
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict):
+        return "STRICT"
+    raw = data.get("risk_tier")
+    if raw is None:
+        return "STRICT"
+    val = str(raw).strip().upper()
+    return val if val in VALID_RISK_TIERS else "STRICT"
 
 
 def scan_secrets(content: str) -> list[str]:

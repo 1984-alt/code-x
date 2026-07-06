@@ -1,0 +1,3 @@
+# PBF-PROP-019 Phase 4 tier evidence receipt: asserts the frozen packet actually resolved to
+# risk_tier: LITE at ship time (mirrors the criteria-receipt snapshot pattern).
+resolved_risk_tier: LITE

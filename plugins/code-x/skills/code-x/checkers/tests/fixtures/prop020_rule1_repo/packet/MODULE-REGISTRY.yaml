@@ -1,0 +1,10 @@
+module_registry:
+  frozen_packet_hash: prop020-rule1-fixture
+  modules:
+    - module_id: m1
+      screen_id: income
+      kind: screen
+      lock_ref: locks/income.lock.yaml
+      requirement_ids: []
+      dependency_modules: []
+      card_ids: [BUILD-007]

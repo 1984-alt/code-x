@@ -1,0 +1,39 @@
+# PBF-PROP-019 P2 FIX (integration drift): a LITE-tier BUILD_FACTORY/MODULE_BUILD state
+# whose review_boundary.coderabbit_before_self_review is not_applicable — LITE legitimately
+# skips CodeRabbit (cx_card.py:419, cx_build_turn.py:251 already relax this). Before the
+# fix, cx_state.py:248 forced coderabbit_before_self_review: yes for EVERY tier, so this
+# accurate LITE declaration failed `cx check state`. Same shape as
+# state_bad_review_boundary_coderabbit_na.yaml (the STRICT-default negative control — no
+# packet_dir there resolves STRICT, still correctly fails) with packet_dir added.
+
+project: real-project-shaped
+protocol_stamp: Code-X V1
+packet_dir: packet_good_risk_tier_lite
+current_stage: BUILD_FACTORY
+current_mode: MODULE_BUILD
+current_card: BUILD-001
+current_actor: claude-sonnet
+next_actor: claude self-review
+build_authorized: true
+mode_a_status: NOT_APPLICABLE
+open_findings:
+  counts: {p0: 0, p1: 0, p2: 0, p3: 0}
+  items: []
+last_commit: abc123def456
+next_action: Code-X self-review BUILD-001 after deterministic checks
+stop_status: NONE
+cost_this_week:
+  cards_run: 1
+  top_model_cards: 0
+  cheap_model_cards: 0
+  full_reviews: 0
+  loops_used: 1
+  waste_alarm: LOW
+active_build_engine: CLAUDE_CODE
+orchestrator_model: claude-opus max
+review_boundary:
+  deterministic_checks_each_card: 'yes'
+  coderabbit_before_self_review: not_applicable
+  self_review_boundary: module
+  cross_family_boundary: module
+  xfam_capability: stage_1

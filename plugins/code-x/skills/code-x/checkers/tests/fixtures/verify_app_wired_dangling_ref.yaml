@@ -1,0 +1,9 @@
+# BAD (PB-PROP-003 Unit 2, ACCEPTANCE-CRITERIA-REFS-RESOLVE): criteria_refs cites REQ-999, which does
+# not exist ANYWHERE in the frozen requirements-manifest — a dangling reference. Must P0.
+module_acceptance:
+  module_id: m_wired
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_refs: [REQ-001, REQ-999]

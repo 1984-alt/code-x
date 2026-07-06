@@ -1,0 +1,9 @@
+module_registry:
+  frozen_packet_hash: good-registry-v1
+  modules:
+  - module_id: home
+    requirement_ids:
+    - REQ-001
+    dependency_modules: []
+    card_ids:
+    - BUILD-W1-001

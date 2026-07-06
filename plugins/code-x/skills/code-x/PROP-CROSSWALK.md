@@ -56,6 +56,10 @@
 | PROP-047 | P-PROP-007 | Blueprint visual parity (storyboard + prototype tab + anchor ids) |
 | PROP-048 | PBF-PROP-017 | One-line installer, dependencies pulled from official sources |
 | PROP-049 | PBF-PROP-018 | Stage routing recognized + preserve posture on accepted surfaces |
+| PROP-050 | B-PROP-013 | /cx-accept forge-parity acceptance recompute (CHARTER §4 promotion) |
+| PROP-051 | PB-PROP-003 | Given/When/Then executable acceptance examples |
+| PROP-052 | PBF-PROP-019 | Tiered strictness — per-project risk tiers (LITE/STANDARD/STRICT) |
+| PROP-053 | PBF-PROP-020 | Mockup-first change rule — no unrendered visuals anywhere in the loop |
 
 ## Retired (no new id)
 

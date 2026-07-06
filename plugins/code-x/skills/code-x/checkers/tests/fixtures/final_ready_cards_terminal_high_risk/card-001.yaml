@@ -1,0 +1,17 @@
+# PBF-PROP-019 P0-2 reproduction fixture: a TERMINAL high-risk card (touches money, no
+# dependency_capsules — nothing depends on it) with no foundation_checkpoint_required
+# declared. Per PB-PROP-002(b) (cx_card.py:1072) a foundation card is never blocked on its
+# own checkpoint, so this card can pass cx check card / build normally WITHOUT ever getting
+# an entry in state.foundation_checkpoints_passed (only a DEPENDENT card's check reads that
+# field). This is the exact real-world shape the old foundation_checkpoints_passed proxy
+# missed: high_risk_card_fired must resolve True here from the card's own security_tripwire,
+# never from a checkpoint ledger a terminal card is structurally exempt from populating.
+
+id: BUILD-TERMINAL-001
+mode: MODULE_BUILD
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: yes
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no

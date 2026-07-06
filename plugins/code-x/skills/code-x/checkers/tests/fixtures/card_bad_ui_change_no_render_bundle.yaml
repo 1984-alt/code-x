@@ -1,0 +1,159 @@
+# BAD: PBF-PROP-020 Rule 1 CITE-AND-COMPARE — a UI change on registered screen 'income' with a
+# VALID ui_contract.lock_ref but NO render_bundle: the lock is referenced but never rendered
+# against (build-turn would mark render-fidelity NOT_APPLICABLE). Fold re-sweep fail-open probe.
+
+id: BUILD-007
+mode: MODULE_BUILD
+actor: codex / gpt-5.5
+model_tier: standard
+objective: Wire the live income engine into the approved income screen.
+module_id: m1   # (V1.10) the frozen module_registry module this UI engine card builds
+source_map:
+  locked_packet_id: PKT-CXCHECK-001
+  locked_packet_hash: abc123def456
+  source_sections:
+  - file: CX-CHECK-SPEC.md
+    section: Subcommands
+    requirement_ids:
+    - REQ-001
+    - REQ-002
+    - REQ-003
+    - REQ-004
+    - REQ-005
+    - REQ-006
+  dependency_capsules: []
+card_compilation:
+  compiled_by:
+    actor: claude-opus
+    family: claude
+    model: claude-opus-4
+    date: '2026-06-09'
+  audited_by:
+    actor: gpt-5.5-pro
+    family: gpt
+    model: gpt-5.5
+    date: '2026-06-09'
+  audit_status: PASS
+actor_record:
+  executor:
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  self_review:
+    required: true
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  cross_review:
+    required: true
+    actor: claude-sonnet
+    family: claude
+    model: claude-sonnet-4-6
+    family_substituted: false
+    ceo_authorization_ref: null
+    recheck_when_opposite_family_available: false
+  fixer:
+    actor: codex
+    family: gpt
+    model: gpt-5.5
+  final_reviewer:
+    required: true
+    actor: claude-opus
+    family: claude
+    model: claude-opus-4
+coderabbit:
+  required: yes
+  receipt:
+family_note:
+  known_quirk: gpt family tends toward verbose output and defensive fallbacks
+  leash: keep output lean; no extra verbs beyond the 6 subcommands
+read:
+  required:
+  - CX-CHECK-SPEC.md
+  - docs/design/PRODUCT-TASTE-LOCK.md
+  - docs/design/DESIGN-GOLDEN-MASTER.md
+  - locks/income.lock.yaml
+  forbidden: []
+allowed_files:
+- app/routes/income.py
+- templates/income.html
+forbidden_files:
+- .env
+- secrets/
+allowed_operations:
+- write-python
+- write-test
+- chmod-executable
+forbidden_operations:
+- edit-scoring-config
+- broad-refactor
+- add-dependency-without-approval
+relevant_invariants:
+- real-data-only
+- secrets-by-name-never-value
+- no-mock-data
+acceptance:
+- cx --help lists exactly 6 subcommands
+- cx check card GOOD fixture = PASS
+- pytest tests/ all green
+evidence_required:
+- checkers/EVIDENCE-cx-check.md
+security_tripwire:
+  touches_auth: false
+  touches_secrets: false
+  touches_money_or_balances: false
+  touches_bank_or_pii: false
+  touches_upload_restore_import: false
+  touches_network_or_public_surface: false
+  touches_logs_or_error_output: false
+loop_budget:
+  review_fix_cycles: 1
+  verification_passes: 1
+  third_review_loop_allowed: false
+  self_heal_attempts:
+    codex: 3
+    claude_cross_family: 4 + final synthesis
+stop_conditions:
+- out-of-scope change detected by scope check
+- secret value found in diff
+cost_budget: 40000 tokens estimated
+state_update: set current_card=null, next_actor=CEO after PASS
+execution:
+  profiles_hash: c8e5a55b06ff
+  role: implementer
+  model_tier: standard
+  claude_code:
+    subagent: general-purpose
+    model: sonnet
+    effort: standard
+  codex_app:
+    agent: worker
+    model: gpt-5.5
+    effort: medium
+  limits:
+    max_parallel_subagents: 4
+    max_depth: 1
+  prevention_preamble:
+    rule: builder-prevention-preamble
+    injected: yes
+    standard_ref: BUILDER-STANDARD.md
+    preamble_sha12: a1b2c3d4e5f6
+ui_contract:
+  taste_lock: docs/design/PRODUCT-TASTE-LOCK.md
+  design_golden_master: docs/design/DESIGN-GOLDEN-MASTER.md
+  mode_a_ceo_accept: docs/design/mode-a-ceo-accept-2026-06-01.md
+  screenshots: docs/design/screens/
+  route_map: docs/design/route-map.yaml
+  click_path_contract: docs/design/click-path-contract.md
+  preservation_rule: replace fixture data, preserve approved shell and controls
+  lock_ref: locks/income.lock.yaml
+design_fixture_purge: 'yes'
+fixture_replacement_map:
+- purged_fixture: templates/income_fixture.html
+  live_route: /income
+  live_template: templates/income.html
+  locked_reference: docs/design/screens/income-locked.png
+  data_fn_preserved: 'yes'
+  controls_preserved: 'yes'
+  screenshot_comparison: evidence/income-before-after.png
+  dom_marker_comparison: evidence/income-marker-diff.txt

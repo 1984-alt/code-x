@@ -140,7 +140,46 @@ def _purges_fixtures(data: dict) -> bool:
     return str(data.get("design_fixture_purge", "no")).lower() in ("yes", "true")
 
 
-def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
+def _resolve_card_registry_screen(data: dict, args) -> tuple[str | None, str | None, str | None]:
+    """[PBF-PROP-020 Rule 1] Resolve (screen_id, live_lock_ref, error) for the card's module_id
+    via the frozen MODULE-REGISTRY. Returns (None, None, None) when the card names no module_id,
+    --state is not supplied, state.packet_dir is unsafe/absent, or the module_id does not resolve
+    to a registry 'screen' row — Rule 1 then does not apply (legacy/no-registry projects and
+    non-screen modules are untouched, matching the design's registry-gated scope). Returns
+    (screen_id, None, error) when the card DOES target a registered screen but the registry or its
+    live lock cannot be resolved — the caller fails closed on a non-None error."""
+    module_id = str(data.get("module_id", "") or "").strip()
+    state_path = getattr(args, "state", None)
+    if not module_id or not state_path:
+        return None, None, None
+    state_data, _serr = load_yaml(state_path)
+    if not isinstance(state_data, dict):
+        return None, None, None
+    packet_dir_rel = str(state_data.get("packet_dir", "") or "").strip()
+    if not packet_dir_rel:
+        return None, None, None
+    from cx_lock_fidelity import path_is_unsafe, frozen_registry_rows, registry_screen_lock
+    if path_is_unsafe(packet_dir_rel):
+        return None, None, None
+    repo_root = str(Path(state_path).resolve().parent)
+    rows, rerr = frozen_registry_rows(repo_root, packet_dir_rel)
+    if rerr:
+        return None, None, rerr
+    screen_id = None
+    for m in rows:
+        if isinstance(m, dict) and str(m.get("module_id", "")).strip() == module_id:
+            if str(m.get("kind", "")).strip() == "screen" and m.get("screen_id"):
+                screen_id = str(m.get("screen_id")).strip()
+            break
+    if not screen_id:
+        return None, None, None
+    live_lock, lerr = registry_screen_lock(rows, screen_id)
+    if lerr:
+        return screen_id, None, lerr
+    return screen_id, live_lock, None
+
+
+def _check_ui_contract(data: dict, args, loc: str, findings: list) -> None:
     """[G3/G6, B-PROP-003] ui_contract required on UI-touching/fixture-purging cards;
     purge additionally requires a complete fixture_replacement_map (no map, no G3 pass).
     DESIGN_FIXTURE_PURGE != DESIGN_DELETE: replace fixture data, preserve the
@@ -149,6 +188,59 @@ def _check_ui_contract(data: dict, loc: str, findings: list) -> None:
     purge = _purges_fixtures(data)
     if not ui and not purge:
         return
+
+    # PBF-PROP-020 Rule 1 (MOCKUP-FIRST-CHANGE-NEEDS-LOCK, P0, fail-closed by default): a
+    # UI-touching card that is NOT (mode: FIX + deviation_class: RESTORE) and whose module_id
+    # resolves to a registered SCREEN must carry ui_contract.lock_ref == that screen's CURRENT
+    # LIVE lock_ref in MODULE-REGISTRY.yaml, and that lock_ref must be in read.required. No
+    # opt-in flag — a card cannot dodge by omission; the only zero-ceremony exemption is an
+    # anchored RESTORE fix.
+    if ui:
+        is_restore_fix = (str(data.get("mode", "")) == "FIX"
+                          and str(data.get("deviation_class", "") or "") == "RESTORE")
+        if not is_restore_fix:
+            screen_id, live_lock, rerr = _resolve_card_registry_screen(data, args)
+            if screen_id:
+                uc_r1 = data.get("ui_contract")
+                lock_ref = (str(uc_r1.get("lock_ref", "") or "").strip()
+                           if isinstance(uc_r1, dict) else "")
+                read_required_r1 = [str(x) for x in (nested_get(data, "read", "required") or [])]
+                if rerr:
+                    findings.append(("P0", loc,
+                        f"card targets registered screen '{screen_id}' but its CURRENT LIVE lock "
+                        f"cannot be resolved from MODULE-REGISTRY.yaml — {rerr} (fail-closed, "
+                        "MOCKUP-FIRST-CHANGE-NEEDS-LOCK, PBF-PROP-020 Rule 1)"))
+                elif not lock_ref:
+                    findings.append(("P0", loc,
+                        f"card touches UI on registered screen '{screen_id}' (not a RESTORE fix) "
+                        "with no ui_contract.lock_ref — a UI-touching change needs the screen's "
+                        "CURRENT LIVE lock; prose-only change orders are rejected "
+                        "(MOCKUP-FIRST-CHANGE-NEEDS-LOCK, PBF-PROP-020 Rule 1)"))
+                elif lock_ref != live_lock:
+                    findings.append(("P0", loc,
+                        f"ui_contract.lock_ref '{lock_ref}' != screen '{screen_id}' CURRENT LIVE "
+                        f"lock_ref '{live_lock}' in MODULE-REGISTRY.yaml — a stale or wrong lock is "
+                        "not the mockup-first lock (MOCKUP-FIRST-CHANGE-NEEDS-LOCK, PBF-PROP-020 Rule 1)"))
+                elif lock_ref not in read_required_r1:
+                    findings.append(("P0", loc,
+                        f"ui_contract.lock_ref '{lock_ref}' is not in read.required — the locked "
+                        "mockup must ride the card's read set, not just be named "
+                        "(MOCKUP-FIRST-CHANGE-NEEDS-LOCK, PBF-PROP-020 Rule 1)"))
+
+                # FOLD RE-SWEEP FIX (CITE-AND-COMPARE): citing the lock is necessary but not
+                # sufficient — a UI change on a registered screen must also be COMPARED against it.
+                # The card must declare a render_bundle so the build-turn rail runs cx check
+                # render-fidelity (Rules 2/7). Omitting render_bundle made build-turn mark
+                # render-fidelity NOT_APPLICABLE — a fail-open dodge (lock referenced, never rendered
+                # against) the extra xfam sweep caught. This is what makes Rule 2 the real backstop
+                # the design leans on. RESTORE fixes never reach here (is_restore_fix short-circuits).
+                if not str(data.get("render_bundle", "") or "").strip():
+                    findings.append(("P0", loc,
+                        f"card touches UI on registered screen '{screen_id}' (not a RESTORE fix) "
+                        "with no render_bundle — the cited lock must be COMPARED against a render, "
+                        "not merely referenced; declare render_bundle so the rendered-fidelity exit "
+                        "gate (Rules 2/7) runs, else the change ships un-rendered-compared "
+                        "(MOCKUP-FIRST-CHANGE-NEEDS-LOCK, PBF-PROP-020 Rule 1)"))
 
     uc = data.get("ui_contract")
     if not isinstance(uc, dict):
@@ -286,13 +378,46 @@ def _check_review_dispatch(data: dict, loc: str, findings: list) -> None:
                 "prompt_ref — quote the stanza leg verbatim or point prompt_ref at the dispatch prompt"))
 
 
-def _check_coderabbit_required_for_code_diff(data: dict, loc: str, findings: list) -> None:
+def resolve_card_risk_tier(args) -> str:
+    """PBF-PROP-019 Phase 3: resolve the CURRENT build's project risk_tier via --state.packet_dir,
+    mirroring the packet_dir resolution every other cx_card fix-card helper already uses
+    (path_is_unsafe + resolve_in_repo, e.g. _check_lock_fidelity above). Reuses the single
+    cx_common.resolve_risk_tier helper — never re-implements tier resolution. Absent/unreadable
+    state or an unsafe/unresolvable packet_dir resolves STRICT (fail-closed; a card check that
+    cannot determine the tier must never silently relax ceremony)."""
+    from cx_lock_fidelity import path_is_unsafe, resolve_in_repo
+    from cx_common import resolve_risk_tier
+    state_path = getattr(args, "state", None) if args is not None else None
+    if not state_path:
+        return "STRICT"
+    state_data, serr = load_yaml(state_path)
+    if serr or not isinstance(state_data, dict):
+        return "STRICT"
+    packet_dir_rel = str(state_data.get("packet_dir", "") or "").strip()
+    if not packet_dir_rel or path_is_unsafe(packet_dir_rel):
+        return "STRICT"
+    repo_root = str(Path(state_path).resolve().parent)
+    resolved_pkt, perr = resolve_in_repo(repo_root, packet_dir_rel)
+    if perr or resolved_pkt is None:
+        return "STRICT"
+    return resolve_risk_tier(resolved_pkt)
+
+
+def _check_coderabbit_required_for_code_diff(data: dict, loc: str, findings: list, risk_tier: str = "STRICT") -> None:
     """PROP-042 / v1.21: CodeRabbit is a planned rail on code-diff build cards, not an
     optional note the builder may forget. The receipt itself is produced after a
-    diff exists and is validated by build-turn."""
+    diff exists and is validated by build-turn.
+
+    PBF-PROP-019 Phase 3 (design v2.B ceremony row 3): a LITE-tier project drops the CodeRabbit
+    requirement — self-review only. STANDARD/STRICT are unchanged from today. This tier read does
+    NOT touch the Phase-2 mechanical high-risk-card force (CARD-HIGH-RISK-FORCES-FOUNDATION): a
+    high-risk card still forces its foundation checkpoint + full cross-family review regardless of
+    tier; CodeRabbit is a SEPARATE rail this clause alone governs."""
     mode = str(data.get("mode", "") or "").strip()
     if mode not in ("MODULE_BUILD", "MODE_A_UI"):
         return
+    if risk_tier == "LITE":
+        return  # PBF-PROP-019: LITE drops the CodeRabbit rail requirement
     cr = data.get("coderabbit")
     required = ""
     if isinstance(cr, dict):
@@ -835,6 +960,9 @@ def cmd_card(args) -> int:
     findings = []
     loc = path
 
+    # PBF-PROP-019 Phase 3: resolve once, reused by the CodeRabbit + cross-review ceremony reads below.
+    risk_tier_val = resolve_card_risk_tier(args)
+
     # --- Required top-level scalar fields ---
     required_scalars = ["id", "mode", "actor", "model_tier", "objective"]
     for f in required_scalars:
@@ -919,7 +1047,23 @@ def cmd_card(args) -> int:
                 f"card_compilation.audit_status='{audit_status}' — must be PASS; PENDING/FIX_FIRST cards are REJECTED"))
 
     # --- foundation_checkpoint_required (P1-01) ---
+    from cx_lock_fidelity import card_high_risk
     fcp_required = str(data.get("foundation_checkpoint_required", "no")).lower()
+
+    # PBF-PROP-019 Phase 2 (design v2 P0-1, CARD-HIGH-RISK-FORCES-FOUNDATION): a card whose
+    # security_tripwire marks it high-risk (money/auth/secrets/PII/destructive) MECHANICALLY
+    # requires the foundation checkpoint — regardless of self-declaration AND regardless of
+    # project risk tier (this gate is SPINE; it never reads risk_tier). Before this fix, a
+    # high-risk card with foundation_checkpoint_required: no passed silently — the hole a LITE
+    # tier would otherwise make unsafe to ship money/auth code through on self-review alone.
+    if card_high_risk(data) and fcp_required not in ("yes", "true"):
+        findings.append(("P0", loc,
+            "card_high_risk (security_tripwire touches money/auth/secrets/PII/destructive) but "
+            "foundation_checkpoint_required is not 'yes' — a high-risk card MECHANICALLY requires "
+            "the foundation checkpoint + full cross-family review regardless of self-declaration "
+            "or project risk tier (CARD-HIGH-RISK-FORCES-FOUNDATION, PBF-PROP-019)"))
+        fcp_required = "yes"  # treat as forced-yes so the reason requirement below still applies
+
     if fcp_required in ("yes", "true"):
         fcp_reason = data.get("foundation_checkpoint_reason", "")
         if not fcp_reason or str(fcp_reason).strip() == "":
@@ -978,12 +1122,12 @@ def cmd_card(args) -> int:
     # --- review_dispatch: three-leg ask on review/audit cards (PBF-PROP-009) ---
     _check_review_dispatch(data, loc, findings)
 
-    # --- CodeRabbit rail on every code-diff build card (PROP-042 / v1.21) ---
-    _check_coderabbit_required_for_code_diff(data, loc, findings)
+    # --- CodeRabbit rail on every code-diff build card (PROP-042 / v1.21; PBF-PROP-019 tier-gated) ---
+    _check_coderabbit_required_for_code_diff(data, loc, findings, risk_tier_val)
     _check_prevention_preamble(data, loc, findings)
 
     # --- ui_contract + fixture_replacement_map + visual_contract_context (B-PROP-003) ---
-    _check_ui_contract(data, loc, findings)
+    _check_ui_contract(data, args, loc, findings)
 
     # --- PROTOCOL_INCIDENT gate: blocks new build/cross-family while open (BF-PROP-002) ---
     _check_incident_gate(data, args, loc, findings)
@@ -1011,41 +1155,52 @@ def cmd_card(args) -> int:
         family_substituted = cross.get("family_substituted", "no")
         ceo_ref = cross.get("ceo_authorization_ref", "")
 
+        # PBF-PROP-019 Phase 3 (design v2.B ceremony row 2): a LITE-tier project relaxes the
+        # per-module cross-family review floor to self-review only — UNLESS the card is high-risk,
+        # in which case the Phase-2 mechanical force (CARD-HIGH-RISK-FORCES-FOUNDATION, checked
+        # above via foundation_checkpoint_required) already requires full cross-family review and
+        # this relaxation MUST NOT override it. STANDARD/STRICT are unchanged from today.
+        lite_self_review_ok = risk_tier_val == "LITE" and not card_high_risk(data)
+
         if exec_family and cross_family:
             same_family = exec_family.lower() == cross_family.lower()
             if same_family:
-                sub_yes = str(family_substituted).lower() in ("yes", "true")
-                if sub_yes and ceo_ref:
-                    # Allowed but opens a P2 blocking finding — check state if supplied (P2-01)
-                    state_path_arg = getattr(args, 'state', None)
-                    if state_path_arg:
-                        state_data, _ = load_yaml(state_path_arg)
-                        if state_data and isinstance(state_data, dict):
-                            state_items = (state_data.get("open_findings") or {}).get("items") or []
-                            card_id = data.get("id", "")
-                            has_pending = any(
-                                isinstance(it, dict) and
-                                "CROSS_FAMILY_RECHECK_PENDING" in str(it.get("finding", "")) and
-                                it.get("owner_card") and
-                                (not card_id or it.get("owner_card") == card_id or
-                                 str(it.get("source_card", "")) == card_id)
-                                for it in state_items
-                            )
-                            if not has_pending:
-                                findings.append(("P1", loc,
-                                    "family_substituted:yes + state provided but no CROSS_FAMILY_RECHECK_PENDING "
-                                    "item found in open_findings.items (owner_card must be set)"))
-                    else:
-                        findings.append(("P2", loc,
-                            "same-family cross_review with family_substituted:yes — "
-                            "CROSS_FAMILY_RECHECK_PENDING (P2) must be opened in CODE-X-STATE"))
+                if lite_self_review_ok:
+                    pass  # LITE, not high-risk: same-family (self) review is legitimate — no IOU needed
                 else:
-                    findings.append(("P0", loc,
-                        "cross_review.family == executor.family — "
-                        "same-family cross-review REJECTED (need opposite family, "
-                        "or family_substituted:yes + ceo_authorization_ref)"))
+                    sub_yes = str(family_substituted).lower() in ("yes", "true")
+                    if sub_yes and ceo_ref:
+                        # Allowed but opens a P2 blocking finding — check state if supplied (P2-01)
+                        state_path_arg = getattr(args, 'state', None)
+                        if state_path_arg:
+                            state_data, _ = load_yaml(state_path_arg)
+                            if state_data and isinstance(state_data, dict):
+                                state_items = (state_data.get("open_findings") or {}).get("items") or []
+                                card_id = data.get("id", "")
+                                has_pending = any(
+                                    isinstance(it, dict) and
+                                    "CROSS_FAMILY_RECHECK_PENDING" in str(it.get("finding", "")) and
+                                    it.get("owner_card") and
+                                    (not card_id or it.get("owner_card") == card_id or
+                                     str(it.get("source_card", "")) == card_id)
+                                    for it in state_items
+                                )
+                                if not has_pending:
+                                    findings.append(("P1", loc,
+                                        "family_substituted:yes + state provided but no CROSS_FAMILY_RECHECK_PENDING "
+                                        "item found in open_findings.items (owner_card must be set)"))
+                        else:
+                            findings.append(("P2", loc,
+                                "same-family cross_review with family_substituted:yes — "
+                                "CROSS_FAMILY_RECHECK_PENDING (P2) must be opened in CODE-X-STATE"))
+                    else:
+                        findings.append(("P0", loc,
+                            "cross_review.family == executor.family — "
+                            "same-family cross-review REJECTED (need opposite family, "
+                            "or family_substituted:yes + ceo_authorization_ref)"))
         elif not cross_family:
-            findings.append(("P1", loc, "actor_record.cross_review.family missing"))
+            if not lite_self_review_ok:
+                findings.append(("P1", loc, "actor_record.cross_review.family missing"))
         elif not exec_family:
             findings.append(("P1", loc, "actor_record.executor.family missing"))
 

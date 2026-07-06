@@ -1,0 +1,10 @@
+module_registry:
+  frozen_packet_hash: dummy0000002abc
+  modules:
+    - module_id: m_lite
+      title: Spike screen (PB-PROP-003 Unit 2 LITE fixture)
+      requirement_ids: [REQ-101]
+      risk_flags: [ui]
+      dependency_modules: []
+      card_ids: [BUILD-PB003-2]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card]

@@ -1,5 +1,5 @@
 # GOOD: a live_slice (m_live) accepted WITH a valid live_slice_accept block (PROP-032) — the CEO
-# drove the running build live on the local machine — AND a passing verify_app block (PROP-036): the verify-app
+# drove the running build live on the Mac — AND a passing verify_app block (PROP-036): the verify-app
 # agent drove the running build and its acceptance-criteria check passed BEFORE the CEO live-drive.
 # AND a valid module_demo block (PROP-042 Part E): real shown-screenshot hash + CEO-typed accept token
 # embedding repo_sha prefix + ceo_verdict: accepted + ceo_turn_ref resolves to a real file.
@@ -55,6 +55,10 @@ module_acceptance:
     ceo_turn_ref: module_demo_shot.png
     ceo_verdict: accepted
     viewport: 390x844
+    mockup_ref: module_demo_shot.png
+    mockup_hash: b1ff9c8ea3a7
+    diff_score: 0.0
+    tolerance: 0.05
   live_slice_accept:
     live_url: http://localhost:8000/home
     ceo_drove: true

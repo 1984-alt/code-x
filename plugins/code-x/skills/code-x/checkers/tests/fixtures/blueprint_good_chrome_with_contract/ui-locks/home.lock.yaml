@@ -1,0 +1,9 @@
+ui_lock_manifest:
+  screen_id: home
+  style_locked: yes
+  provenance: original
+  interactive_chrome: yes
+  behavior_contract:
+    fixed: nav bar stays fixed to viewport bottom
+    scrolls: content area scrolls independently under the nav bar
+    bounces: "no"

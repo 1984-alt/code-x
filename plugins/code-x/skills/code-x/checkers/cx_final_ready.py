@@ -2,7 +2,7 @@
 import hashlib
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, field_present, nested_get
+from cx_common import findings_report, load_yaml, field_present, nested_get, resolve_risk_tier
 
 
 def _sha12(path) -> str | None:
@@ -10,6 +10,54 @@ def _sha12(path) -> str | None:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
     except OSError:
         return None
+
+
+def _compute_high_risk_card_fired(cards_dir) -> bool:
+    """PBF-PROP-019 P0-2 FIX: recompute "did a high-risk card fire in this build" from the
+    build's actual compiled cards, instead of the unsound `foundation_checkpoints_passed`
+    proxy. That field is populated ONLY for a card with a DEPENDENT (cx_card.py's
+    dependency_capsules block) — a TERMINAL high-risk card (no dependents) passes
+    PB-PROP-002(b) without ever recording a checkpoint, so the old proxy silently read False
+    for a real high-risk build and let it skip the final cross-family receipt.
+
+    FAIL-CLOSED: any case where the build's cards cannot be positively enumerated (no
+    cards_dir resolved, not a directory, unreadable, zero cards found where cards were
+    expected, any individual card unreadable/malformed, or any file that is not a
+    SHAPED card — see below) returns True — "can't tell" must never relax the gate. Only a
+    build whose cards ARE enumerated, are non-empty, are ALL shaped cards, and are ALL
+    non-high-risk returns False (the legitimate pure-LITE fast path, design v2.C Option A).
+
+    SHAPE GUARD (re-sweep, GPT-5.5 xhigh codex 019f32f9): card_high_risk() returns False
+    when a card carries no `security_tripwire` mapping — so a wrong/stale directory of
+    non-card YAML (e.g. a packet dir, or any non-empty YAML dir) would enumerate cleanly and
+    read as "all clean", the unsafe False. Every real Code-X card carries a security_tripwire
+    mapping (G2 per-card); a file lacking one is NOT a trustworthy card, so it fails closed
+    rather than being trusted as clean. NOTE (ratified honest-limit, EVAL-052): this catches
+    an ACCIDENTAL wrong/non-card directory, not a DELIBERATELY substituted directory of
+    valid-shaped clean cards — closing that requires binding cards_dir to the frozen packet
+    hash (future hardening); same forge-vs-accidental posture as the PBF-PROP-020 carve-outs."""
+    from cx_lock_fidelity import card_high_risk
+
+    if not cards_dir:
+        return True
+    cdir = Path(cards_dir)
+    if not cdir.is_dir():
+        return True
+    try:
+        card_files = sorted(cdir.glob("*.yaml"))
+    except OSError:
+        return True
+    if not card_files:
+        return True  # zero cards found where cards were expected — fail closed
+    for card_file in card_files:
+        card, err = load_yaml(str(card_file))
+        if err or not isinstance(card, dict):
+            return True  # unreadable/malformed card — fail closed, never skip silently
+        if not isinstance(card.get("security_tripwire"), dict):
+            return True  # not a shaped card (no G2 tripwire) — fail closed, never trust as clean
+        if card_high_risk(card):
+            return True
+    return False
 
 
 def cmd_final_ready(args) -> int:
@@ -32,6 +80,30 @@ def cmd_final_ready(args) -> int:
         return 1
 
     loc = state_path
+
+    # Resolved once, reused below and by the dependency-scan block near the end.
+    repo_root_val = getattr(args, "repo_root", None)
+
+    # PBF-PROP-019 Phase 3: resolve the project risk_tier once, reused by the audit_stage_final
+    # (row 1) and final_cross_family_receipt (row 5 / design v2.C) ceremony reads below. Fail-closed:
+    # absent/unsafe packet_dir resolves STRICT — the spine (open_findings/current_card/stop_status/
+    # gate-fields/final-ready blocking above and below) NEVER reads this value.
+    risk_tier_val = "STRICT"
+    _pkt_rel_tier = str(state.get("packet_dir", "") or "").strip()
+    if _pkt_rel_tier and not (Path(_pkt_rel_tier).is_absolute() or ".." in Path(_pkt_rel_tier).parts):
+        _base_tier = Path(repo_root_val) if repo_root_val else Path(state_path).resolve().parent
+        risk_tier_val = resolve_risk_tier(_base_tier / _pkt_rel_tier)
+
+    # High-risk-card evidence (P0-2 FIX): recomputed from the build's real compiled cards
+    # (never a proxy field — see _compute_high_risk_card_fired docstring for why the old
+    # foundation_checkpoints_passed proxy was unsound). --cards-dir wins; else auto-discover
+    # the conventional <repo-root>/cards deck dir (mirrors cx_module_acceptance's pattern).
+    _cards_dir_val = getattr(args, "cards_dir", None)
+    if _cards_dir_val is None and repo_root_val:
+        _conventional_cards = Path(repo_root_val) / "cards"
+        if _conventional_cards.is_dir():
+            _cards_dir_val = str(_conventional_cards)
+    high_risk_card_fired = _compute_high_risk_card_fired(_cards_dir_val)
 
     # --- protocol_stamp ---
     stamp = state.get("protocol_stamp", "")
@@ -104,12 +176,22 @@ def cmd_final_ready(args) -> int:
     # gate. Shipping without its bound receipt is forbidden. If the opposite family is out of
     # budget, that must be a typed protocol_deviation/STOP that saves state (BF-PROP-002) — never a
     # silently missing receipt that still ships.
+    # PBF-PROP-019 Phase 3 (design v2.C, CEO ruling 2026-07-05, Option A): the final cross-family
+    # receipt is required when risk_tier is STANDARD/STRICT, OR when any high-risk card fired in
+    # this build (the Phase-2 mechanical force already put THAT card through full cross-family
+    # review — this is a SEPARATE whole-build final pass). A pure-LITE build with zero high-risk
+    # cards ships on self-review only and does not require this receipt. If a receipt IS present
+    # regardless, it is still validated in full below — this only relaxes the missing-receipt P0.
+    fcf_required = risk_tier_val != "LITE" or high_risk_card_fired
     fcf = state.get("final_cross_family_receipt")
     if not isinstance(fcf, dict):
-        findings.append(("P0", loc,
-            "final_cross_family_receipt missing — the final whole-build cross-family review is the "
-            "ship gate; shipping without it is forbidden ('last' can never become 'never'). A budget "
-            "block must be a typed protocol_deviation/STOP that saves state, never a silent skip [V1.10]"))
+        if fcf_required:
+            findings.append(("P0", loc,
+                "final_cross_family_receipt missing — the final whole-build cross-family review is the "
+                "ship gate; shipping without it is forbidden ('last' can never become 'never'). A budget "
+                "block must be a typed protocol_deviation/STOP that saves state, never a silent skip "
+                f"[V1.10; risk_tier={risk_tier_val}, high_risk_card_fired={high_risk_card_fired}]"))
+        # else: pure-LITE build, no high-risk card fired — v2.C Option A ships on self-review only.
     else:
         receipt_ref = str(fcf.get("receipt", "") or "").strip()
         receipt_hash = str(fcf.get("receipt_hash", "") or "").strip()
@@ -268,13 +350,19 @@ def cmd_final_ready(args) -> int:
     # hard rules + the review ladder), judged by the SAME collect_audit_findings() the `cx check
     # audit` CLI uses (F1, v1.22 self-review — no divergent second copy of the judgment logic).
     # Path-safety mirrors built_app_audit.report_ref exactly (repo-relative, non-symlink, in-tree).
+    # PBF-PROP-019 Phase 3 (design v2.B row 1): LITE drops the SEPARATE formal Audit-STAGE
+    # ceremony (mirrors cx_audit.collect_audit_findings' own ENTRY-REQUIRED relaxation — same
+    # tier, same judgment, never two divergent copies). If the block IS present regardless, it is
+    # still validated in FULL below via collect_audit_findings (facts/hard-rules never suppressed).
     audit_stage_blk = state.get("audit_stage_final")
     if not isinstance(audit_stage_blk, dict):
-        findings.append(("P1", loc,
-            "audit_stage_final block missing from state — a valid FINAL Audit-stage receipt "
-            "(cx check audit --final) must exist and pass before final-ready (A-PROP-001; "
-            "GATES.md: 'a build cannot reach final-ready while skipping Audit') "
-            "[AUDIT-STAGE-FINAL-READY-CHAIN]"))
+        if risk_tier_val != "LITE":
+            findings.append(("P1", loc,
+                "audit_stage_final block missing from state — a valid FINAL Audit-stage receipt "
+                "(cx check audit --final) must exist and pass before final-ready (A-PROP-001; "
+                "GATES.md: 'a build cannot reach final-ready while skipping Audit') "
+                "[AUDIT-STAGE-FINAL-READY-CHAIN]"))
+        # else: LITE — the formal Audit-STAGE is not required (design v2.B row 1).
     else:
         as_ref = str(audit_stage_blk.get("report_ref", "") or "").strip()
         if not as_ref:

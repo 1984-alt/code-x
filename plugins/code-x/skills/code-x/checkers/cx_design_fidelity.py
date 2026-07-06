@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 
 from cx_common import findings_report, load_yaml
+from cx_module_acceptance import _sha12
 
 SCREENSHOT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -93,6 +94,50 @@ def cmd_design_fidelity(args) -> int:
             findings.append(("P0", manifest_path,
                 "ui_lock_manifest.ceo_acceptance_ref missing — the CEO accepts the lock "
                 "manifest before the builder consumes it (B-PROP-004)"))
+
+        # LOCK-ACCEPTANCE-CITES-RENDERED (P1, PBF-PROP-020 Rule 3): a lock acceptance that DECLARES
+        # chosen_from must cite >=2 hash-matched RENDERED artifacts the CEO chose FROM — never a
+        # worded/numbered option list. FORWARD-SCOPE (CEO-D-046 grandfather, 2026-07-05): a pre-020
+        # accepted lock that OMITS chosen_from is grandfathered (untouched — never retro-broken).
+        # WHY OMISSION STAYS GRANDFATHERED HERE (and is NOT forced like repo_sha_before/render_bundle):
+        # chosen_from lives on a lock manifest that is FROZEN inside the packet hash — forcing it
+        # would retro-break every live project's already-frozen pre-020 lock (already-shipped apps), the exact
+        # thing CEO-D-046 protects. The residual (a lock accepted on a word-only pick) is BACKSTOPPED
+        # by the now-fail-closed primary gates: Rule 1 (card must cite the live lock) + Rule 2 (the
+        # card must declare a render_bundle AND the bundle must declare repo_sha_before, both made
+        # fail-closed in the fold re-sweep) block any real look-change regardless of chosen_from. A
+        # NEW lock that DOES declare chosen_from is fully enforced (>=2 hash-matched rendered picks).
+        chosen_from = manifest.get("chosen_from")
+        if chosen_from is not None:
+            base_dir = Path(manifest_path).resolve().parent
+            valid_rendered = 0
+            if isinstance(chosen_from, list):
+                for row in chosen_from:
+                    if not isinstance(row, dict):
+                        continue
+                    rpath = str(row.get("path", "") or "").strip()
+                    rhash = str(row.get("hash", "") or "").strip()
+                    if not rpath or not rhash:
+                        continue
+                    rp = Path(rpath)
+                    if rp.is_absolute() or ".." in rp.parts:
+                        continue
+                    full = base_dir / rp
+                    try:
+                        if full.is_symlink() or not full.resolve().is_relative_to(base_dir.resolve()):
+                            continue
+                    except OSError:
+                        continue
+                    if not full.is_file():
+                        continue
+                    if _sha12(full) == rhash:
+                        valid_rendered += 1
+            if valid_rendered < 2:
+                findings.append(("P1", manifest_path,
+                    f"ui_lock_manifest.chosen_from has only {valid_rendered} hash-matched, in-repo "
+                    "rendered artifact(s) — a lock acceptance needs >=2 RENDERED options the CEO chose "
+                    "FROM (path+hash, file exists, hash matches real bytes); a worded/numbered option "
+                    "list is not a rendered pick (LOCK-ACCEPTANCE-CITES-RENDERED, PBF-PROP-020 Rule 3)"))
 
     # ui_lock_manifest section names (dom_markers · controls · shell_regions) with
     # legacy ui_marker_manifest aliases.

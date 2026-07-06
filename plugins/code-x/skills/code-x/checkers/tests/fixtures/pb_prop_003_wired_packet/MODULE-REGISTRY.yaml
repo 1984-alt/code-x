@@ -1,0 +1,17 @@
+# PB-PROP-003 Unit 2 fixture — the frozen registry row IS the reverse-coverage authority
+# (PACKET-MODULE-REGISTRY-COVERS-REQUIREMENTS, cx_packet.py:822-841): m_wired's requirement_ids
+# is what the acceptance-stage checker enumerates, never a card's source_map.
+# CX-PB003-001 FIX-FIRST: live_slice: true — m_wired is this packet's FINAL/ONLY live_slice
+# module (no later module-start order-wall re-validation ever fires for it), the exact shape the
+# module-quality/graduation --packet-dir wiring fix targets.
+module_registry:
+  frozen_packet_hash: dummy0000001abc
+  modules:
+    - module_id: m_wired
+      title: Home balance screen (PB-PROP-003 Unit 2 fixture)
+      requirement_ids: [REQ-001, REQ-002]
+      risk_flags: [ui]
+      live_slice: true
+      dependency_modules: []
+      card_ids: [BUILD-PB003-1]
+      expected_acceptance_artifacts: [live_url, screenshots, quality_card]

@@ -1,0 +1,35 @@
+# PB-PROP-003 Unit 2 fixture packet — DECLARES the pb_prop_003_wiring capability marker, so the
+# new resolving criteria_refs wiring + reverse-coverage checks are ENFORCED here (§R5). STANDARD
+# risk tier -> ceremony (ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED) is NOT relaxed.
+pb_prop_003_wiring: true
+risk_tier: STANDARD
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Tapping refresh on the home screen shows the latest balance."
+      evidence_type: automated_test
+      verification_ref: "tests/test_home.py::test_refresh_shows_latest_balance"
+      examples:
+        - given: "a user is on the home screen"
+          when: "they tap the refresh button"
+          then: "the latest balance is shown"
+  - id: REQ-002
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Opening the transaction list shows the pending transaction at the top."
+      evidence_type: automated_test
+      verification_ref: "tests/test_home.py::test_pending_transaction_at_top"
+      examples:
+        - given: "a user has one pending transaction"
+          when: "they open the transaction list"
+          then: "the pending transaction is shown at the top"
+  - id: REQ-003
+    disposition: BUILDING
+    non_behavioral_exemption:
+      reason: visual
+      artifact_ref: "SCREENS.md#req-003-home-layout"
+    acceptance_criterion:
+      pass_condition: "Home screen layout matches the locked visual lock."
+      evidence_type: visual_review
+      verification_ref: "SCREENS.md#req-003-home-layout"

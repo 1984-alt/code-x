@@ -1,0 +1,12 @@
+# requirements-manifest.yaml — inside the frozen packet hash (PROP-007).
+# Dispositions: BUILDING | NOT_BUILDING | NOT_APPLICABLE | CEO_DEFERRED.
+# NOT_BUILDING / CEO_DEFERRED rows need a ceo_decision_ref resolving to a ledger row.
+# PBF-PROP-019: unknown/invalid risk_tier value (bad fixture — PACKET-RISK-TIER-WELL-FORMED).
+risk_tier: BOGUS
+requirements:
+  - id: REQ-001
+    disposition: BUILDING
+    acceptance_criterion:
+      pass_condition: "Submitting valid credentials on the login screen lands on the dashboard and creates a session cookie."
+      evidence_type: automated_test
+      verification_ref: "tests/test_login.py::test_valid_login_lands_dashboard"

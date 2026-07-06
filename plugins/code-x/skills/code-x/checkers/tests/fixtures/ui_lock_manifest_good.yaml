@@ -6,6 +6,11 @@ ui_lock_manifest:
   audit_status: PASS
   audit_ref: design-history/income-lock-manifest-audit-2026-06-12.md
   ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#CEO-D-012
+  chosen_from:
+  - path: module_demo_shot.png
+    hash: b1ff9c8ea3a7
+  - path: screenshot_good.png
+    hash: e878950f8091
   lock_hash: 9b5aa88f58ab
   dom_markers:
   - id: top_tabs

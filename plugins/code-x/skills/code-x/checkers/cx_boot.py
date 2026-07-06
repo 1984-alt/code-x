@@ -55,8 +55,13 @@ def cmd_boot(args) -> int:
         state_path, args, session_start=True, repo_root=repo_root,
         check_boot_ack=False)
     if fatal:
+        # fatal is a typed (severity, loc, msg) finding tuple — render it the
+        # same way as the non-fatal findings below (the printer re-adds
+        # "<state_path> — "). No string re-parsing, no template coupling
+        # (PBF-PROP-015; this branch was dead until the arity fix).
         state_result = "FIX-FIRST"
-        finding_lines = [fatal.splitlines()[-1].strip()]
+        _sev, _floc, _fmsg = fatal
+        finding_lines = [f"[{_sev}] {_fmsg}"]
     else:
         state_result = "FIX-FIRST" if findings else "PASS"
         finding_lines = [f"[{sev}] {msg}" for sev, _loc, msg in (findings or [])]

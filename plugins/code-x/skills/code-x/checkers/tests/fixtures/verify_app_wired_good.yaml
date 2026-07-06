@@ -1,0 +1,10 @@
+# GOOD (PB-PROP-003 Unit 2): a wired packet (pb_prop_003_wired_packet) whose verify_app.criteria_refs
+# covers BOTH of module m_wired's behavioral BUILDING requirements (REQ-001, REQ-002) — resolves
+# (Layer 1) AND reverse-covers (Layer 2), at every clause.
+module_acceptance:
+  module_id: m_wired
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_refs: [REQ-001, REQ-002]

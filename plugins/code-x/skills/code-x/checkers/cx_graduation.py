@@ -28,7 +28,7 @@ from pathlib import Path
 
 import yaml
 
-from cx_common import field_present, findings_report, load_yaml, nested_get, safe_repo_ref
+from cx_common import VALID_RISK_TIERS, field_present, findings_report, load_yaml, nested_get, safe_repo_ref
 from cx_final_ready import cmd_final_ready
 from cx_module_acceptance import registry_flag_true, validate_module_demo
 from cx_module_quality import cmd_module_quality
@@ -515,10 +515,20 @@ def _crit_c7(doc, receipt_path, project_id, loc, receipts_dir, ctx):
                 f"registry '{rref}' {rsc_err}"))
             continue
 
+        # PB-PROP-003 Unit 2 (finding CX-PB003-001 FIX-FIRST): resolve the frozen packet dir the
+        # SAME way module-start's order wall does — the canonical registry lives at the TOP of
+        # the frozen packet (<packet-dir>/MODULE-REGISTRY.yaml, cx_module_start.py's
+        # CANONICAL_REGISTRY_NAME convention), so the registry ref's own parent directory IS the
+        # packet dir. No new resolution path: this recovers the same directory module-start's
+        # --packet-dir already names, from the same ref this replay already reads. A registry
+        # fixture with no sibling requirements-manifest.yaml (every pre-existing, non-PB-PROP-003
+        # replay fixture) safely resolves the wiring marker to absent -> no new findings (fail-
+        # closed OMISSION, not fail-open widening).
         class _NS:
             acceptance = str(apath)
             registry = str(rpath)
             module_id = mid
+            packet_dir = str(rpath.parent)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cmd_module_quality(_NS())
@@ -609,19 +619,124 @@ def _recompute_criterion(cid: str, receipt_ref: str, receipt_sha256: str, receip
     return ("UNMET" if findings else "MET"), findings
 
 
+def _validate_tier_evidence(entry: dict, manifest_ok: bool, manifest_files: dict, receipts_dir: Path,
+                             project_id: str, loc: str) -> tuple[bool, str | None, list[tuple[str, str, str]]]:
+    """PBF-PROP-019 Phase 4 (design v2 P1-5): every graduation entry must POSITIVELY declare a
+    hash-bound `risk_tier` — an entry may NEVER be silent on tier. FAIL-CLOSED DIRECTION IS THE
+    OPPOSITE of the packet resolver (`cx_common.resolve_risk_tier`, which defaults absence to
+    STRICT): here, missing/unbindable/malformed tier evidence is a P0
+    `GRADUATION-TIER-EVIDENCE-REQUIRED` that keeps the entry OUT of the streak population — it is
+    never defaulted to STRICT-and-counted. That P0 only bites under `--authorize-decision`
+    (cmd_graduation's existing dormant-by-default posture), so it blocks the autonomy
+    authorization until the ledger is complete — that is the intended teeth.
+
+    Mirrors the criteria-receipt pattern (`_recompute_criterion`, ~L581-609 / L694-706): a
+    `receipt` + full 64-hex `receipt_sha256` cross-checked against the entry's own evidence
+    manifest, then the real file re-hashed. The receipt's content must assert a
+    `resolved_risk_tier` that MATCHES the entry's declared `risk_tier` — a declared
+    STANDARD/STRICT claim over a receipt asserting the run was actually built LITE is REJECTED
+    (the LITE->STANDARD migration guard: a later tier flip cannot retroactively bank a
+    LITE-built run as STANDARD).
+
+    Returns (tier_ok, verified_tier, findings). `verified_tier` is the declared tier (normalised
+    uppercase) ONLY when tier_ok is True; otherwise None — a caller must never treat an unverified
+    tier value as meaningful."""
+    findings: list[tuple[str, str, str]] = []
+    raw_tier = entry.get("risk_tier")
+    declared_tier = str(raw_tier).strip().upper() if isinstance(raw_tier, str) and raw_tier.strip() else None
+    if declared_tier not in VALID_RISK_TIERS:
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' 'risk_tier' is missing/blank "
+            f"or not one of {sorted(VALID_RISK_TIERS)} — a graduation entry may never be silent on "
+            "tier (fail-closed: rejected from the streak population, never defaulted to "
+            "STRICT-and-counted)"))
+        return False, None, findings
+
+    tier_evidence = entry.get("tier_evidence")
+    if not isinstance(tier_evidence, dict):
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' declares risk_tier="
+            f"'{declared_tier}' but has no 'tier_evidence' block — the tier must be hash-bound to a "
+            "snapshotted receipt, never a bare self-declared field"))
+        return False, None, findings
+
+    receipt_ref = str(tier_evidence.get("receipt", "") or "").strip()
+    receipt_sha256 = str(tier_evidence.get("receipt_sha256", "") or "").strip().lower()
+    if not receipt_ref or not _SHA256_RE.match(receipt_sha256):
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence is missing "
+            "'receipt' or a full 64-hex 'receipt_sha256' (mirrors R1.4: full sha256, not a "
+            "12-hex prefix)"))
+        return False, None, findings
+
+    if manifest_ok and manifest_files.get(receipt_ref) != receipt_sha256:
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence receipt "
+            f"'{receipt_ref}' is absent from (or hash-mismatched in) its own evidence manifest — "
+            "an unindexed/unbound tier receipt is never trusted"))
+        return False, None, findings
+
+    receipt_path, rerr = safe_repo_ref(receipt_ref, receipts_dir)
+    if rerr or receipt_path is None or not receipt_path.is_file():
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence receipt "
+            f"'{receipt_ref}' {rerr or 'does not exist'}"))
+        return False, None, findings
+
+    actual = _sha256_full(receipt_path)
+    if actual is None or actual != receipt_sha256:
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence receipt "
+            f"'{receipt_ref}' sha256={actual or 'UNREADABLE'} != declared {receipt_sha256} — hash "
+            "mismatch (forged/swapped/hand-edited tier receipt)"))
+        return False, None, findings
+
+    tdoc, tderr = load_yaml(str(receipt_path))
+    if tderr or not isinstance(tdoc, dict):
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence receipt is not "
+            f"a readable YAML mapping — {tderr or 'not a mapping'}"))
+        return False, None, findings
+
+    raw_receipt_tier = tdoc.get("resolved_risk_tier")
+    receipt_tier = (str(raw_receipt_tier).strip().upper()
+                    if isinstance(raw_receipt_tier, str) and raw_receipt_tier.strip() else None)
+    if receipt_tier not in VALID_RISK_TIERS:
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' tier_evidence receipt "
+            f"'resolved_risk_tier' is missing/blank or not one of {sorted(VALID_RISK_TIERS)}"))
+        return False, None, findings
+
+    if receipt_tier != declared_tier:
+        findings.append(("P0", loc,
+            f"GRADUATION-TIER-EVIDENCE-REQUIRED: entry '{project_id}' declares risk_tier="
+            f"'{declared_tier}' but its bound tier receipt asserts the frozen packet actually "
+            f"resolved to '{receipt_tier}' — a later tier claim cannot retroactively bank a run "
+            "built under a lighter tier (LITE->STANDARD migration guard)"))
+        return False, None, findings
+
+    return True, declared_tier, findings
+
+
 def _validate_entry(entry: dict, receipts_dir: Path, window_days: int = POSTSHIP_WINDOW_DAYS,
-                     today: date | None = None) -> tuple[bool, bool, bool, list[tuple[str, str, str]]]:
+                     today: date | None = None) -> tuple[bool, bool, bool, bool, list[tuple[str, str, str]]]:
     """Validate + recompute ONE ledger entry against its snapshotted receipts.
 
-    Returns (is_clean, is_userfacing, is_pending, findings). is_pending is True iff every
+    Returns (is_clean, is_userfacing, is_pending, is_lite, findings). is_pending is True iff every
     criterion is MET except c5 (INDETERMINATE, post-ship window still open) — such an entry is
     NOT clean, does NOT reset the streak, and is EXCLUDED from the streak count (§3 'pending').
+    is_lite is True iff the entry's `risk_tier` is hash-bound-VERIFIED (never a bare claim, see
+    `_validate_tier_evidence`) as LITE — a verified-LITE entry is likewise EXCLUDED from the streak
+    count (PBF-PROP-019 Phase 4 design v2 §5/P1-5): it neither counts nor resets, same mechanic as
+    'pending'. A missing/unbindable/malformed tier declaration is NEVER treated as is_lite=True —
+    it instead surfaces a P0 GRADUATION-TIER-EVIDENCE-REQUIRED finding and makes the entry NOT
+    clean (fail-closed: rejected from the streak, never defaulted to STRICT-and-counted).
     """
     project_id = entry.get("project_id") if isinstance(entry.get("project_id"), str) else None
     loc = f"graduation-ledger:{project_id or '<unknown>'}"
 
     if entry.get("_unparseable"):
-        return False, False, False, [("P1", "graduation-ledger",
+        return False, False, False, False, [("P1", "graduation-ledger",
             f"GRADUATION-ENTRY-SHAPE: a ```yaml fence could not be parsed as a ledger entry — "
             f"{entry.get('_raw', '')!r}")]
 
@@ -652,7 +767,7 @@ def _validate_entry(entry: dict, receipts_dir: Path, window_days: int = POSTSHIP
         evidence_manifest_ref = None
 
     if shape_errors:
-        return False, False, False, [("P1", loc,
+        return False, False, False, False, [("P1", loc,
             f"GRADUATION-ENTRY-SHAPE: entry '{project_id or '<unknown>'}' is malformed — "
             f"{'; '.join(shape_errors)}")]
 
@@ -679,6 +794,13 @@ def _validate_entry(entry: dict, receipts_dir: Path, window_days: int = POSTSHIP
             for row in files:
                 if isinstance(row, dict) and isinstance(row.get("path"), str):
                     manifest_files[row["path"].strip()] = str(row.get("sha256", "")).strip().lower()
+
+    # PBF-PROP-019 Phase 4: hash-bound tier evidence — independent of the 7-criteria recompute
+    # (never touches criterion dispatch/verdicts), gates is_clean + supplies is_lite for the
+    # streak-population filter below.
+    tier_ok, verified_tier, tier_findings = _validate_tier_evidence(
+        entry, manifest_ok, manifest_files, receipts_dir, project_id, loc)
+    findings.extend(tier_findings)
 
     ctx: dict = {"ship_date": ship_date_val, "window_days": window_days, "today": today or date.today(),
                  "live_slice_module_ids": [], "userfacing": False,
@@ -711,17 +833,22 @@ def _validate_entry(entry: dict, receipts_dir: Path, window_days: int = POSTSHIP
 
     is_pending = (criterion_verdicts.get("c5_zero_postship_p0p1") == "INDETERMINATE"
                   and all(v == "MET" for cid, v in criterion_verdicts.items() if cid != "c5_zero_postship_p0p1"))
-    is_clean = manifest_ok and all(v == "MET" for v in criterion_verdicts.values())
+    is_clean = tier_ok and manifest_ok and all(v == "MET" for v in criterion_verdicts.values())
     is_userfacing = bool(ctx.get("userfacing"))
-    return is_clean, is_userfacing, is_pending, findings
+    is_lite = tier_ok and verified_tier == "LITE"
+    return is_clean, is_userfacing, is_pending, is_lite, findings
 
 
 def _recompute_streak(ordered_statuses: list[dict], receipts_dir: Path, n: int, m: int) -> tuple[int, int, dict]:
     """`ordered_statuses`: chronological OLDEST->NEWEST (each carries project_id/is_clean/
-    is_userfacing/is_pending). Streak = count of consecutive CLEAN projects counting backward
-    from the newest, SKIPPING pending entries (they neither count nor reset), stopping at the
-    first non-clean/non-pending entry (§3). Returns (streak, userfacing_in_streak, per_project) —
-    per_project also carries the '_pending_newer_than_streak' flag (R1.1.3)."""
+    is_userfacing/is_pending/is_lite). Streak = count of consecutive CLEAN projects counting
+    backward from the newest, SKIPPING pending entries (they neither count nor reset) AND
+    SKIPPING verified-LITE entries (PBF-PROP-019 Phase 4, design v2 §5/P1-5 — same exclusion
+    mechanic: a LITE project builds normally but never contributes a "clean project" to the
+    reliability record, whether it appears newest, oldest, or interleaved between STANDARD/STRICT
+    entries), stopping at the first non-clean/non-pending/non-lite entry (§3). Returns (streak,
+    userfacing_in_streak, per_project) — per_project also carries the
+    '_pending_newer_than_streak' flag (R1.1.3)."""
     per_project: dict = {}
     streak = 0
     userfacing_in_streak = 0
@@ -730,6 +857,9 @@ def _recompute_streak(ordered_statuses: list[dict], receipts_dir: Path, n: int, 
     counting = True
     for st in reversed(ordered_statuses):
         pid = st["project_id"]
+        if counting and st.get("is_lite"):
+            per_project[pid] = st
+            continue
         if counting and st.get("is_pending"):
             seen_pending_prefix = True
             per_project[pid] = st
@@ -756,7 +886,9 @@ def _print_status_readout(ordered_statuses, streak, userfacing_in_streak, n, m, 
     for st in reversed(ordered_statuses):
         pid = st["project_id"]
         ship_date_disp = st.get("ship_date") or "?"
-        if counting and st["is_pending"]:
+        if counting and st.get("is_lite"):
+            marker, label = "○", "excluded   LITE tier — outside the reliability record (GRADUATION-LITE-EXCLUDED)"
+        elif counting and st["is_pending"]:
             marker, label = "⚠️", "pending    post-ship window still open"
         elif counting and st["is_clean"]:
             uf = "user-facing" if st["is_userfacing"] else "not user-facing"
@@ -824,12 +956,13 @@ def cmd_graduation(args) -> int:
 
     statuses = []
     for entry in raw_entries:
-        is_clean, is_userfacing, is_pending, findings = _validate_entry(
+        is_clean, is_userfacing, is_pending, is_lite, findings = _validate_entry(
             entry, receipts_dir, window_days=window_days, today=today)
         pid = entry.get("project_id") if isinstance(entry, dict) else None
         statuses.append({
             "project_id": pid or "<unknown>",
             "is_clean": is_clean, "is_userfacing": is_userfacing, "is_pending": is_pending,
+            "is_lite": is_lite,
             "findings": findings,
             "ts_raw": entry.get("ship_timestamp_utc") if isinstance(entry, dict) else None,
             "ship_date": entry.get("ship_date") if isinstance(entry, dict) else None,
@@ -853,6 +986,7 @@ def cmd_graduation(args) -> int:
                 "streak, never silently assumed UTC (R1.3/R2.6)"))
             st["is_clean"] = False
             st["is_pending"] = False
+            st["is_lite"] = False
             orderable.append((None, st))
             continue
         if tv in ts_seen:
@@ -862,6 +996,7 @@ def cmd_graduation(args) -> int:
                 "ordered (R1.3)"))
             st["is_clean"] = False
             st["is_pending"] = False
+            st["is_lite"] = False
         else:
             ts_seen[tv] = st["project_id"]
         orderable.append((tv, st))
@@ -879,6 +1014,7 @@ def cmd_graduation(args) -> int:
         for _, st in orderable:
             st["is_clean"] = False
             st["is_pending"] = False
+            st["is_lite"] = False
     ordered_statuses = [st for _, st in orderable]
 
     streak, userfacing_in_streak, per_project = _recompute_streak(ordered_statuses, receipts_dir, n, m)

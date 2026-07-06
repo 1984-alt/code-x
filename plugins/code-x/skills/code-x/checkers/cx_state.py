@@ -24,6 +24,7 @@ from cx_common import (
     VALID_BUILD_ENGINES, ENGINE_BRANCH_KEYS,
     CLAUDE_MODEL_RANK, GPT_MODEL_RANK, EFFORT_RANK,
     resolve_profiles_path, parse_model_effort, profiles_sha12,
+    resolve_risk_tier,
 )
 
 # Build modes whose sessions must acknowledge BUILDER-STANDARD.md at session start
@@ -113,7 +114,7 @@ def _check_module_demo_mode(data: dict, loc: str, findings: list) -> None:
     """PBF-PROP-012 Part E (SEE-AND-TEST): a BUILD/FIXING session must declare it will DEMO every
     user-facing module on its real surface (web→Chrome, mobile→iPhone 13 Pro sim) and capture a
     real shown-screenshot before offering the CEO live-drive accept. The model-agnostic rail that
-    forces the show-step a real project skipped. A project with NO user-facing modules may carry a typed
+    forces the show-step real-project skipped. A project with NO user-facing modules may carry a typed
     no_user_facing_modules waiver + ceo_decision_ref. P2 (mirrors the orchestration-mode ack).
     [RULE:module-demo-mode-ack]"""
     md = nested_get(data, "session_start", "module_demo_mode")
@@ -225,9 +226,15 @@ def _check_boot_ack(data: dict, repo_root: str, loc: str, findings: list) -> Non
 
 
 def _check_review_boundary(data: dict, loc: str, findings: list,
-                           require_block: bool = False) -> None:
+                           require_block: bool = False, risk_tier_val: str = "STRICT") -> None:
     """BF-PROP-002: reviewer taxonomy/timing is STATE, not prose — required enums,
-    partial prose rejected. Block presence enforced at session-start in BUILD modes."""
+    partial prose rejected. Block presence enforced at session-start in BUILD modes.
+
+    PBF-PROP-019 P2 FIX: `coderabbit_before_self_review: yes` is now tier-aware — LITE
+    projects legitimately skip CodeRabbit (cx_card.py:419, cx_build_turn.py:251 already relax
+    this), so forcing the flag here on every LITE project was integration drift: a LITE
+    project was forced to either carry an inaccurate 'yes' or fail state check for a rail it
+    correctly never runs. STANDARD/STRICT are unchanged (default STRICT, fail-closed)."""
     rb = data.get("review_boundary")
     if not isinstance(rb, dict):
         if require_block:
@@ -249,12 +256,14 @@ def _check_review_boundary(data: dict, loc: str, findings: list,
         str(data.get("current_stage", "")) == "BUILD_FACTORY"
         and str(data.get("current_mode", "")) in ("MODULE_BUILD", "MODE_A_UI")
     )
-    if code_diff_build_state and cr != "yes":
+    if code_diff_build_state and cr != "yes" and risk_tier_val != "LITE":
         findings.append(("P1", loc,
             "review_boundary.coderabbit_before_self_review must be yes for BUILD_FACTORY "
             f"{data.get('current_mode')} code-diff work — CodeRabbit is mandatory before "
             "self-review/cross-family on build modules; not_applicable/no is a planning-stage "
             "skip (PROP-042 / v1.21)"))
+    # else: risk_tier LITE drops the CodeRabbit-mandatory requirement (self-review only,
+    # PBF-PROP-019 P2 fix) — mirrors cx_card.py's _check_coderabbit_required_for_code_diff.
     srb = str(rb.get("self_review_boundary", ""))
     if srb not in VALID_SELF_REVIEW_BOUNDARY:
         findings.append(("P1", loc,
@@ -949,8 +958,15 @@ def _session_start_checks(data: dict, repo_root: str, loc: str, findings: list,
         # P1: machine-generated boot receipt referenced + fresh (B-PROP-002 rail).
         if check_boot_ack:
             _check_boot_ack(data, repo_root, loc, findings)
-        # P1: reviewer taxonomy/timing declared as typed state (BF-PROP-002).
-        _check_review_boundary(data, loc, findings, require_block=True)
+        # P1: reviewer taxonomy/timing declared as typed state (BF-PROP-002). PBF-PROP-019
+        # P2 fix: resolve risk_tier the same way collect_state_findings does (repo_root is
+        # always given at session-start) so the tier-aware CodeRabbit read is consistent
+        # whether or not this session-start block ran.
+        _rb_risk_tier = "STRICT"
+        _rb_pkt_rel = str(data.get("packet_dir", "") or "").strip()
+        if _rb_pkt_rel and not (Path(_rb_pkt_rel).is_absolute() or ".." in Path(_rb_pkt_rel).parts):
+            _rb_risk_tier = resolve_risk_tier(Path(repo_root) / _rb_pkt_rel)
+        _check_review_boundary(data, loc, findings, require_block=True, risk_tier_val=_rb_risk_tier)
 
     # P1: BF-PROP-007 Lever B (F6) — when state.packet_dir is set, the latest handoff's lock-pointer
     # must match the RECOMPUTED frozen hash + open-card set, so the next session cannot boot on a
@@ -972,14 +988,19 @@ def _session_start_checks(data: dict, repo_root: str, loc: str, findings: list,
 
 def collect_state_findings(path: str, args, session_start: bool, repo_root: str | None,
                            check_boot_ack: bool = True):
-    """Full state validation as (findings, advisories, fatal_line). Shared by
+    """Full state validation as (data, findings, advisories, fatal). Shared by
     cmd_state and cx check boot (which runs the same checks pre-receipt,
-    minus the boot-ack clause it is about to make satisfiable)."""
+    minus the boot-ack clause it is about to make satisfiable). Every return
+    site is 4-ary. `fatal` is None on the happy path; on an early parse/shape
+    error it is a TYPED (severity, loc, msg) finding tuple (not a pre-rendered
+    string) so each caller renders it itself — a bad state file is REPORTED,
+    never crashes the unpack, and no caller re-parses a display string
+    (PBF-PROP-015; typed shape per GPT-5.5 xfam)."""
     data, err = load_yaml(path)
     if err:
-        return None, None, f"FIX-FIRST\n  [P0] {path} — {err}"
+        return None, None, None, ("P0", path, " ".join(str(err).split()))
     if not isinstance(data, dict):
-        return None, None, f"FIX-FIRST\n  [P0] {path} — not a YAML mapping"
+        return None, None, None, ("P0", path, "not a YAML mapping")
 
     findings = []
     loc = path
@@ -1004,10 +1025,21 @@ def collect_state_findings(path: str, args, session_start: bool, repo_root: str 
     # --- PBF-PROP-008: active_build_engine + orchestrator seat vs BUILD-ENGINE-PROFILES ---
     _engine_profile_checks(data, args, loc, findings)
 
+    # PBF-PROP-019 P2 FIX: resolve the project risk_tier once, reused by
+    # _check_review_boundary's CodeRabbit ceremony read below. Fail-closed: absent/unsafe
+    # packet_dir resolves STRICT. Mirrors cx_final_ready.py / cx_build_turn.py's identical
+    # packet_dir->resolve_risk_tier pattern; falls back to the state file's own dir when no
+    # --repo-root is given (cx check state does not require --repo-root outside session-start).
+    risk_tier_val = "STRICT"
+    _pkt_rel_tier = str(data.get("packet_dir", "") or "").strip()
+    if _pkt_rel_tier and not (Path(_pkt_rel_tier).is_absolute() or ".." in Path(_pkt_rel_tier).parts):
+        _base_tier = Path(repo_root) if repo_root else Path(path).resolve().parent
+        risk_tier_val = resolve_risk_tier(_base_tier / _pkt_rel_tier)
+
     # --- BF-PROP-002: typed deviations + review_boundary enums + PROTOCOL_INCIDENT ---
     # (review_boundary validated whenever present; presence required at session-start
     # in build modes — see _session_start_checks)
-    _check_review_boundary(data, loc, findings, require_block=False)
+    _check_review_boundary(data, loc, findings, require_block=False, risk_tier_val=risk_tier_val)
     _check_protocol_deviations(data, loc, findings)
     _check_protocol_incident(data, loc, findings)
     _check_built_app_audit_before_final_xfam(data, loc, findings)
@@ -1091,7 +1123,8 @@ def cmd_state(args) -> int:
     data, findings, advisories, fatal = collect_state_findings(
         path, args, session_start, repo_root)
     if fatal:
-        print(fatal)
+        _sev, _loc, _msg = fatal
+        print(f"FIX-FIRST\n  [{_sev}] {_loc} — {_msg}")
         return 1
     loc = path
     counts = nested_get(data, "open_findings", "counts", default={}) or {}

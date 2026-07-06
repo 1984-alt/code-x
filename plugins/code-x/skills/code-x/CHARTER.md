@@ -68,7 +68,7 @@ MEMORY  (lightweight files — never auto-mutating)
 - Clean reset (not v0.14 patching v0.13). Name: **Code-X V1**.
 - **Tiny kernel + one work-order at a time + module capsules.** Per-turn read = kernel + state + one card + named slices. Nothing else.
 - **Anti-bloat ceiling:** the per-turn read path has a hard size cap; any change that busts it must cut something else first. Fail-closed on size.
-- **Enforcement = Level A (plain files) + Level B (tiny checkers). NO Level C (full orchestrator/runner) now.** Revisit only after V1 proves itself on 2–3 projects.
+- **Enforcement = Level A (plain files) + Level B (tiny checkers). NO Level C (full orchestrator/runner) now.** Revisit only after V1 proves itself on 2–3 projects. *(Clarified B-PROP-013 2026-07-06: a Level-B **receipt-stamper** — `cx check boot`, `cx check accept` — is NOT the deferred Level-C auto-orchestrator; it generates one machine-authored receipt per command invocation and never routes actors, builds, or self-mutates. Forge-parity hardening of the acceptance checkpoint (`cx check module-acceptance` recompute legs + `cx check accept`) is therefore permitted NOW and is orthogonal to the reliability-bar / long-autonomous axis below (L80–84) — it hardens the wall the bar depends on, it does not move the bar.)*
 - **`cx check` = ONE command surface** with subcommands (`card`, `state`, `scope`, `evidence`, `cost`, `final-ready`). Never a sprawl of scripts; never `cx run`/`orchestrate`/`auto-route`/`self-mutate`.
 
 ## Long-autonomous milestone

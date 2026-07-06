@@ -16,7 +16,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, field_present
+from cx_common import findings_report, load_yaml, field_present, resolve_risk_tier
 
 # A conservative tripwire: a hit means "potential sensitive content" and (since a receipt /
 # carve-out is mandatory anyway) is used mainly to catch a scrub receipt that did NOT scrub.
@@ -28,6 +28,20 @@ SENSITIVE_PATTERNS = [
     ("long digit run (account/PII)", re.compile(r"\b\d{12,}\b")),
 ]
 SCRUB_REQUIRED_KEYS = ("target", "diff_hash", "scrub_command", "positive_control_exit", "produced_at")
+# PBF-PROP-019: the money/PII subset of cx_lock_fidelity.card_high_risk's security_tripwire
+# classes (money/auth/secrets/PII/destructive) — egress ties specifically to money/PII per the
+# design v2.B ceremony table, not the full high-risk set (auth-only/secrets-only cards do not by
+# themselves force egress under LITE/STANDARD; a card can still separately force the Phase-2
+# foundation checkpoint via cx_card's card_high_risk).
+_MONEY_PII_TRIPWIRE_KEYS = ("touches_money_or_balances", "touches_bank_or_pii")
+
+
+def _card_touches_money_or_pii(card: dict) -> bool:
+    st = card.get("security_tripwire") if isinstance(card, dict) else None
+    if not isinstance(st, dict):
+        return False
+    truthy = lambda v: str(v).strip().lower() in ("yes", "true", "1")
+    return any(truthy(st.get(k)) for k in _MONEY_PII_TRIPWIRE_KEYS)
 
 
 def cmd_egress(args) -> int:
@@ -36,6 +50,34 @@ def cmd_egress(args) -> int:
     receipt_ref = getattr(args, "receipt", None)
     loc = diff_path
     findings = []
+
+    # PBF-PROP-019 Phase 3 (design v2.B ceremony row 4): LITE/STANDARD only require the scrub when
+    # a card touches money/PII; STRICT requires it for every module. Fail-closed: with no --card /
+    # --state supplied (the pre-existing call shape, preserved byte-for-byte), or an unresolvable
+    # tier/packet_dir, this resolves to "always required" — the exact behaviour every existing
+    # caller/test already gets. Only a caller that explicitly opts in with --card/--state can relax.
+    card_path = getattr(args, "card", None)
+    state_path = getattr(args, "state", None)
+    repo_root_arg = getattr(args, "repo_root", None)
+
+    money_pii_touch = True
+    if card_path:
+        card_data, cerr = load_yaml(card_path)
+        if cerr or not isinstance(card_data, dict):
+            findings.append(("P1", loc, f"--card {card_path} unreadable: {cerr or 'not a mapping'}"))
+            return findings_report(findings)
+        money_pii_touch = _card_touches_money_or_pii(card_data)
+
+    risk_tier_val = "STRICT"
+    if state_path:
+        state_data, serr = load_yaml(state_path)
+        if not serr and isinstance(state_data, dict):
+            pkt_rel = str(state_data.get("packet_dir", "") or "").strip()
+            if pkt_rel and not (Path(pkt_rel).is_absolute() or ".." in Path(pkt_rel).parts):
+                base = Path(repo_root_arg) if repo_root_arg else Path(state_path).resolve().parent
+                risk_tier_val = resolve_risk_tier(base / pkt_rel)
+
+    egress_required = risk_tier_val == "STRICT" or money_pii_touch
 
     try:
         diff_text = Path(diff_path).read_text(errors="replace")
@@ -99,7 +141,14 @@ def cmd_egress(args) -> int:
             print(f"PASS — egress to {target} scrubbed + bound to diff {diff_hash} (positive control nonzero)")
         return findings_report(findings)
 
-    # neither a scrub receipt nor a carve-out → BLOCK before any upload.
+    # neither a scrub receipt nor a carve-out → BLOCK before any upload, UNLESS this tier/card
+    # combination doesn't require egress at all (PBF-PROP-019) — but a MECHANICAL hit from the
+    # sensitive-content tripwire always forces the requirement regardless of tier/card declaration
+    # (a detected secret/PII pattern is evidence, not a self-declared risk class; never relaxed).
+    if not egress_required and not hits:
+        print(f"NOT_APPLICABLE — egress scrub not required for {target} "
+              f"(risk_tier={risk_tier_val}, card does not touch money/PII) [PBF-PROP-019]")
+        return 0
     detail = f"; sensitive content detected in the diff: {hits}" if hits else ""
     findings.append(("P0", loc,
         f"egress to {target} has NO scrub receipt and NO local-only carve-out — a raw diff must be "

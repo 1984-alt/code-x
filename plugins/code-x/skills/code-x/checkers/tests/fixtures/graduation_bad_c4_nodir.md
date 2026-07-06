@@ -9,6 +9,8 @@
   ship_timestamp_utc: "2026-01-01T10:00:00Z"
   entered_by: hand-append
   evidence_manifest: graduation_receipts/clean/graduation-evidence-manifest.yaml
+  risk_tier: STANDARD
+  tier_evidence: {receipt: graduation_receipts/clean/tier-standard.yaml, receipt_sha256: e750d7cd467245edee8660a769076cc046090068d3a87e79661324af943675a0}
   criteria:
     c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
     c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}
@@ -23,6 +25,8 @@
   ship_timestamp_utc: "2026-02-01T10:00:00Z"
   entered_by: hand-append
   evidence_manifest: graduation_receipts/clean/graduation-evidence-manifest.yaml
+  risk_tier: STANDARD
+  tier_evidence: {receipt: graduation_receipts/clean/tier-standard.yaml, receipt_sha256: e750d7cd467245edee8660a769076cc046090068d3a87e79661324af943675a0}
   criteria:
     c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
     c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}
@@ -37,6 +41,8 @@
   ship_timestamp_utc: "2026-03-01T10:00:00Z"
   entered_by: hand-append
   evidence_manifest: graduation_receipts/bad2/manifest-c4-nodir.yaml
+  risk_tier: STANDARD
+  tier_evidence: {receipt: graduation_receipts/clean/tier-standard.yaml, receipt_sha256: e750d7cd467245edee8660a769076cc046090068d3a87e79661324af943675a0}
   criteria:
     c1_demo_gate_never_fired: {receipt: graduation_receipts/clean/c1-index.yaml, receipt_sha256: 2015b253a72f442a2921eb1a528673b2219f82487a6745cc3a5829de4cdd856a}
     c2_ceo_first_accept: {receipt: graduation_receipts/clean/c2-history.yaml, receipt_sha256: 7198be08655e7b5d048b66ef394713e881cfbdb9d281bdae75e2f415a899c31b}

@@ -1,0 +1,7 @@
+# PBF-PROP-019 Phase 3: minimal state whose packet_dir resolves risk_tier: STRICT
+# (via packet_good_risk_tier_strict/requirements-manifest.yaml). Used as the positive
+# control proving STANDARD/STRICT still enforce the ceremony each ceremony gate relaxes for LITE.
+project: cx-pbf019-phase3-test
+protocol_stamp: Code-X V1
+packet_dir: packet_good_risk_tier_strict
+current_card:

@@ -49,7 +49,7 @@ os.environ["CX_PROFILES"] = str(THIS_DIR / "fixtures" / "profiles_test.yaml")
 os.environ["CODE_X_TEST_MODE"] = "1"
 
 REQUIRED_SUBCOMMANDS = {"card", "state", "scope", "evidence", "cost", "final-ready", "consistency", "deck", "packet",
-                        "boot", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
+                        "boot", "accept", "build-turn", "close-turn", "evals", "design-fidelity", "module-start", "module-acceptance", "module-quality",
                         "dep-scan", "egress", "class-sweep", "render-fidelity", "drift", "structure", "verify-app", "module-demo",
                         "blueprint", "whole-packet-review", "kaizen", "graduation", "audit", "accepted-surface"}
 FIXTURES = THIS_DIR / "fixtures"
@@ -426,7 +426,7 @@ def _substantive_hash(pkt) -> str:
 
 
 def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --version",
-                     module_id: str = "m1") -> tuple[str, str]:
+                     module_id: str = "m1", risk_tier_manifest_extra: str = "") -> tuple[str, str]:
     """Shared build-turn recipe: repo with a shape-valid card, existing allowed
     files, real evidence, committed clean. The named test command is the
     deterministic command the card itself names (never guessed).
@@ -450,6 +450,11 @@ def _build_turn_repo(tmp: str, with_test_cmd: bool, test_cmd: str = "git --versi
     os.makedirs(packet, exist_ok=True)
     with open(FIXTURES / "module_start_good_packet" / "requirements-manifest.yaml") as f:
         manifest_body = f.read()
+    if risk_tier_manifest_extra:
+        # PBF-PROP-019 Phase 5 (EVAL-052): inject a risk_tier declaration into the frozen packet
+        # BEFORE the packet content hash is computed below, so the tier-gated build-turn recipes
+        # stay content-bound like every other _build_turn_repo caller.
+        manifest_body += risk_tier_manifest_extra
     with open(os.path.join(packet, "requirements-manifest.yaml"), "w") as f:
         f.write(manifest_body)
     with open(FIXTURES / "module_registry_good.yaml") as f:
@@ -730,6 +735,11 @@ def _build_turn_ref_real_repo(tmp: str, field: str) -> tuple[str, str]:
         # if it stays unchanged the scope check won't flag it as modified.
         bundle = {
             "current_repo_head": commit_sha,
+            # PBF-PROP-020 fold re-sweep: a render bundle checked with --repo-root/--packet-dir
+            # (build-turn wires them when state.packet_dir is set) MUST declare repo_sha_before or
+            # fail closed. baseline == HEAD here => empty git-touched set => Rules 2/7 resolve with
+            # no CEO-visible screen touched (this fixture proves the safe-ref pass path, not coverage).
+            "repo_sha_before": commit_sha,
             "render_profile": {
                 "chromium_revision": "1234.5", "device_pixel_ratio": 2,
                 "viewport": "390x844",
@@ -796,6 +806,67 @@ def _recipe_build_turn_render_bundle_ref_ok(tmp: str) -> tuple[str, str]:
 def _recipe_build_turn_coderabbit_receipt_ref_ok(tmp: str) -> tuple[str, str]:
     """PROP-038 item 1: coderabbit per-field good — real in-repo receipt, passes whole build-turn."""
     return _build_turn_ref_real_repo(tmp, "coderabbit")
+
+
+def _relocate_state_to_repo_root(repo: str, state: str) -> str:
+    """cx_card.py's resolve_card_risk_tier (and every other packet_dir-relative resolver in
+    cx_card.py — lock_fidelity, the packet-ledger loader) resolves repo_root as
+    Path(state_path).resolve().parent — the documented, universal convention that CODE-X-STATE.yaml
+    lives AT the repo root. _build_turn_repo's shared state.yaml lives in tmp/ (the repo's parent),
+    which every OTHER existing git_fixture recipe tolerates because none of them exercise a
+    packet_dir-relative resolver through the nested `cx check card` sub-check build-turn dispatches.
+    The risk_tier read is the first one that does, so the state file must actually sit at the repo
+    root for the nested card sub-check to resolve the SAME packet_dir the outer build-turn command
+    resolves via its own --repo-root."""
+    real_state = os.path.join(repo, "CODE-X-STATE.yaml")
+    with open(state) as f:
+        body = f.read()
+    with open(real_state, "w") as f:
+        f.write(body)
+    return real_state
+
+
+def _recipe_build_turn_coderabbit_lite_strict(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-019 Phase 5 (EVAL-052): bad — the frozen packet declares NO risk_tier (defaults
+    STRICT) and the card's coderabbit block is stripped -> build-turn's CodeRabbit rail must still
+    fire MANDATORY. Closes the Phase-3 contract gap: cx_build_turn's tier-conditional CodeRabbit
+    read (design v2.B row 3) previously had a run.py integration test but no check-contracts.yaml
+    git_fixture bite."""
+    repo, state = _build_turn_repo(tmp, with_test_cmd=True)
+    state = _relocate_state_to_repo_root(repo, state)
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    del card["coderabbit"]
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "pbf019 phase5 strip coderabbit, strict tier\n\nCode-X-Provenance: cx-test"],
+                   check=True)
+    return repo, state
+
+
+def _recipe_build_turn_coderabbit_lite_relaxed(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-019 Phase 5 (EVAL-052): good — the frozen packet declares risk_tier: LITE (with a
+    resolving risk_tier_decision_ref) and the SAME coderabbit-stripped card now PASSES the
+    CodeRabbit sub-check (NOT_APPLICABLE, tier-relaxed) — proving the tier read actually reaches
+    build-turn's git-backed rail, not just cx_card's static fixture path."""
+    repo, state = _build_turn_repo(
+        tmp, with_test_cmd=True,
+        risk_tier_manifest_extra="risk_tier: LITE\nrisk_tier_decision_ref: CEO-D-001\n")
+    state = _relocate_state_to_repo_root(repo, state)
+    cpath = os.path.join(repo, "card.yaml")
+    with open(cpath) as f:
+        card = yaml.safe_load(f)
+    del card["coderabbit"]
+    with open(cpath, "w") as f:
+        yaml.safe_dump(card, f)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                    "pbf019 phase5 strip coderabbit, lite tier\n\nCode-X-Provenance: cx-test"],
+                   check=True)
+    return repo, state
 
 
 def _recipe_module_start_registry_alias_symlink(tmp: str) -> tuple[str, str]:
@@ -949,6 +1020,226 @@ def _recipe_module_acceptance_external_ref(tmp: str) -> tuple[str, str]:
 
 def _recipe_module_acceptance_inrepo_ref(tmp: str) -> tuple[str, str]:
     return _module_acceptance_ref_repo(tmp, external=False)
+
+
+# ── B-PROP-013 Unit 1 forge-parity bite harness (design-history/b-prop-013-forge-parity-design-
+# 2026-07-06.md §7) — formalizes the GUARD's new clauses into check-contracts.yaml so a prior
+# builder's run.py-only unit tests count as ENFORCING risk, not just green (run_contracts.py is
+# the wall that proves a clause bites via the CLI, same as every other gate in this file).
+
+def _forge_parity_qc_hash(qc: dict) -> str:
+    """Same canonicalization as cx_module_acceptance._canonicalize_quality_card_hash — kept inline
+    so the harness has no import-path dependency on the checkers package (mirrors _packet_hash)."""
+    import json
+    canonical = json.dumps(qc, sort_keys=True, separators=(",", ":"), default=str)
+    return _hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+
+
+def _forge_parity_repo(tmp: str) -> tuple[str, str]:
+    """A real 2-commit repo (non-empty repo_sha_before diff, PROP-028 baseline) — returns
+    (repo, base_sha) so callers can bind forge-parity repo_sha fields to a REAL reachable commit
+    (base_sha) or a fabricated one, and still pass the pre-existing phantom-completion guard."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo, exist_ok=True)
+    with open(os.path.join(repo, "a.txt"), "w") as f:
+        f.write("one\n")
+    _git_init(repo)
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    base_sha = _git_commit(repo, "first")
+    with open(os.path.join(repo, "b.txt"), "w") as f:
+        f.write("two\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    _git_commit(repo, "second")
+    return repo, base_sha
+
+
+def _forge_parity_write(tmp: str, repo: str, base_sha: str, *, marker_value=True,
+                        verify_sha=None, demo_sha=None, lsa_sha=None,
+                        quality_card=None, qc_hash=None) -> tuple[str, str]:
+    """Writes the packet (declaring the b_prop_013_forge_parity marker), a module-acceptance
+    receipt (verify_app/module_demo/live_slice_accept carry ONLY repo_sha — forge_parity_findings
+    reads these unconditionally; the full block-shape checks only fire when the order wall passes
+    require_live_slice=True, which these standalone `cx check module-acceptance` calls never do),
+    and a state.yaml binding the receipt + pointing packet_dir at the packet."""
+    packet = os.path.join(repo, "packet")
+    os.makedirs(packet, exist_ok=True)
+    with open(os.path.join(packet, "requirements-manifest.yaml"), "w") as f:
+        yaml.dump({"b_prop_013_forge_parity": marker_value, "requirements": []}, f)
+
+    ma = {
+        "module_id": "m1", "verdict": "accepted", "generated_by": "cx-accept",
+        "state_sha_before": "abc123", "quality_card_hash": qc_hash or "qc0011223344",
+        "repo_sha_before": base_sha,
+    }
+    if verify_sha is not None:
+        ma["verify_app"] = {"repo_sha": verify_sha}
+    if demo_sha is not None:
+        ma["module_demo"] = {"repo_sha": demo_sha}
+    if lsa_sha is not None:
+        ma["live_slice_accept"] = {"repo_sha": lsa_sha}
+    if quality_card is not None:
+        ma["quality_card"] = quality_card
+
+    os.makedirs(os.path.join(repo, "acc"), exist_ok=True)
+    receipt = os.path.join(repo, "acc", "receipt.yaml")
+    with open(receipt, "w") as f:
+        yaml.dump({"module_acceptance": ma}, f)
+    with open(receipt, "rb") as fh:
+        sha = _hashlib.sha256(fh.read()).hexdigest()[:12]
+
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "cx-fp-test", "protocol_stamp": "Code-X V1", "packet_dir": "packet",
+                   "accepted_modules": [{"module_id": "m1", "acceptance_ref": "acc/receipt.yaml",
+                                         "acceptance_sha12": sha}]}, f)
+    return repo, state
+
+
+def _recipe_forge_parity_good(tmp: str) -> tuple[str, str]:
+    """Marker enabled + all three repo_sha fields reachable + a matching quality_card_hash — the
+    honest /cx-accept-shaped receipt that must pass the FULL forge-parity wall clean."""
+    repo, base_sha = _forge_parity_repo(tmp)
+    qc = {"core_four_answered": True, "conformance": "n/a"}
+    qc_hash = _forge_parity_qc_hash(qc)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True,
+                               verify_sha=base_sha, demo_sha=base_sha, lsa_sha=base_sha,
+                               quality_card=qc, qc_hash=qc_hash)
+
+
+def _forge_parity_repo_with_side_branch(tmp: str) -> tuple[str, str, str]:
+    """FIX-FIRST (B-PROP-013 xfam P1): same 2-commit main history as _forge_parity_repo, PLUS a
+    commit made on a side branch that is NEVER merged back — a REAL commit object that genuinely
+    exists in the repo (git cat-file -e would find it) but is NOT an ancestor of HEAD. Proves the
+    guard checks ANCESTRY, not mere object existence: before the fix, this side-branch sha wrongly
+    PASSED (cat-file -e only checks the object is present); merge-base --is-ancestor correctly
+    rejects it. Returns (repo, base_sha, side_sha)."""
+    repo, base_sha = _forge_parity_repo(tmp)
+    orig_branch = subprocess.run(
+        ["git", "-C", repo, "symbolic-ref", "--short", "HEAD"],
+        capture_output=True, text=True, check=True).stdout.strip()
+    subprocess.run(["git", "-C", repo, "checkout", "-b", "side-branch", base_sha],
+                   check=True, capture_output=True)
+    with open(os.path.join(repo, "side.txt"), "w") as f:
+        f.write("side-only\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    side_sha = _git_commit(repo, "side-only-commit-never-merged")
+    subprocess.run(["git", "-C", repo, "checkout", orig_branch], check=True, capture_output=True)
+    return repo, base_sha, side_sha
+
+
+def _recipe_forge_parity_bad_verify_app(tmp: str) -> tuple[str, str]:
+    repo, base_sha = _forge_parity_repo(tmp)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True, verify_sha="deadbeef0000")
+
+
+def _recipe_forge_parity_bad_verify_app_not_ancestor(tmp: str) -> tuple[str, str]:
+    """FIX-FIRST: a real, existing commit that is on a side branch — NOT an ancestor of HEAD."""
+    repo, base_sha, side_sha = _forge_parity_repo_with_side_branch(tmp)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True, verify_sha=side_sha)
+
+
+def _recipe_forge_parity_bad_module_demo(tmp: str) -> tuple[str, str]:
+    repo, base_sha = _forge_parity_repo(tmp)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True, demo_sha="deadbeef0000")
+
+
+def _recipe_forge_parity_bad_live_slice(tmp: str) -> tuple[str, str]:
+    repo, base_sha = _forge_parity_repo(tmp)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True, lsa_sha="deadbeef0000")
+
+
+def _recipe_forge_parity_bad_qc_drift(tmp: str) -> tuple[str, str]:
+    repo, base_sha = _forge_parity_repo(tmp)
+    qc = {"core_four_answered": True, "conformance": "n/a"}
+    return _forge_parity_write(tmp, repo, base_sha, marker_value=True, quality_card=qc,
+                               qc_hash="wronghash1234")
+
+
+def _recipe_forge_parity_bad_marker_malformed(tmp: str) -> tuple[str, str]:
+    repo, base_sha = _forge_parity_repo(tmp)
+    return _forge_parity_write(tmp, repo, base_sha, marker_value="true")  # quoted string, not real bool
+
+
+# ── B-PROP-013 Unit 2 (`cx check accept`, the STAMPER) — CX-ACCEPT-NO-CEO-TOKEN fixtures ─────────
+
+def _cx_accept_repo(tmp: str) -> tuple[str, str]:
+    """A minimal one-commit repo (HEAD == that commit) + a minimal state.yaml — cx-accept only
+    needs a resolvable HEAD and a readable state file to recompute state_sha_before."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    head = _git_commit(repo, "first")
+    state = os.path.join(tmp, "state.yaml")
+    with open(state, "w") as f:
+        yaml.dump({"project": "cx-accept-test", "protocol_stamp": "Code-X V1"}, f)
+    return repo, state, head
+
+
+def _recipe_cx_accept_no_token(tmp: str) -> tuple[str, str]:
+    """A draft requesting verdict: accepted with NO ceo_accept_token anywhere — cx-accept must
+    refuse to stamp it (CX-ACCEPT-NO-CEO-TOKEN)."""
+    repo, state, _head = _cx_accept_repo(tmp)
+    draft = {"module_acceptance": {"module_id": "m1", "verdict": "accepted"}}
+    with open(os.path.join(repo, "draft.yaml"), "w") as f:
+        yaml.dump(draft, f)
+    return repo, state
+
+
+def _recipe_cx_accept_good_token(tmp: str) -> tuple[str, str]:
+    """A draft whose ceo_accept_token embeds the recomputed HEAD's FULL 12-char prefix PLUS a
+    ceo_turn_ref on the same (top-level, no live_slice/module_demo block) location — cx-accept
+    stamps it (PASS), proving the refusal below is not a blanket block. FIX-FIRST: was head[:6]
+    with no turn_ref before the P1 close."""
+    repo, state, head = _cx_accept_repo(tmp)
+    draft = {"module_acceptance": {
+        "module_id": "m1", "verdict": "accepted",
+        "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+        "ceo_turn_ref": "turn-2026-07-06-001",
+    }}
+    with open(os.path.join(repo, "draft.yaml"), "w") as f:
+        yaml.dump(draft, f)
+    return repo, state
+
+
+def _recipe_cx_accept_short_prefix_token(tmp: str) -> tuple[str, str]:
+    """FIX-FIRST (B-PROP-013 xfam P1): a token embedding only the OLD forgeable 6-char HEAD
+    prefix (`auto-<HEAD[:6]>` shape) must be REFUSED — 12 hex chars are required now."""
+    repo, state, head = _cx_accept_repo(tmp)
+    draft = {"module_acceptance": {
+        "module_id": "m1", "verdict": "accepted",
+        "ceo_accept_token": f"auto-{head[:6]}",
+    }}
+    with open(os.path.join(repo, "draft.yaml"), "w") as f:
+        yaml.dump(draft, f)
+    return repo, state
+
+
+def _recipe_cx_accept_token_no_turn_ref(tmp: str) -> tuple[str, str]:
+    """FIX-FIRST (B-PROP-013 xfam P1): a full 12-char HEAD-prefix token with NO ceo_turn_ref on
+    the same block must be REFUSED — a token alone is not proof of a real CEO turn."""
+    repo, state, head = _cx_accept_repo(tmp)
+    draft = {"module_acceptance": {
+        "module_id": "m1", "verdict": "accepted",
+        "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+    }}
+    with open(os.path.join(repo, "draft.yaml"), "w") as f:
+        yaml.dump(draft, f)
+    return repo, state
+
+
+def _recipe_cx_accept_token_wrong_block(tmp: str) -> tuple[str, str]:
+    """FIX-FIRST (B-PROP-013 xfam P1): a live_slice module (live_slice_accept block present, but
+    carrying NO ceo_accept_token) with a bare TOP-LEVEL token+turn_ref must be REFUSED — for a
+    live_slice/module_demo module the token must live ON that structured block, not top-level."""
+    repo, state, head = _cx_accept_repo(tmp)
+    draft = {"module_acceptance": {
+        "module_id": "m1", "verdict": "accepted",
+        "live_slice_accept": {"passed": True},
+        "ceo_accept_token": f"ceo-accepts-{head[:12]}",
+        "ceo_turn_ref": "turn-2026-07-06-001",
+    }}
+    with open(os.path.join(repo, "draft.yaml"), "w") as f:
+        yaml.dump(draft, f)
+    return repo, state
 
 
 def _lf_acceptance_repo(tmp: str, *, deviations=None, drift_card=False,
@@ -1109,7 +1400,11 @@ _MODULE_DEMO_BLOCK_TEMPLATE = (
     "    ceo_accept_token: \"ACCEPT-m1-abcdef\"\n"
     "    ceo_turn_ref: {turn_path}\n"
     "    ceo_verdict: accepted\n"
-    "    viewport: 390x844\n")
+    "    viewport: 390x844\n"
+    "    mockup_ref: {shot_path}\n"
+    "    mockup_hash: {shot_hash}\n"
+    "    diff_score: 0.0\n"
+    "    tolerance: 0.05\n")
 
 
 def _module_start_live_slice_repo(tmp: str, with_drive: bool) -> tuple[str, str]:
@@ -1349,7 +1644,7 @@ def _recipe_dep_scan_high_unwaived(tmp):
     return _mk_dep_repo(tmp, scan_override={"high_count": 2, "critical_count": 1})
 
 _WAIVER = {"ceo_decision_ref": "CEO-D-X", "advisory_ids": ["GHSA-aaaa"], "package": "a",
-           "severity": "high", "reason": "r", "mitigation": "m", "expiry": "2026-12-01", "owner": "dev"}
+           "severity": "high", "reason": "r", "mitigation": "m", "expiry": "2026-12-01", "owner": "acme"}
 
 def _recipe_dep_scan_high_uncovered(tmp):
     # advisories named, but the only waiver covers a DIFFERENT advisory + package -> uncovered.
@@ -2609,6 +2904,8 @@ _RECIPES = {
     "build_turn_render_bundle_symlink": _recipe_build_turn_render_bundle_symlink,
     "build_turn_dep_scan_symlink": _recipe_build_turn_dep_scan_symlink,
     "build_turn_coderabbit_receipt_symlink": _recipe_build_turn_coderabbit_receipt_symlink,
+    "build_turn_coderabbit_lite_strict": _recipe_build_turn_coderabbit_lite_strict,
+    "build_turn_coderabbit_lite_relaxed": _recipe_build_turn_coderabbit_lite_relaxed,
     "build_turn_dep_scan_ref_ok": _recipe_build_turn_dep_scan_ref_ok,
     "build_turn_render_bundle_ref_ok": _recipe_build_turn_render_bundle_ref_ok,
     "build_turn_coderabbit_receipt_ref_ok": _recipe_build_turn_coderabbit_receipt_ref_ok,
@@ -2619,6 +2916,18 @@ _RECIPES = {
     "module_start_registry_alias_symlink": _recipe_module_start_registry_alias_symlink,
     "module_acceptance_external_ref": _recipe_module_acceptance_external_ref,
     "module_acceptance_inrepo_ref": _recipe_module_acceptance_inrepo_ref,
+    "forge_parity_good": _recipe_forge_parity_good,
+    "forge_parity_bad_verify_app": _recipe_forge_parity_bad_verify_app,
+    "forge_parity_bad_verify_app_not_ancestor": _recipe_forge_parity_bad_verify_app_not_ancestor,
+    "forge_parity_bad_module_demo": _recipe_forge_parity_bad_module_demo,
+    "forge_parity_bad_live_slice": _recipe_forge_parity_bad_live_slice,
+    "forge_parity_bad_qc_drift": _recipe_forge_parity_bad_qc_drift,
+    "forge_parity_bad_marker_malformed": _recipe_forge_parity_bad_marker_malformed,
+    "cx_accept_no_token": _recipe_cx_accept_no_token,
+    "cx_accept_good_token": _recipe_cx_accept_good_token,
+    "cx_accept_short_prefix_token": _recipe_cx_accept_short_prefix_token,
+    "cx_accept_token_no_turn_ref": _recipe_cx_accept_token_no_turn_ref,
+    "cx_accept_token_wrong_block": _recipe_cx_accept_token_wrong_block,
     "module_start_live_slice_blocks": _recipe_module_start_live_slice_blocks,
     "module_start_live_slice_ok": _recipe_module_start_live_slice_ok,
     "no_module_demo_mode": _recipe_no_module_demo_mode,
@@ -2668,7 +2977,8 @@ def run_cx(*args, env_overrides: dict | None = None):
 # like --state/--approval/--repo-root/--registry/--packet-dir) is still resolved to an absolute
 # fixture path — so a genuinely-missing path-valued flag value is still reported MISSING FIXTURE.
 _NON_PATH_VALUE_FLAGS = {"--module", "--module-id", "--target", "--repo-head",
-                         "--authorize-decision", "--n", "--m", "--window-days"}
+                         "--authorize-decision", "--n", "--m", "--window-days",
+                         "--migration-ref"}
 
 
 def resolve_args(args_list):

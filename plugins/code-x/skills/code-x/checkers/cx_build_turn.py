@@ -77,6 +77,16 @@ def cmd_build_turn(args) -> int:
 
     findings = []
 
+    # PBF-PROP-019 Phase 3: resolve the project risk_tier once, reused by the CodeRabbit
+    # ceremony read below (design v2.B row 3). Mirrors the packet_dir path-safety guard used
+    # throughout this rail (e.g. the module-start block just below); absent/unsafe packet_dir
+    # resolves STRICT (fail-closed — never silently relaxes ceremony when the tier is unknown).
+    from cx_common import resolve_risk_tier
+    _pkt_ref_for_tier = str(state.get("packet_dir", "") or "").strip()
+    risk_tier_val = "STRICT"
+    if _pkt_ref_for_tier and not (Path(_pkt_ref_for_tier).is_absolute() or ".." in Path(_pkt_ref_for_tier).parts):
+        risk_tier_val = resolve_risk_tier(Path(repo_root) / _pkt_ref_for_tier)
+
     # 1. card (incident gating included via --state)
     rc, out = _run_cx("check", "card", card_path, "--state", state_path)
     _sub("card", rc, out, findings)
@@ -238,11 +248,14 @@ def cmd_build_turn(args) -> int:
                                 "precede CodeRabbit (BF-PROP-005 / GPT #1)"))
                         else:
                             print("  [INFO] PASS coderabbit-receipt (typed + egress-bound)")
-    elif code_diff_review:
+    elif code_diff_review and risk_tier_val != "LITE":
         findings.append(("P1", "coderabbit-receipt",
             "card is a code-diff module review but the card requires no CodeRabbit — CodeRabbit is "
             "MANDATORY before self/cross review on every MODULE_BUILD / MODE_A_UI code diff; it "
             "unblocks the build but never satisfies xfam (PROP-042 / v1.21)"))
+    elif code_diff_review:
+        # PBF-PROP-019 Phase 3 (design v2.B row 3): LITE drops the CodeRabbit requirement.
+        print("  [INFO] NOT_APPLICABLE coderabbit-receipt (risk_tier: LITE)")
     else:
         print("  [INFO] NOT_APPLICABLE coderabbit-receipt")
 
@@ -293,8 +306,18 @@ def cmd_build_turn(args) -> int:
                 findings.append(("P1", "render-fidelity",
                     f"cannot read live repo HEAD for render-fidelity freshness: {head.stderr.strip()}"))
             else:
-                rc, out = _run_cx("check", "render-fidelity", str(safe_rb),
-                                  "--repo-head", head.stdout.strip())
+                rf_args = ["check", "render-fidelity", str(safe_rb),
+                           "--repo-head", head.stdout.strip()]
+                # PBF-PROP-020 Rules 2/7: the git-touched CEO-visible scope needs BOTH --repo-root
+                # and --packet-dir (state.packet_dir) — without them RENDER-COVERS-GIT-TOUCHED /
+                # UNPICTURED-STATE-IS-GAP / GOLDEN-DRIFT-BLOCKS-TOUCHED stay dormant. Wire them on
+                # the ENFORCED rail so the mockup-first exit check is not opt-in (built-code xfam
+                # P0). A project with no frozen packet_dir has no registry to scope against and the
+                # rules correctly stay dormant.
+                pkt_dir = str(state.get("packet_dir", "") or "").strip()
+                if pkt_dir:
+                    rf_args += ["--repo-root", repo_root, "--packet-dir", pkt_dir]
+                rc, out = _run_cx(*rf_args)
                 _sub("render-fidelity", rc, out, findings)
     else:
         print("  [INFO] NOT_APPLICABLE render-fidelity (card declares no render_bundle)")
@@ -352,7 +375,20 @@ def cmd_build_turn(args) -> int:
             findings.append(("P1", "verify-app",
                 f"card.verify_app_ref '{va_ref}' {vaerr}"))
         else:
-            rc, out = _run_cx("check", "verify-app", "--acceptance", str(safe_va))
+            va_args = ["check", "verify-app", "--acceptance", str(safe_va)]
+            # PB-PROP-003 (fix re-sweep CX-PB003-002 residual): when the frozen packet context is
+            # present + path-safe, thread it so this early-catch ALSO exercises the criteria_refs
+            # wiring leg — a malformed capability marker or a dangling criteria_ref is surfaced HERE,
+            # not only later at the acceptance wall. Absent/unsafe packet_dir → the legacy bare call
+            # (a non-packet project has no wiring surface; the wall still enforces it — this step
+            # never claims to mechanically force the check, only to catch early when it can).
+            va_pkt = str(state.get("packet_dir", "") or "").strip()
+            if va_pkt and not (Path(va_pkt).is_absolute() or ".." in Path(va_pkt).parts):
+                va_args += ["--packet-dir", str(Path(repo_root) / va_pkt)]
+                va_mid = str(card.get("module_id", "") or "").strip()
+                if va_mid:
+                    va_args += ["--module-id", va_mid]
+            rc, out = _run_cx(*va_args)
             _sub("verify-app", rc, out, findings)
     else:
         print("  [INFO] NOT_APPLICABLE verify-app (card declares no verify_app_ref)")

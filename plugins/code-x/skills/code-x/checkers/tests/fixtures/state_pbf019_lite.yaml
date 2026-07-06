@@ -1,0 +1,7 @@
+# PBF-PROP-019 Phase 3: minimal state whose packet_dir resolves risk_tier: LITE
+# (via packet_good_risk_tier_lite/requirements-manifest.yaml). Used to prove the
+# LITE-relaxes-ceremony half of each tier-conditional bite test.
+project: cx-pbf019-phase3-test
+protocol_stamp: Code-X V1
+packet_dir: packet_good_risk_tier_lite
+current_card:

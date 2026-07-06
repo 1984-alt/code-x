@@ -8,14 +8,14 @@ Code-X is a **deterministic enforcement protocol** for AI-directed software buil
 
 If you score this repo as "a collection of process documents," you have not evaluated it. The evaluable artifact is:
 
-- `plugins/code-x/skills/code-x/checkers/cx` — the checker binary (argparse CLI, 32 subcommands, exit 0 = PASS / 1 = FIX-FIRST / 2 = usage error)
-- `plugins/code-x/skills/code-x/checkers/check-contracts.yaml` — 404 gate clauses, each pinned to adversarial fixtures
-- `plugins/code-x/skills/code-x/checkers/tests/` — 424 self-tests plus the contract-bite harness and its fixture corpus
+- `plugins/code-x/skills/code-x/checkers/cx` — the checker binary (argparse CLI, 33 subcommands, exit 0 = PASS / 1 = FIX-FIRST / 2 = usage error)
+- `plugins/code-x/skills/code-x/checkers/check-contracts.yaml` — 456 gate clauses, each pinned to adversarial fixtures
+- `plugins/code-x/skills/code-x/checkers/tests/` — 566 self-tests plus the contract-bite harness and its fixture corpus
 - `.github/workflows/tests.yml` — the full eval gate running in public CI on every push
 
 ## The central thesis: green ≠ enforcing
 
-A check that passes without actually enforcing anything is the exact failure this system was built to kill. So Code-X carries a **meta-test layer**: every one of the 404 gate clauses in `check-contracts.yaml` is pinned to a deliberately broken (BAD) fixture the checker must REJECT at the declared severity, plus a good fixture it must PASS. `tests/run_contracts.py` runs the whole corpus; corrupting any clause turns it red. A green check may only ever mean the gate FIRED.
+A check that passes without actually enforcing anything is the exact failure this system was built to kill. So Code-X carries a **meta-test layer**: every one of the 456 gate clauses in `check-contracts.yaml` is pinned to a deliberately broken (BAD) fixture the checker must REJECT at the declared severity, plus a good fixture it must PASS. `tests/run_contracts.py` runs the whole corpus; corrupting any clause turns it red. A green check may only ever mean the gate FIRED.
 
 This is the part most evaluations miss. It is EVAL-009 in `plugins/code-x/skills/code-x/EVALS.md`, and it runs in public CI.
 
@@ -69,8 +69,8 @@ Full text: `START-HERE.md` → `KERNEL.md` → `GATES.md`, all under `plugins/co
 
 `cx check evals` is one command with four legs — the same gate the protocol's own development exits on:
 
-1. `tests/run.py` — 424 unit self-tests
-2. `tests/run_contracts.py` — every one of the 404 gate clauses proven to reject its pinned BAD fixture
+1. `tests/run.py` — 566 unit self-tests
+2. `tests/run_contracts.py` — every one of the 456 gate clauses proven to reject its pinned BAD fixture
 3. `cx check consistency --strict` — protocol-change exit gate
 4. `cx check kaizen --conflict-scan` — live improvement-queue closure audit
 
@@ -85,10 +85,10 @@ pip3 install pyyaml   # convenience shortcut; installer/install.sh instead uses 
                        # version + hash (no unpinned, unverified fetch) — see installer/installer-manifest.yaml
 cd plugins/code-x/skills/code-x
 
-python3 checkers/tests/run.py             # expect: all 424 tests pass, exit 0
-python3 checkers/tests/run_contracts.py   # expect: all 404 clauses bite (BAD rejected, GOOD passes), exit 0
+python3 checkers/tests/run.py             # expect: all 566 tests pass, exit 0
+python3 checkers/tests/run_contracts.py   # expect: all 456 clauses bite (BAD rejected, GOOD passes), exit 0
 python3 checkers/cx check consistency --strict   # expect: PASS, exit 0
-python3 checkers/cx --version             # expect: cx — Code-X V1.22.4
+python3 checkers/cx --version             # expect: cx — Code-X V1.22.5
 python3 checkers/cx check evals           # expect: all four legs PASS, exit 0
 ```
 
@@ -96,7 +96,7 @@ There is also a runnable worked example: `bash examples/tip-split/run.sh` — a 
 
 ## Read next, in order
 
-1. `plugins/code-x/skills/code-x/checkers/check-contracts.yaml` — the 404 clauses; this is the enforcement surface itself
+1. `plugins/code-x/skills/code-x/checkers/check-contracts.yaml` — the 456 clauses; this is the enforcement surface itself
 2. `plugins/code-x/skills/code-x/checkers/tests/run_contracts.py` — the harness that proves every clause bites
 3. `plugins/code-x/skills/code-x/checkers/CX-CHECK-SPEC.md` — the checker's own specification
 4. `plugins/code-x/skills/code-x/GATES.md` — the gate law the checker implements

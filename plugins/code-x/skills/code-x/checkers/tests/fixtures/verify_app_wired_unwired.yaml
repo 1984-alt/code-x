@@ -1,0 +1,11 @@
+# BAD (PB-PROP-003 Unit 2): criteria_refs covers ONLY REQ-001 — REQ-002 (a behavioral BUILDING
+# requirement of module m_wired, WITH an authored example) is left uncovered. Trips BOTH
+# ACCEPTANCE-BEHAVIORAL-REQ-UNWIRED (ceremony, STANDARD tier here) and
+# ACCEPTANCE-PRESENT-EXAMPLE-COVERED (spine, every tier) in the SAME output.
+module_acceptance:
+  module_id: m_wired
+  verify_app:
+    passed: true
+    repo_sha: 7d1408c9aa21
+    generated_by: verify-app-agent
+    criteria_refs: [REQ-001]

@@ -1,0 +1,12 @@
+# PBF-PROP-019 P0-2 fixture: a build whose only card touches nothing sensitive — the
+# legitimate pure-LITE fast path (design v2.C Option A). Minimal shape: cx_final_ready's
+# card-enumeration recompute only reads security_tripwire via card_high_risk().
+
+id: BUILD-CLEAN-001
+mode: MODULE_BUILD
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no

@@ -1,0 +1,9 @@
+# PBF-PROP-019 Phase 3: minimal card with NO money/PII tripwire, for cx_egress --card tier tests.
+id: BUILD-EGRESS-1
+mode: MODULE_BUILD
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no

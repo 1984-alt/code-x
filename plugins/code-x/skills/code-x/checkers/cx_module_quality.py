@@ -19,7 +19,7 @@ from pathlib import Path
 
 from cx_common import findings_report, load_yaml, nested_get, field_present
 from cx_evidence import _read_log
-from cx_module_acceptance import validate_live_slice_accept, registry_flag_true
+from cx_module_acceptance import validate_live_slice_accept, registry_flag_true, has_blocking
 
 CONFORMANCE_RISK = {"money", "login", "data"}
 CORE_FOUR = ("security", "efficient", "regression", "tests")
@@ -126,8 +126,17 @@ def cmd_module_quality(args) -> int:
         # PBF-PROP-012 Part E: pass the receipt's parent directory as base so validate_module_demo
         # can resolve shown_screenshot_path and ceo_turn_ref (screenshot + turn artifact must
         # be in-repo relative to the receipt's location when no explicit repo-root is given).
+        # PB-PROP-003 Unit 2 (finding CX-PB003-001 FIX-FIRST): thread --packet-dir (+ module_id,
+        # already resolved above) so a FINAL/ONLY live_slice module — one no later module-start
+        # order-wall re-validation ever fires for — gets the SAME criteria_refs wiring/reverse-
+        # coverage checks a PRIOR module already gets via validate_accepted_module. Omitted (the
+        # pre-existing standalone invocation, e.g. no --packet-dir on the CLI), those checks
+        # silently do not run — this never widens what a caller-less check enforces, only what a
+        # caller WITH packet context can.
         from pathlib import Path as _Path
-        findings.extend(validate_live_slice_accept(ma, loc, base=str(_Path(loc).parent)))
+        packet_dir = getattr(args, "packet_dir", None)
+        findings.extend(validate_live_slice_accept(ma, loc, base=str(_Path(loc).parent),
+                                                    packet_dir=packet_dir, module_id=module_id))
 
     # --- QUALITY CARD: core four + conformance answer present ---
     qc = ma.get("quality_card")
@@ -149,7 +158,7 @@ def cmd_module_quality(args) -> int:
                 "(does the built code implement the locked implementation-contract?) [V1.10]"))
 
     # --- MODULE SELF-REVIEW: actual evidence, not just card intent ---
-    # Build cards already declare actor_record.self_review, but a real project (v1.20) showed that declaration
+    # Build cards already declare actor_record.self_review, but real-project v1.20 showed that declaration
     # alone can drift: two accepted modules had deterministic evidence while the same-family
     # self-review receipt never appeared. The module acceptance rail now requires the review receipt.
     sr = ma.get("self_review")
@@ -336,4 +345,10 @@ def cmd_module_quality(args) -> int:
         print(f"  [INFO] module '{module_id}' quality bar met "
               f"(core four answered; risk {sorted(risk_flags)}; shared_shell={touches_shared})")
         return 0
-    return findings_report(findings)
+    # A findings set with ONLY advisories (P2/P3 — e.g. the PB-PROP-003 §R5 legacy_criteria_ref
+    # migration-debt advisory, only reachable now that --packet-dir threads through to
+    # validate_live_slice_accept) is non-blocking — mirrors cmd_module_acceptance's and
+    # cmd_verify_app's identical has_blocking() gate; module-quality must not turn a genuine
+    # non-blocking carve-out into a hard FIX-FIRST [PB-PROP-003 CX-PB003-001 FIX-FIRST].
+    rc = findings_report(findings)
+    return rc if has_blocking(findings) else 0

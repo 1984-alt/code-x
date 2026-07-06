@@ -1,0 +1,46 @@
+# PBF-PROP-019 Phase 5 (EVAL-052): BAD state for final-ready — an EXPLICIT risk_tier: LITE
+# packet_dir combined with an open P0 finding. The open_findings spine block
+# (cx_final_ready.py:64-79) never reads risk_tier_val — this must block final-ready identically
+# to state_bad_final_ready.yaml (which carries no tier declaration at all), proving the block is
+# never tier-conditional even when LITE is explicitly declared (not just absent).
+
+project: sample
+protocol_stamp: Code-X V1
+packet_dir: packet_good_risk_tier_lite
+
+current_stage: BUILD_FACTORY
+current_mode: FINAL_READY
+current_card: BUILD-003   # still in flight — blocks final-ready
+current_actor: codex
+next_actor: claude
+
+build_authorized: yes
+mode_a_status: NOT_APPLICABLE
+
+open_findings:
+  counts:
+    p0: 1
+    p1: 0
+    p2: 0
+    p3: 0
+  items:
+    - id: F-010
+      severity: P0
+      source_card: BUILD-003
+      finding: auth bypass in session handler
+      owner_card: FIX-003
+      status: OPEN
+      evidence_ref:
+      ceo_acceptance_ref:
+
+last_commit: deadbeef1234
+next_action: fix auth bypass first
+stop_status: NONE
+
+cost_this_week:
+  cards_run: 3
+  top_model_cards: 1
+  cheap_model_cards: 0
+  full_reviews: 1
+  loops_used: 2
+  waste_alarm: LOW
