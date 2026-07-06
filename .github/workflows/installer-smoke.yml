@@ -36,6 +36,7 @@ on:
 jobs:
   clean-install-twice:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -57,6 +58,15 @@ jobs:
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install PyYAML (required prerequisite the installer does not auto-fetch)
+        run: |
+          # install.sh fails closed on missing PyYAML rather than auto-running
+          # a bare, unpinned `pip install` (xfam P0 UNPINNED_PIP_FETCH) — it
+          # prints this exact pinned+hashed command for a human to run by hand.
+          # This step runs that same command so the smoke test exercises the
+          # real "clean machine with prerequisites met" path, not a shortcut.
+          python3 -m pip install --no-binary :all: --require-hashes -r <(printf '%s --hash=sha256:%s\n' "pyyaml==6.0.3" "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f")
 
       - name: First install run (must succeed on a clean machine)
         run: |
@@ -111,6 +121,13 @@ jobs:
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install PyYAML (required prerequisite the installer does not auto-fetch)
+        run: |
+          # Without this, the run below fails closed on missing PyYAML
+          # instead of the nonexistent release tag this job is meant to
+          # prove — install it so the ONLY remaining failure reason is the
+          # corrupted tag, making this a true negative test of that path.
+          python3 -m pip install --no-binary :all: --require-hashes -r <(printf '%s --hash=sha256:%s\n' "pyyaml==6.0.3" "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f")
       - name: Corrupt the pinned release tag and expect a fail-closed exit
         run: |
           # A marketplace source can only be pinned to a branch/tag ref (see
@@ -141,7 +158,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run installer with no python3 on PATH — expect nonzero exit + plain-English failure
         run: |
-          apt-get update -qq && apt-get install -y -qq git bash >/dev/null
+          # curl is required so install.sh gets PAST its curl check (which
+          # runs before the python3 check) and actually reaches the
+          # python3-missing assertion this test greps for — without curl,
+          # the run fails earlier with "curl is unavailable" and this test
+          # would go green for the wrong reason.
+          apt-get update -qq && apt-get install -y -qq git bash curl >/dev/null
           chmod +x installer/install.sh
           set +e
           PATH="/usr/bin:/bin" ./installer/install.sh > /tmp/out.log 2>&1
@@ -166,6 +188,14 @@ jobs:
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install PyYAML (required prerequisite the installer does not auto-fetch)
+        run: |
+          # install.sh fails closed on missing PyYAML rather than auto-running
+          # a bare, unpinned `pip install` (xfam P0 UNPINNED_PIP_FETCH) — it
+          # prints this exact pinned+hashed command for a human to run by hand.
+          # This step runs that same command so the smoke test exercises the
+          # real "clean machine with prerequisites met" path, not a shortcut.
+          python3 -m pip install --no-binary :all: --require-hashes -r <(printf '%s --hash=sha256:%s\n' "pyyaml==6.0.3" "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f")
       - name: Run installer with no CodeRabbit interaction — run must still pass
         run: |
           chmod +x installer/install.sh
