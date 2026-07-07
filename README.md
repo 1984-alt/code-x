@@ -226,18 +226,10 @@ does" below.
 
 What it does, in plain English:
 
-1. **Checks your machine** — Python 3.10+, git, and the Claude Code CLI. If
-   anything is missing, it tells you exactly what to install and stops there
-   (it never guesses or installs something it can't verify).
-2. **Installs Code-X and superpowers** — both pulled directly from their own
-   GitHub repositories, pinned to an exact, checked release so you always get
-   a known-good version, not whatever happens to be at the tip of a branch.
-3. **Offers CodeRabbit** — an optional, separate code-review service used
-   alongside Code-X's own review flow. It needs its own account, so the
-   installer only prints the official install link — it never installs or
-   configures CodeRabbit for you.
-4. **Shows you a pass/fail table** so you can see exactly what worked, with a
-   plain-English fix for anything that didn't.
+1. **Checks your machine** — Python 3.10+, git, and the Claude Code CLI. If anything is missing, it tells you exactly what to install and stops there (it never guesses or installs something it can't verify).
+2. **Installs Code-X and superpowers** — both pulled directly from their own GitHub repositories, pinned to an exact, checked release so you always get a known-good version, not whatever happens to be at the tip of a branch.
+3. **Offers CodeRabbit** — an optional, separate code-review service used alongside Code-X's own review flow. It needs its own account, so the installer only prints the official install link — it never installs or configures CodeRabbit for you.
+4. **Shows you a pass/fail table** so you can see exactly what worked, with a plain-English fix for anything that didn't.
 
 Safe to run more than once — if something is already installed correctly,
 the installer leaves it alone; if something is half-installed, it finishes
@@ -419,7 +411,7 @@ I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't bu
 
 ## Roadmap & help wanted
 
-The headline open item is an **Autonomous Build/Session Loop**. Today a human still babysits context windows and session handoffs; the missing piece is a policy layer that drives the build hands-off *across sessions* and stops only when human input is genuinely required — a real gate failure, or a decision the locked plan didn't pre-decide. Other valuable work: independent reproductions, stronger example projects, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
+The headline ask isn't a feature — it's **real users**. Long autonomous build runs are already achievable today by driving Code-X with Codex as the build engine (a human still approves at the review gates — by design, that's the point, not a gap). What Code-X needs now is people who **try it on their own projects and verify its usefulness in practice**: report where it earned its keep, where it was just ceremony, what a non-coder actually stumbled on — and help improve it. That's also the honest missing proof named at the top of this page: single-operator so far, not yet reproduced by anyone else. Other valuable work: independent reproductions, stronger example projects, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
 
 ---
 
