@@ -42,6 +42,7 @@ os.environ["CX_PROFILES"] = str(FIXTURES / "profiles_test.yaml")
 sys.path.insert(0, str(CHECKERS_DIR))
 import cx_kaizen  # noqa: E402
 import cx_blueprint  # noqa: E402 — PBF-PROP-019 Phase 3: unit-test _derive_expected_anchor_ids directly
+import cx_egress  # noqa: E402 — PBF-PROP-021 P1-3/P2-1: unit-test the normalize/context helpers directly
 
 
 def run_cx(*args) -> tuple[int, str]:
@@ -1496,6 +1497,17 @@ class TestRenderFidelity(unittest.TestCase):
     def test_coverage_incomplete_blocks(self):
         self._bad("render_bad_coverage_incomplete.yaml", "RENDER-FIT-COVERAGE-INCOMPLETE", "P0")
 
+    def test_coverage_incomplete_zero_zero_blocks(self):
+        """PBF-PROP-021 P1-1 round 1 repro: required_rows AND render_evidence both empty, ui_card
+        omitted — must fail closed (this fixture existed but was never wired to a test)."""
+        self._bad("render_bad_empty_no_uicard.yaml", "RENDER-FIT-COVERAGE-INCOMPLETE", "P0")
+
+    def test_coverage_incomplete_vacuous_evidence_blocks(self):
+        """PBF-PROP-021 P1-1 round 2 (GPT-5.5 xhigh built-code review): a single THROWAWAY but
+        otherwise-VALID evidence row must NOT dodge the P0 when required_rows is empty — evidence
+        proves rows, it can never DEFINE what was required."""
+        self._bad("render_bad_coverage_vacuous_evidence.yaml", "RENDER-FIT-COVERAGE-INCOMPLETE", "P0")
+
     def test_overflow_blocks(self):
         self._bad("render_bad_overflow.yaml", "RENDER-FIT-OVERFLOW", "P1")
 
@@ -2215,6 +2227,55 @@ class TestEgress(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("contradicted by the diff content", out)
 
+    def test_pii_phone_and_bank_account_shapes_are_caught(self):
+        """PBF-PROP-021 hole #12: real Indonesian phone numbers (raw/dash/spaced/+62/62 prefixes)
+        and a 10-digit bank account number (with account-context nearby) are caught — a scrub
+        claiming clean is contradicted. (Fixture existed but was never wired to a test — F17.)"""
+        rc, out = run_cx("check", "egress", fix("egress_diff_pii.txt"), "--target", "coderabbit",
+                         "--receipt", fix("egress_scrub_for_pii.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("contradicted by the diff content", out)
+        self.assertIn("Indonesian phone number (PII)", out)
+        self.assertIn("10-digit account number (bank/PII)", out)
+
+    def test_benign_long_digit_runs_stay_quiet(self):
+        """Negative control: a dotted version string, a hex build hash, an ISO timestamp, and a
+        13-digit epoch-millis value are NOT phone/account-shaped — the tripwire stays quiet and
+        the scrub is NOT contradicted. (Fixture existed but was never wired to a test — F17.)"""
+        rc, out = run_cx("check", "egress", fix("egress_diff_benign_digits.txt"), "--target", "coderabbit",
+                         "--receipt", fix("egress_scrub_for_benign_digits.yaml"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
+    def test_separator_format_phone_bypasses_are_caught(self):
+        """PBF-PROP-021 P1-3 (GPT-5.5 xhigh built-code review): dotted (0812.3456.7890),
+        parenthesized ((0812) 3456 7890), and +62-with-parens (+62 (812) 3456-7890) phone formats
+        all slipped the old hand-grown separator class. All three are pinned in ONE diff; the
+        normalize-then-match fix catches all three (a scrub claiming clean is contradicted)."""
+        rc, out = run_cx("check", "egress", fix("egress_diff_pii_separators.txt"), "--target", "coderabbit",
+                         "--receipt", fix("egress_scrub_for_pii_separators.yaml"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("contradicted by the diff content", out)
+        self.assertIn("Indonesian phone number (PII)", out)
+
+    def test_separator_format_phone_bypasses_block_with_no_receipt(self):
+        """Same 3 separator-format dodges, no receipt at all — must BLOCK with the hit named."""
+        rc, out = run_cx("check", "egress", fix("egress_diff_pii_separators.txt"), "--target", "coderabbit")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("NO scrub receipt and NO local-only carve-out", out)
+        self.assertIn("Indonesian phone number (PII)", out)
+
+    def test_bare_10digit_negative_controls_stay_quiet(self):
+        """PBF-PROP-021 P2-1 (GPT-5.5 xhigh built-code review): an order id ('order 1234567890'),
+        a datelike code ('2026070712'), and a numeric-leading hex/alnum chunk
+        ('1234567890abcdef') must NOT trip the bank-account tripwire — none carry account/bank context, and
+        the hex-leading chunk fails the alnum-boundary check. A scrub claiming clean must NOT be
+        contradicted (proves the P2-1 fix without weakening the real bank-account catch above)."""
+        rc, out = run_cx("check", "egress", fix("egress_diff_benign_bare_10digit.txt"), "--target", "coderabbit",
+                         "--receipt", fix("egress_scrub_for_benign_bare_10digit.yaml"))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("PASS", out)
+
 
 class TestEgressTierGated(unittest.TestCase):
     """PBF-PROP-019 Phase 3 (design v2.B row 4): LITE/STANDARD only require the scrub for a
@@ -2251,6 +2312,31 @@ class TestEgressTierGated(unittest.TestCase):
                          "--state", fix("state_pbf019_lite.yaml"))
         self.assertEqual(rc, 1, out)
         self.assertIn("NO scrub receipt and NO local-only carve-out", out)
+
+
+class TestEgressPhoneAndBankAccountPatternsDirect(unittest.TestCase):
+    """PBF-PROP-021 P1-3 / P2-1 (GPT-5.5 xhigh built-code review): direct, in-process proof of the
+    normalize-then-match phone detector and the context-gated bank-account detector — precise per-shape
+    coverage that complements the CLI/fixture-level TestEgress tests above."""
+
+    def test_all_separator_formats_normalize_and_match(self):
+        for shape in ("0812-3456-7890", "08123456789", "+62 812-3456-7890",
+                      "0812.3456.7890", "(0812) 3456 7890", "+62 (812) 3456-7890"):
+            normalized = cx_egress._normalize_digit_runs(shape)
+            self.assertTrue(cx_egress._ID_PHONE_RE.search(normalized),
+                            f"{shape!r} (normalized {normalized!r}) should match _ID_PHONE_RE")
+
+    def test_bank_account_negative_controls_stay_quiet(self):
+        for shape in ("order 1234567890", "2026070712", "1234567890abcdef"):
+            normalized = cx_egress._normalize_digit_runs(shape)
+            self.assertFalse(cx_egress._bank_account_hit(normalized),
+                             f"{shape!r} must NOT trip the bank-account context-gated detector")
+
+    def test_bank_account_with_context_is_caught(self):
+        shape = "BANK_ACCOUNT = '1234509876'"
+        normalized = cx_egress._normalize_digit_runs(shape)
+        self.assertTrue(cx_egress._bank_account_hit(normalized),
+                        "a real 10-digit account number with bank context must be caught")
 
 
 # ---------------------------------------------------------------------------
@@ -2448,8 +2534,11 @@ class TestCheckEvidence(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ev = Path(tmp) / "test_output.txt"
             ev.write_text("assert True  # always passes\n")
+            # PBF-PROP-021 group-1: evidence_required is path-safety-guarded now — an
+            # absolute tempdir path is rejected before the faked-pass scan this test
+            # exercises. Card-relative keeps the scan reachable.
             card = {"id": "TEST-004", "mode": "MODULE_BUILD", "model_tier": "standard",
-                    "objective": "Test.", "evidence_required": [str(ev)]}
+                    "objective": "Test.", "evidence_required": [ev.name]}
             card_file = self._write_card(tmp, card)
             rc, out = run_cx("check", "evidence", card_file)
             self.assertEqual(rc, 1)
@@ -3234,6 +3323,37 @@ class TestCheckCostRound2(unittest.TestCase):
         self.assertIn("PASS", out)
 
 
+class TestCheckCostRound3(unittest.TestCase):
+    """PBF-PROP-021 group-2 hole #4/#5: type(value) is int (not isinstance) + crash close.
+
+    PRE-FIX PROOF (verified interactively before this fix landed):
+      - cost_log_quoted_review_fix_cycles.yaml (review_fix_cycles: "4") returned PASS exit 0 —
+        isinstance(rfc, int) silently rejected the quoted str with NO finding at all.
+      - cost_log_quoted_loops_used_crashes.yaml (loops_used: "9") returned FATAL exit 2
+        (TypeError: unsupported operand type(s) for +: 'int' and 'str') in the roll-up sum.
+    """
+
+    def test_quoted_review_fix_cycles_fires_not_a_real_integer(self):
+        rc, out = run_cx("check", "cost", fix("cost_log_quoted_review_fix_cycles.yaml"))
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("review_fix_cycles", out)
+        self.assertIn("is not a real integer", out)
+
+    def test_quoted_loops_used_no_longer_crashes(self):
+        rc, out = run_cx("check", "cost", fix("cost_log_quoted_loops_used_crashes.yaml"))
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST (not a FATAL crash), got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("loops_used", out)
+        self.assertIn("is not a real integer", out)
+        self.assertNotIn("FATAL", out)
+
+    def test_good_cost_log_still_passes(self):
+        rc, out = run_cx("check", "cost", fix("cost_log_good.yaml"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
+
+
 # ---------------------------------------------------------------------------
 # ROUND 2: cx check final-ready — F5 P2-03
 # ---------------------------------------------------------------------------
@@ -3627,20 +3747,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_5_locked(self):
-        """The checker reports v1.22.5 as the LOCKED CANONICAL 2026-07-06 (CEO-D-050) protocol version."""
+    def test_protocol_version_constant_marks_1_22_6_folded(self):
+        """The checker reports v1.22.6 (CEO-D-051 fold 2026-07-07; lock-onto-main pending CEO "lock") as the protocol version."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.5")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.6")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_5_locked(self):
-        """`cx --version` reports the LOCKED CANONICAL 2026-07-06 (CEO-D-050) v1.22.5 canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_6_folded(self):
+        """`cx --version` reports the v1.22.6 (CEO-D-051) canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.5(?!\d)")
+        self.assertRegex(out, r"V1\.22\.6(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -4337,6 +4457,60 @@ class TestCheckPacketPBPROP003GWT(unittest.TestCase):
         rc, out = run_cx("check", "packet", fix("packet_bad_gwt_manifest_malformed"))
         self.assertEqual(rc, 1)
         self.assertIn("PACKET-GWT-MANIFEST-MALFORMED-FAILS-CLOSED", out)
+
+
+class TestCheckPacketForgeParityWaiverRound2(unittest.TestCase):
+    """PBF-PROP-021 group-2 hole #9 (round 1): the --legacy-migration frozen_packet_hash waiver
+    leg was SHAPE-CHECKED (real sha256 hex digest), not accepted as any non-empty string.
+
+    PRE-FIX PROOF (verified interactively before this fix landed): `cx check packet
+    packet_bad_forge_parity_waiver_forged_hash --legacy-migration` returned PASS exit 0 — the
+    self-authored 'totally-forged-not-a-hash' string satisfied `if not rerr and fph:` verbatim.
+
+    PBF-PROP-021 P1-2 round 2 (GPT-5.5 xhigh built-code review): the shape-check leg ITSELF was
+    then found forgeable — any 64-char hex (e.g. all-zeros) shape-passes trivially. The leg is now
+    REMOVED entirely; both a non-hex garbage string AND a validly-shaped all-zeros hex fail
+    identically (neither is proof the packet was really frozen — only a resolving
+    --migration-ref counts)."""
+
+    def test_self_authored_non_hex_hash_does_not_waive(self):
+        rc, out = run_cx("check", "packet", fix("packet_bad_forge_parity_waiver_forged_hash"),
+                         "--legacy-migration")
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("PACKET-FORGE-PARITY-MARKER-REQUIRED", out)
+        self.assertIn("are NOT a waiver", out)
+
+    def test_self_authored_allzeros_hex_does_not_waive(self):
+        """PBF-PROP-021 P1-2 round 2: a VALIDLY-SHAPED 64-char hex (all zeros) — the exact dodge
+        the GPT-5.5 xhigh reviewer named — must fail identically to the non-hex garbage string
+        above; the registry-hash leg is gone, so shape no longer matters at all."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_forge_parity_waiver_allzeros_hash"),
+                         "--legacy-migration")
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("PACKET-FORGE-PARITY-MARKER-REQUIRED", out)
+        self.assertIn("are NOT a waiver", out)
+
+    def test_migration_ref_resolving_to_ledger_row_waives(self):
+        """The one remaining (strong) leg still works: --migration-ref resolving to a real
+        MEMORY/CEO-DECISION-LEDGER.md row exempts the marker requirement."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_forge_parity_waiver_allzeros_hash"),
+                         "--legacy-migration", "--migration-ref", "CEO-D-001")
+        self.assertEqual(rc, 0, f"Expected PASS via the resolving migration-ref, got {rc}.\n{out}")
+
+    def test_migration_ref_not_in_ledger_does_not_waive(self):
+        """A --migration-ref that merely LOOKS like a ledger id but names no real protocol-ledger
+        row must not waive (the fake-ref self-exemption escape hatch)."""
+        rc, out = run_cx("check", "packet", fix("packet_bad_forge_parity_waiver_allzeros_hash"),
+                         "--legacy-migration", "--migration-ref", "CEO-D-99999-FAKE")
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("PACKET-FORGE-PARITY-MARKER-REQUIRED", out)
+
+    def test_good_packet_still_passes(self):
+        rc, out = run_cx("check", "packet", fix("packet_good"))
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
 
 
 # ---------------------------------------------------------------------------
@@ -5382,6 +5556,51 @@ class KaizenChecks(unittest.TestCase):
                          "--contracts", self._CONTRACTS)
         self.assertEqual(rc, 1)
         self.assertIn("KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT", out)
+
+
+class KaizenChecksRound2(unittest.TestCase):
+    """PBF-PROP-021 group-2 hole #6/#7: fence-tolerance + status enum validation.
+
+    PRE-FIX PROOF (verified interactively before this fix landed): all 3 bad fixtures below
+    returned PASS exit 0 on the pre-fix code — the trailing-space and exotic-tag fences made
+    the whole PROP block vanish with zero finding, and the case-drifted status silently read
+    as "not applied" and skipped the enforcement clause.
+    """
+
+    _CONTRACTS = str(CHECKERS_DIR / "check-contracts.yaml")
+
+    def test_fence_trailing_space_still_parsed(self):
+        """A ```yaml<space> fence is still parsed — the missing-enforcement P0 still fires."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_fence_trailing_space.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT", out)
+
+    def test_fence_exotic_tag_prop_shaped_fires_loud(self):
+        """An unrecognized-tag fence with PROP-shaped text fires KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_fence_exotic_tag_prop_shaped.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE", out)
+
+    def test_status_case_drift_enum_validated_and_still_enforced(self):
+        """status: applied (lowercase) fires KAIZEN-STATUS-ENUM-VALID AND is still treated as
+        APPLIED — the missing-enforcement P0 must ALSO fire, not be silently skipped."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_bad_status_case_drift.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 1, f"Expected FIX-FIRST, got {rc}.\n{out}")
+        self.assertIn("FIX-FIRST", out)
+        self.assertIn("KAIZEN-STATUS-ENUM-VALID", out)
+        self.assertIn("KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT", out)
+
+    def test_good_queue_unaffected(self):
+        """The existing good fixture is untouched by the fence/status hardening."""
+        rc, out = run_cx("check", "kaizen", fix("kaizen_good.md"),
+                         "--contracts", self._CONTRACTS)
+        self.assertEqual(rc, 0, f"Expected PASS, got {rc}.\n{out}")
+        self.assertIn("PASS", out)
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,27 @@ from cx_common import (
 )
 
 
+def _typed_int(entry: dict, field: str, entry_loc: str, findings: list, severity: str = "P1") -> int | None:
+    """PBF-PROP-021 group-2 hole #4: return entry[field] as a validated int, or None when the
+    field is absent/blank/wrong-typed. Uses `type(value) is int`, NOT `isinstance(value, int)` —
+    `bool` is an `int` subclass in Python (`isinstance(True, int)` is True), so isinstance would
+    silently let a boolean masquerade as a count. A YAML-QUOTED numeric (e.g. `review_fix_cycles:
+    "4"`) previously made the field a str, which isinstance(..., int) already rejected — but
+    SILENTLY, with no finding at all, so the quoted value just skipped every downstream
+    comparison and a real one-and-done / anti-grind violation dodged the gate by quoting. This
+    now fails LOUD: a wrong-typed field is itself a P1/P2 finding, never a silent skip."""
+    if field not in entry or entry[field] is None:
+        return None
+    value = entry[field]
+    if type(value) is not int:
+        findings.append((severity, entry_loc,
+            f"{field}={value!r} is not a real integer (got type {type(value).__name__}) — a "
+            f"quoted or boolean value defeats the type-gated comparison this field feeds; fix "
+            f"the YAML to an unquoted integer"))
+        return None
+    return value
+
+
 def cmd_cost(args) -> int:
     log_path = args.log
     data, err = load_yaml(log_path)
@@ -58,20 +79,20 @@ def cmd_cost(args) -> int:
                         f"unknown waste_flag '{flag}' — valid: {VALID_WASTE_FLAGS}"))
 
         # Waste alarm: flag over_read
-        files_read = entry.get("files_read", 0) or 0
-        if isinstance(files_read, int) and files_read > 30:
+        files_read = _typed_int(entry, "files_read", entry_loc, findings, severity="P2") or 0
+        if files_read > 30:
             findings.append(("P2", entry_loc,
                 f"over_read: files_read={files_read} — likely over kernel read budget"))
 
         # loops_used
-        loops = entry.get("loops_used", 0) or 0
-        if isinstance(loops, int) and loops > 3:
+        loops = _typed_int(entry, "loops_used", entry_loc, findings, severity="P2") or 0
+        if loops > 3:
             findings.append(("P2", entry_loc,
                 f"loop: loops_used={loops} — anti-grind lock (max 3 review-fix cycles)"))
 
         # review_fix_cycles: one-and-done rule (tracked SEPARATELY from self_heal_attempts)
-        rfc = entry.get("review_fix_cycles")
-        if isinstance(rfc, int) and rfc > 1:
+        rfc = _typed_int(entry, "review_fix_cycles", entry_loc, findings, severity="P1")
+        if rfc is not None and rfc > 1:
             findings.append(("P1", entry_loc,
                 f"review_fix_cycles={rfc} > 1 violates one-and-done — review once, fix one batch, verify once "
                 "(self_heal_attempts is a separate bounded loop and is NOT counted here)"))
@@ -91,7 +112,14 @@ def cmd_cost(args) -> int:
         findings.append(("P2", loc,
             f"waste-alarm: {total_top}/{total} cards used top model_tier ({top_ratio:.0%}) — consider cheaper tiers"))
 
-    total_loops = sum((e.get("loops_used") or 0) for e in data if isinstance(e, dict))
+    # PBF-PROP-021 group-2 hole #5 (VERIFY F13): `(e.get("loops_used") or 0)` crashed FATAL
+    # (exit 2, `TypeError: unsupported operand type(s) for +: 'int' and 'str'`) the moment ANY
+    # entry's loops_used was a truthy non-int (e.g. YAML-quoted "9") — `sum()` starts its
+    # accumulator at int 0 and the str never coerces. The per-entry loop above already flags a
+    # wrong-typed loops_used as its own finding; this roll-up only needs to not crash on it, so
+    # a non-int value here contributes 0 rather than reaching the sum.
+    total_loops = sum((e.get("loops_used") if type(e.get("loops_used")) is int else 0)
+                       for e in data if isinstance(e, dict))
     if total_loops > total * 2:
         findings.append(("P2", loc,
             f"waste-alarm: total loops_used={total_loops} across {total} cards — repeated_review/loop pattern"))

@@ -147,9 +147,12 @@ def main():
                           help="Exempt a genuinely in-flight, already-frozen project from the "
                                "B-PROP-013 forge-parity WRITING-floor marker requirement "
                                "(PACKET-FORGE-PARITY-MARKER-REQUIRED) — never for a new packet. "
-                               "REQUIRES typed proof: --migration-ref, or a pre-existing frozen "
-                               "MODULE-REGISTRY.yaml hash — a bare flag alone does NOT waive "
-                               "(FIX-FIRST, B-PROP-013 xfam P1)")
+                               "REQUIRES typed proof: --migration-ref resolving to a real "
+                               "MEMORY/CEO-DECISION-LEDGER.md row — a bare flag, or a "
+                               "self-authored MODULE-REGISTRY.yaml frozen_packet_hash (even a "
+                               "validly-shaped one), do NOT waive (FIX-FIRST, B-PROP-013 xfam P1; "
+                               "PBF-PROP-021 P1-2 round 2 — the registry-hash leg was removed, "
+                               "a packet cannot author proof of its own freezing)")
     p_packet.add_argument("--migration-ref", dest="migration_ref", default="",
                           help="CEO-D-NNN row id in MEMORY/CEO-DECISION-LEDGER.md proving "
                                "--legacy-migration's grandfather claim is a real, ratified "

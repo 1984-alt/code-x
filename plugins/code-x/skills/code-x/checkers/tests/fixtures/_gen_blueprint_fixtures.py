@@ -418,6 +418,17 @@ def build():
         b["modules"][1].pop("design_nav_na_reason", None)
     _bad_packet("blueprint_bad_per_kind_packet", _bad_perkind)
 
+    # MODULES-NONEMPTY (PBF-PROP-021 hole #8): manifest emptied of all modules — --all must fail
+    # closed, never vacuously report "all 0 module(s) BLUEPRINT-READY". Also reused by
+    # cx check blueprint-page (sibling gate, same manifest shape).
+    def _empty_modules(b):
+        b["modules"] = []
+    _bad_packet("blueprint_bad_empty_modules_packet", _empty_modules)
+
+    # blueprint-page companion: an empty/markerless page over the same emptied-manifest packet.
+    _write(HERE / "blueprint_bad_page_empty.html",
+           "<html><body><p>empty page, no markers</p></body></html>\n")
+
     # ── packet-floor BAD fixtures: copy packet_good + a planning MODULE-REGISTRY with a coverage gap ──
     _build_packet_floor_fixtures()
 

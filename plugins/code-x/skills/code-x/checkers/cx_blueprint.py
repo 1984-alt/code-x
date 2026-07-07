@@ -740,6 +740,11 @@ def cmd_blueprint(args) -> int:
                 "(P-PROP-005)"))
     else:
         targets = modules
+        if not targets:
+            findings.append(("P0", str(manifest_path),
+                "blueprint-manifest has an EMPTY modules list — --all cannot certify zero modules as "
+                "BLUEPRINT-READY; an emptied/truncated manifest fails CLOSED, it is never a vacuous PASS "
+                "(BLUEPRINT-MODULES-NONEMPTY, P-PROP-005)"))
 
     for m in targets:
         mid = str(m.get("module_id", "") or "").strip()

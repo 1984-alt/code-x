@@ -1588,6 +1588,14 @@ def _recipe_close_turn_row_untyped(tmp: str) -> tuple[str, str]:
     return _close_turn_repo(tmp, body)
 
 
+def _recipe_close_turn_evidence_path_escape(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-021 group-1 hole #5: `(Path(repo_root) / str(ev)).exists()` silently drops the
+    left operand when `ev` is ABSOLUTE (pathlib join semantics) — `/etc/hosts` resolved OUTSIDE
+    the repo and counted as durable in-repo evidence, masking a turn that committed nothing."""
+    body = _CLOSE_TURN_BLOCK_OK.replace("    - evidence.txt\n", "    - /etc/hosts\n")
+    return _close_turn_repo(tmp, body)
+
+
 def _recipe_close_turn_vault_skip_no_reason(tmp: str) -> tuple[str, str]:
     """vault_sync SKIPPED_WITH_REASON without reason/where_saved → P1."""
     body = _CLOSE_TURN_BLOCK_OK.replace(
@@ -2557,14 +2565,22 @@ def _as_full_inventory(accepted_commit: str, dangling_ceo_ref=False, drop_last=F
 
 
 def _as_write_manifest(repo: str, name: str, module_id: str, accepted_commit: str,
-                       owned: list, shared: list) -> None:
-    """Write one legacy manifest + its typed, HASH-BOUND legacy-freeze receipt (P1-4 binding)."""
+                       owned: list, shared: list, bad_binding: bool = False) -> None:
+    """Write one legacy manifest + its typed, HASH-BOUND legacy-freeze receipt (P1-4 binding).
+
+    bad_binding=True (PBF-PROP-021 F17 systemic scar — ACCEPTED-SURFACE-MANIFEST-BINDING had NO
+    pinned bad fixture anywhere): the freeze receipt's frozen_commit DISAGREES with the manifest's
+    accepted_commit — the manifest's commit must come FROM the freeze receipt, never a self-declared
+    value the receipt doesn't actually back."""
     os.makedirs(os.path.join(repo, "receipts"), exist_ok=True)
     freeze_rel = f"receipts/{name}-freeze.yaml"
     freeze_path = os.path.join(repo, freeze_rel)
+    frozen_commit = accepted_commit
+    if bad_binding:
+        frozen_commit = ("0" if accepted_commit[0] != "0" else "1") + accepted_commit[1:]
     with open(freeze_path, "w") as f:
         yaml.safe_dump({"legacy_freeze_baseline": {
-            "frozen_commit": accepted_commit, "generated_by": "cx-test-legacy-freeze"}}, f)
+            "frozen_commit": frozen_commit, "generated_by": "cx-test-legacy-freeze"}}, f)
     freeze_hash = _hashlib.sha256(open(freeze_path, "rb").read()).hexdigest()[:12]
     manifest = {"accepted_surface_manifest": {
         "module_id": module_id, "accepted_commit": accepted_commit,
@@ -2605,7 +2621,7 @@ def _as_repo(tmp, *, with_manifest=True, incomplete_inventory=False, dangling_ce
             missing_regression=False, narrow_regression=False, missing_shared_coverage=False,
             add_shared_manifest=False, diff_undeclared=False, keep_narrow=False,
             fix_scope_change=False, no_contract=False, shell_content=_AS_SHELL_CONTENT,
-            with_ledger=True) -> tuple:
+            with_ledger=True, bad_binding=False) -> tuple:
     """Base recipe for every PBF-PROP-018 accepted-surface clause. Returns (repo, extra) where
     extra is either the repo again (unused-state convention) or, for diff_undeclared, the
     pre-build baseline sha (substituted via the harness's {STATE} token — the ONLY value that
@@ -2632,7 +2648,8 @@ def _as_repo(tmp, *, with_manifest=True, incomplete_inventory=False, dangling_ce
     if with_manifest:
         _as_write_manifest(repo, "trans-shell", _AS_MODULE_ID, accepted_commit,
                            owned=[_AS_FILE],
-                           shared=[_AS_SHARED_FILE] if add_shared_manifest else [])
+                           shared=[_AS_SHARED_FILE] if add_shared_manifest else [],
+                           bad_binding=bad_binding)
     if add_shared_manifest:
         _as_write_manifest(repo, "cowork-pane", _AS_SHARED_MODULE_ID, accepted_commit,
                            owned=[], shared=[_AS_SHARED_FILE])
@@ -2727,6 +2744,13 @@ def _recipe_as_no_contract(tmp):
     return _as_repo(tmp, no_contract=True)
 
 
+def _recipe_as_bad_binding(tmp):
+    # PBF-PROP-021 F17 systemic scar: ACCEPTED-SURFACE-MANIFEST-BINDING had NO pinned bad fixture
+    # anywhere in the harness. The legacy-freeze receipt's frozen_commit disagrees with the
+    # manifest's accepted_commit — a self-declared commit the receipt does not actually back.
+    return _as_repo(tmp, bad_binding=True)
+
+
 def _recipe_as_extractor_variants(tmp):
     # P1-1: baseline file uses valid HTML/JS variants (attr order, spaced data-fn, class/window
     # dispatcher, addEventListener); the inventory covers only the include row → the recomputed
@@ -2806,7 +2830,167 @@ def _recipe_as_good_shared(tmp):
     return _as_repo(tmp, add_shared_manifest=True)
 
 
+def _recipe_evidence_abs_path(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-021 group-1 hole #3: evidence_required with an ABSOLUTE path escapes the card/repo
+    entirely — /etc/hosts (any always-present external file) previously satisfied the gate verbatim,
+    then the faked-pass scan read the external file as if it were committed proof. No git repo needed:
+    the card lives alone in tmp with no .git / CODE-X-STATE.yaml ancestor, so repo_root resolves None
+    and the absolute ref is checked as-is (safe_repo_ref rejects it on the is_absolute() branch)."""
+    card_dir = os.path.join(tmp, "card")
+    os.makedirs(card_dir, exist_ok=True)
+    cpath = os.path.join(card_dir, "card.yaml")
+    with open(cpath, "w") as f:
+        f.write("id: EV-ABS\nmode: MODULE_BUILD\nevidence_required:\n  - /etc/hosts\n")
+    return cpath, cpath
+
+
+def _recipe_evidence_symlink_escape(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-021 group-1 hole #3: evidence_required is a relative path that is actually an
+    in-card-dir SYMLINK pointing OUTSIDE the card dir — without the safe_repo_ref guard the honesty
+    scan would read arbitrary external bytes as an in-repo evidence file."""
+    card_dir = os.path.join(tmp, "card")
+    os.makedirs(card_dir, exist_ok=True)
+    ext = os.path.join(tmp, "external_evidence.log")   # OUTSIDE card_dir (tmp is card_dir's parent)
+    with open(ext, "w") as f:
+        f.write("not a real evidence file\n")
+    os.symlink(ext, os.path.join(card_dir, "sneaky.log"))
+    cpath = os.path.join(card_dir, "card.yaml")
+    with open(cpath, "w") as f:
+        f.write("id: EV-SYM\nmode: MODULE_BUILD\nevidence_required:\n  - sneaky.log\n")
+    return cpath, cpath
+
+
+def _recipe_evidence_unreadable(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-021 group-1 hole #4: an unreadable evidence file (chmod 000) previously swallowed
+    the read error in a bare `except Exception: pass` and skipped the faked-pass honesty scan with
+    NO finding — a faked-pass file made unreadable defeated the `echo "PASS"` anti-cheat scan
+    entirely. The file's own content WOULD trip scan_faked_pass if it could be read."""
+    card_dir = os.path.join(tmp, "card")
+    os.makedirs(card_dir, exist_ok=True)
+    fake = os.path.join(card_dir, "fake.log")
+    with open(fake, "w") as f:
+        f.write('echo "PASS"\n')
+    os.chmod(fake, 0o000)
+    cpath = os.path.join(card_dir, "card.yaml")
+    with open(cpath, "w") as f:
+        f.write("id: EV-UNREAD\nmode: MODULE_BUILD\nevidence_required:\n  - fake.log\n")
+    return cpath, cpath
+
+
+def _rft_repo(tmp, *, cover_home=True, pictured_state="populated", drift_screen=None):
+    """PBF-PROP-021 F17 systemic scar: RENDER-COVERS-GIT-TOUCHED / UNPICTURED-STATE-IS-GAP /
+    GOLDEN-DRIFT-BLOCKS-TOUCHED (PBF-PROP-020 Rules 2/7) were proven to bite only in tests/run.py's
+    TestPBFPROP020GitTouchedScope, never in the static contract-bite harness. Mirrors that suite's
+    _repo() helper: a real git repo whose HEAD touches templates/home.html vs its baseline, a packet
+    with a MODULE-REGISTRY screen->file binding + a hash-bound lock carrying pictured_states, and a
+    render bundle. Returns (repo, head_sha) — head_sha rides the harness's {STATE} token."""
+    repo = os.path.join(tmp, "repo")
+    _git_init(repo)
+    os.makedirs(os.path.join(repo, "templates"))
+    with open(os.path.join(repo, "templates", "home.html"), "w") as f:
+        f.write("<h1>one</h1>\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    base = _git_commit(repo, "baseline")
+    with open(os.path.join(repo, "templates", "home.html"), "w") as f:
+        f.write("<h1>two — the look changed</h1>\n")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+    head = _git_commit(repo, "change home look")
+    pkt = os.path.join(repo, "packet")
+    os.makedirs(os.path.join(pkt, "locks"))
+    with open(os.path.join(pkt, "locks", "home.lock.yaml"), "w") as f:
+        f.write(
+            "ui_lock_manifest:\n"
+            "  audit_status: PASS\n"
+            "  ceo_acceptance_ref: CEO-D-FIXTURE\n"
+            "  pictured_states:\n"
+            f"    - {{screen_id: home, content_state: {pictured_state}}}\n")
+    with open(os.path.join(pkt, "MODULE-REGISTRY.yaml"), "w") as f:
+        f.write(
+            "module_registry:\n"
+            "  frozen_packet_hash: p021-f17-rft-fixture\n"
+            "  modules:\n"
+            "    - module_id: m_home\n"
+            "      screen_id: home\n"
+            "      kind: screen\n"
+            "      files: [templates/home.html]\n"
+            "      lock_ref: packet/locks/home.lock.yaml\n"
+            "      requirement_ids: []\n"
+            "      dependency_modules: []\n"
+            "      card_ids: [BUILD-1]\n")
+    # Otherwise-VALID render_profile + render_evidence (mirrors tests/fixtures/render_good.yaml)
+    # for whichever screen coverage_matrix.required_rows declares — so the only clause that can
+    # fire is the ONE this recipe targets, never a coincidental RENDER-FIT-PROFILE-UNPINNED /
+    # RENDER-FIT-COVERAGE-INCOMPLETE noise (and so the "good" recipe reaches a clean rc=0).
+    with open(os.path.join(repo, "render_shot.txt"), "w") as f:
+        f.write("render-fixture-screenshot-bytes-v1\n")
+    covered_screen = "home" if cover_home else "other"
+    lines = [
+        f"repo_sha_before: {base[:12]}",
+        "render_profile:",
+        "  chromium_revision: \"1234.5\"", "  device_pixel_ratio: 2", "  viewport: \"390x844\"",
+        "  viewports:", "    - viewport_id: phone", "      width: 390",
+        "  color_schemes: [light, dark]", "  reduced_motion: true", "  locale: en-US",
+        "  timezone: UTC", "  fonts: bundled", "  animations: disabled", "  network: blocked",
+        "  fixture: DESIGN_FIXTURE", "  profile_hash: c7c416dfa9b0",
+        "coverage_matrix:", "  ui_card: true", "  required_rows:",
+        f"    - screen_id: {covered_screen}",
+        "      viewport_id: phone", "      theme: light", "      content_state: populated",
+        "render_evidence:",
+        "  - card_id: BUILD-RF-021-F17", f"    screen_id: {covered_screen}",
+        "    viewport_id: phone", "    theme: light", "    content_state: populated",
+        "    route: /home", f"    repo_head: {head}", "    state_sha12: state00aabbcc",
+        "    locked_packet_hash: pkt00112233aa", "    render_profile_hash: c7c416dfa9b0",
+        "    tool_version: \"cx-render/1.0.0\"", "    command: \"cx render collect --screen home\"",
+        "    generated_by: cx render collect", "    screenshot_path: render_shot.txt",
+        "    screenshot_hash: 3e4f45cb0a7d", "    measured_metrics:",
+        "      viewport_width: 390", "      content_width: 390",
+        "      has_horizontal_overflow: false", "      max_visible_right: 389.4",
+        "      nonblank: true", "      app_ready: true", "      controls_in_frame: []",
+        "    produced_at: \"2026-06-22T09:00:00Z\"",
+    ]
+    if drift_screen:
+        lines += ["golden_drift:", f"  - screen_id: {drift_screen}", "    viewport_id: phone",
+                  "    diff_score: 0.9", "    tolerance: 0.1", "    baseline_ref: baseline-shot"]
+    with open(os.path.join(repo, "bundle.yaml"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return repo, head
+
+
+def _recipe_rft_bad_covers(tmp):
+    return _rft_repo(tmp, cover_home=False)
+
+
+def _recipe_rft_bad_unpictured(tmp):
+    return _rft_repo(tmp, cover_home=True, pictured_state="empty")
+
+
+def _recipe_rft_bad_drift(tmp):
+    return _rft_repo(tmp, cover_home=True, drift_screen="home")
+
+
+def _recipe_rft_good(tmp):
+    return _rft_repo(tmp, cover_home=True, pictured_state="populated")
+
+
+def _recipe_packet_no_risk_tier(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-022-C: a fully valid frozen packet that declares NO risk_tier. cx check packet
+    PASSES (rc 0 — the fail-closed STRICT resolver default is safe) but prints the non-blocking
+    PACKET-RISK-TIER-UNDECLARED WARN nudge. Returns the read-only static fixture path (cx check
+    packet never mutates it); tmp is unused."""
+    d = str(FIXTURES / "packet_good")
+    return d, d
+
+
+def _recipe_packet_risk_tier_declared(tmp: str) -> tuple[str, str]:
+    """PBF-PROP-022-C good/quiet: a valid frozen packet that DOES declare risk_tier (STRICT, needs
+    no decision ref). cx check packet PASSES and the undeclared-tier advisory stays SILENT."""
+    d = str(FIXTURES / "packet_good_risk_tier_strict")
+    return d, d
+
+
 _RECIPES = {
+    "packet_no_risk_tier": _recipe_packet_no_risk_tier,
+    "packet_risk_tier_declared": _recipe_packet_risk_tier_declared,
     "build_turn_blueprint_not_ready": _recipe_build_turn_blueprint_not_ready,
     "build_turn_blueprint_ready": _recipe_build_turn_blueprint_ready,
     "build_turn_blueprint_approval_symlink": _recipe_build_turn_blueprint_approval_symlink,
@@ -2937,6 +3121,7 @@ _RECIPES = {
     "close_turn_no_delta": _recipe_close_turn_no_delta,
     "close_turn_delta_mismatch": _recipe_close_turn_delta_mismatch,
     "close_turn_vault_skip_no_reason": _recipe_close_turn_vault_skip_no_reason,
+    "close_turn_evidence_path_escape": _recipe_close_turn_evidence_path_escape,
     "as_legacy_no_manifest": _recipe_as_legacy_no_manifest,
     "as_incomplete_inventory": _recipe_as_incomplete_inventory,
     "as_fake_ceo_ref": _recipe_as_fake_ceo_ref,
@@ -2946,11 +3131,19 @@ _RECIPES = {
     "as_diff_undeclared": _recipe_as_diff_undeclared,
     "as_fix_scope_change": _recipe_as_fix_scope_change,
     "as_no_contract": _recipe_as_no_contract,
+    "as_bad_binding": _recipe_as_bad_binding,
     "as_extractor_variants": _recipe_as_extractor_variants,
     "as_stale_accepted_commit": _recipe_as_stale_accepted_commit,
     "build_turn_as_no_baseline": _recipe_build_turn_as_no_baseline,
     "as_good": _recipe_as_good,
     "as_good_shared": _recipe_as_good_shared,
+    "evidence_abs_path": _recipe_evidence_abs_path,
+    "evidence_symlink_escape": _recipe_evidence_symlink_escape,
+    "evidence_unreadable": _recipe_evidence_unreadable,
+    "rft_bad_covers": _recipe_rft_bad_covers,
+    "rft_bad_unpictured": _recipe_rft_bad_unpictured,
+    "rft_bad_drift": _recipe_rft_bad_drift,
+    "rft_good": _recipe_rft_good,
 }
 
 

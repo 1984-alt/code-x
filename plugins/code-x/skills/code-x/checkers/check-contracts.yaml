@@ -443,6 +443,43 @@ clauses:
     good:
       args: ["tests/fixtures/packet_bad_forge_parity_marker_absent", "--legacy-migration", "--migration-ref", "CEO-D-001"]
 
+  - id: PACKET-FORGE-PARITY-WAIVER-HASH-LEG-REMOVED
+    check: packet
+    kind: gate
+    clause: "the frozen-registry-hash leg of --legacy-migration proof is REMOVED entirely — neither a self-authored non-hex frozen_packet_hash string (e.g. 'totally-forged-not-a-hash') NOR a validly-shaped 64-char hex digest (e.g. 64 zeros — the reviewer's own dodge) waives the marker requirement; only a --migration-ref resolving to a real MEMORY/CEO-DECISION-LEDGER.md row counts (PBF-PROP-021 P1-2 round 2, GPT-5.5 xhigh built-code review; round 1's shape-check was itself forgeable — a packet cannot author proof of its own freezing)"
+    source: "PBF-PROP-021 P1-2 round 2 (cx-audit-2026-07-07 GPT-5.5 xhigh built-code review)"
+    bad:
+      args: ["tests/fixtures/packet_bad_forge_parity_waiver_forged_hash", "--legacy-migration"]
+      expect_severity: P1
+      expect_contains: "are NOT a waiver"
+    good:
+      args: ["tests/fixtures/packet_good"]
+
+  - id: PACKET-FORGE-PARITY-WAIVER-ALLZEROS-HASH-NOT-PROOF
+    check: packet
+    kind: gate
+    clause: "a VALIDLY-SHAPED 64-char hex frozen_packet_hash (all zeros) still does NOT waive the marker requirement — shape alone was never proof; the whole registry-hash leg is gone (PBF-PROP-021 P1-2 round 2)"
+    source: "PBF-PROP-021 P1-2 round 2 (cx-audit-2026-07-07 GPT-5.5 xhigh built-code review)"
+    bad:
+      args: ["tests/fixtures/packet_bad_forge_parity_waiver_allzeros_hash", "--legacy-migration"]
+      expect_severity: P1
+      expect_contains: "are NOT a waiver"
+    good:
+      args: ["tests/fixtures/packet_bad_forge_parity_waiver_allzeros_hash", "--legacy-migration", "--migration-ref", "CEO-D-001"]
+
+  - id: PACKET-RISK-TIER-UNDECLARED-ADVISORY
+    check: packet
+    kind: heuristic
+    clause: "a frozen packet that declares NO risk_tier PASSES cx check packet (rc 0 — the fail-closed STRICT resolver default is safe by design) but prints a NON-BLOCKING PACKET-RISK-TIER-UNDECLARED WARN nudge that new-project setup must put the explicit tier choice to the CEO as a CEO-DECISION-LEDGER row; a packet that DOES declare a tier is quiet. Advisory only — it must NEVER block the freeze (a P2 routed through findings_report would exit 1 and block; this rides the STATE-SESSION-BEHIND WARN convention instead) (PBF-PROP-022-C)"
+    source: "PBF-PROP-022-C (design-history/pbf-prop-022-b-merge-analysis-2026-07-07.md); mirrors STATE-SESSION-BEHIND-WARN advisory convention"
+    git_fixture: packet_no_risk_tier
+    bad:
+      args: ["{REPO}"]
+      expect_warn_text: "PACKET-RISK-TIER-UNDECLARED"
+    good:
+      git_fixture: packet_risk_tier_declared
+      args: ["{REPO}"]
+
   - id: CX-ACCEPT-NO-CEO-TOKEN
     check: accept
     kind: gate
@@ -1474,6 +1511,18 @@ clauses:
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
+  - id: SCOPE-FORBIDDEN-FILE-RENAMED
+    check: scope
+    kind: gate
+    clause: "a mixed diff that RENAMES a forbidden file (git 'rename from/to' headers, no +++/--- pair for that file) while also editing an allowed file is rejected — the rename must not exempt the forbidden file from forbidden_files (PBF-PROP-021 group-1 hole #1)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #1)"
+    bad:
+      args: ["tests/fixtures/card_forbidden_rename.yaml", "tests/fixtures/diff_bad_forbidden_rename.txt"]
+      expect_severity: P0
+      expect_contains: "diff touches forbidden_file: config/prod.env"
+    good:
+      args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
+
   # ──────────────────────────────────────────────────────────────
   # check: evidence
   # ──────────────────────────────────────────────────────────────
@@ -1501,6 +1550,45 @@ clauses:
     good:
       args: ["tests/fixtures/card_final_ready_relpath.yaml"]
 
+  - id: EVIDENCE-REQUIRED-ABSOLUTE-PATH-REJECTED
+    check: evidence
+    kind: gate
+    clause: "evidence_required with an ABSOLUTE path (e.g. /etc/hosts) is rejected — no path-safety previously guarded this ref at all, so any existing machine file outside the repo satisfied the gate verbatim (PBF-PROP-021 group-1 hole #3)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #3)"
+    git_fixture: evidence_abs_path
+    bad:
+      args: ["{REPO}"]
+      expect_severity: P0
+      expect_contains: "must be a repo-relative path"
+    good:
+      args: ["tests/fixtures/card_final_ready_relpath.yaml"]
+
+  - id: EVIDENCE-REQUIRED-SYMLINK-ESCAPE-REJECTED
+    check: evidence
+    kind: gate
+    clause: "evidence_required whose ref is a SYMLINK resolving outside the card dir is rejected — a symlink to an always-passing external file previously satisfied the gate, then the faked-pass scan read the external bytes as if they were committed proof (PBF-PROP-021 group-1 hole #3)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #3)"
+    git_fixture: evidence_symlink_escape
+    bad:
+      args: ["{REPO}"]
+      expect_severity: P0
+      expect_contains: "symlink or resolves OUTSIDE the repo"
+    good:
+      args: ["tests/fixtures/card_final_ready_relpath.yaml"]
+
+  - id: EVIDENCE-REQUIRED-UNREADABLE-FAILS-CLOSED
+    check: evidence
+    kind: gate
+    clause: "an evidence_required file that cannot be READ (e.g. chmod 000) fails closed — it must not silently skip the faked-pass honesty scan; the file's content (echo \"PASS\") would itself trip the scan if it could be read (PBF-PROP-021 group-1 hole #4)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #4)"
+    git_fixture: evidence_unreadable
+    bad:
+      args: ["{REPO}"]
+      expect_severity: P0
+      expect_contains: "could not be read"
+    good:
+      args: ["tests/fixtures/card_final_ready_relpath.yaml"]
+
   # ──────────────────────────────────────────────────────────────
   # check: cost
   # ──────────────────────────────────────────────────────────────
@@ -1524,6 +1612,30 @@ clauses:
     bad:
       args: ["tests/fixtures/cost_log_bad.yaml"]
       expect_severity: P1
+    good:
+      args: ["tests/fixtures/cost_log_good.yaml"]
+
+  - id: COST-QUOTED-REVIEW-FIX-CYCLES-TYPE-REJECTED
+    check: cost
+    kind: gate
+    clause: "review_fix_cycles is type-validated with `type(value) is int` (not isinstance — bool is an int subclass and must be rejected) — a YAML-quoted review_fix_cycles: \"4\" fires a P1 not-a-real-integer finding instead of silently bypassing the one-and-done comparison (PBF-PROP-021 group-2 hole #4)"
+    source: "PBF-PROP-021 group-2 (cx-audit-2026-07-07 finding #13)"
+    bad:
+      args: ["tests/fixtures/cost_log_quoted_review_fix_cycles.yaml"]
+      expect_severity: P1
+      expect_contains: "is not a real integer"
+    good:
+      args: ["tests/fixtures/cost_log_good.yaml"]
+
+  - id: COST-QUOTED-LOOPS-USED-NO-CRASH
+    check: cost
+    kind: gate
+    clause: "a YAML-quoted loops_used: \"9\" no longer crashes the roll-up sum (FATAL exit 2, TypeError: unsupported operand type(s) for +: 'int' and 'str') — it fires a clean P2 not-a-real-integer finding instead (PBF-PROP-021 group-2 hole #5, VERIFY F13 crash sibling)"
+    source: "PBF-PROP-021 group-2 (cx-audit-2026-07-07 finding #13 / VERIFY-P1-verdicts F13)"
+    bad:
+      args: ["tests/fixtures/cost_log_quoted_loops_used_crashes.yaml"]
+      expect_severity: P2
+      expect_contains: "is not a real integer"
     good:
       args: ["tests/fixtures/cost_log_good.yaml"]
 
@@ -1940,6 +2052,18 @@ clauses:
       args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet_blank_card"]
       expect_severity: P0
       expect_contains: "blank/empty card_ids entry"
+    good:
+      args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet"]
+
+  - id: DECK-MODULE-REGISTRY-UNPARSEABLE-FAILS-CLOSED
+    check: deck
+    kind: gate
+    clause: "an unparseable MODULE-REGISTRY.yaml (malformed YAML) FAILS CLOSED — it must not silently degrade to zero module rows and green DECK-MODULE-REGISTRY-CARD-IDS-MATCH (PBF-PROP-021 group-1 hole #2)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #2)"
+    bad:
+      args: ["tests/fixtures/deck_bad_unparseable_registry_cards", "tests/fixtures/deck_bad_unparseable_registry_packet"]
+      expect_severity: P0
+      expect_contains: "MODULE-REGISTRY.yaml could not be parsed"
     good:
       args: ["tests/fixtures/deck_registry_good_cards", "tests/fixtures/good_registry_packet"]
 
@@ -2635,6 +2759,20 @@ clauses:
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
       expect_severity: P1
+    good:
+      git_fixture: close_turn_ok
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+
+  - id: CLOSE-TURN-EVIDENCE-PATH-ESCAPE-REJECTED
+    check: close-turn
+    kind: gate
+    clause: "close_turn.evidence_paths with an ABSOLUTE path (e.g. /etc/hosts) is rejected — `(Path(repo_root) / str(ev)).exists()` previously dropped the left operand on an absolute ev (pathlib join semantics), letting an external file count as durable in-repo turn evidence (PBF-PROP-021 group-1 hole #5)"
+    source: "PBF-PROP-021 group-1 (cx-audit-2026-07-07 finding #5)"
+    git_fixture: close_turn_evidence_path_escape
+    bad:
+      args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "must be a repo-relative path"
     good:
       git_fixture: close_turn_ok
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -3382,6 +3520,26 @@ clauses:
     good:
       args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_carveout_good.yaml"]
 
+  - id: EGRESS-PII-INDONESIAN-PHONE-AND-BANK-ACCOUNT
+    check: egress
+    kind: gate
+    clause: "the PII tripwire is widened past the old blanket 12+-digit-run pattern to Indonesian mobile numbers (raw/dash/spaced, +62/62/0 prefixes) and 10-digit bank-style account numbers — a scrub receipt claiming a clean diff that still carries these shapes is contradicted (PBF-PROP-021 hole #12)"
+    source: "PBF-PROP-021 hole #12 / BF-PROP-005 / GPT #1"
+    bad:
+      args: ["tests/fixtures/egress_diff_pii.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_for_pii.yaml"]
+      expect_severity: P0
+      expect_contains: "contradicted by the diff content"
+    good:
+      args: ["tests/fixtures/egress_diff_clean.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_good.yaml"]
+
+  - id: EGRESS-PII-NEGATIVE-CONTROL-QUIET
+    check: egress
+    kind: gate
+    clause: "the widened PII tripwire stays QUIET on benign long digit runs (a dotted version string, a hex build hash, an ISO timestamp, a 13-digit epoch-millis value) — a scrub receipt over a diff carrying only these is NOT contradicted; a tripwire that fires on every long number is a dead tripwire (PBF-PROP-021 hole #12 negative control)"
+    source: "PBF-PROP-021 hole #12 / BF-PROP-005 / GPT #1"
+    good:
+      args: ["tests/fixtures/egress_diff_benign_digits.txt", "--target=coderabbit", "--receipt", "tests/fixtures/egress_scrub_for_benign_digits.yaml"]
+
   # ──────────────────────────────────────────────────────────────
   # v1.11 — BF-PROP-005 the 3-stage cross-family review ladder (xfam_capability, EVAL-021)
   # ──────────────────────────────────────────────────────────────
@@ -3659,6 +3817,18 @@ clauses:
     good:
       args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
 
+  - id: RENDER-FIT-COVERAGE-EMPTY-NOT-OPT-IN
+    check: render-fidelity
+    kind: gate
+    clause: "a bundle with zero required_rows AND zero render_evidence AND no non_user_facing_decision_ref rejected regardless of the bundle's own self-declared coverage_matrix.ui_card — ui_card is not an opt-in escape hatch (PBF-PROP-021 hole #10)"
+    source: GATES.md G6 / B-PROP-009 §4.3
+    bad:
+      args: ["tests/fixtures/render_bad_empty_no_uicard.yaml", "--repo-head=aaaaaaaaaaaa"]
+      expect_severity: P0
+      expect_contains: "RENDER-FIT-COVERAGE-INCOMPLETE"
+    good:
+      args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
   - id: RENDER-FIT-OVERFLOW
     check: render-fidelity
     kind: gate
@@ -3706,6 +3876,48 @@ clauses:
       expect_contains: "RENDER-FIT-CANNOT-VERIFY"
     good:
       args: ["tests/fixtures/render_good.yaml", "--repo-head=aaaaaaaaaaaa"]
+
+  - id: RENDER-COVERS-GIT-TOUCHED
+    check: render-fidelity
+    kind: gate
+    clause: "a git-touched CEO-visible screen (git diff vs bundle.repo_sha_before) with NO row in coverage_matrix.required_rows rejected — PBF-PROP-020 Rule 2 — needs a real git repo + registry, so PBF-PROP-021 F17 systemic scar: proven only in tests/run.py's TestPBFPROP020GitTouchedScope, never in this static contract-bite harness"
+    source: PBF-PROP-020 Rule 2 (F17 fold)
+    git_fixture: rft_bad_covers
+    bad:
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
+      expect_severity: P0
+      expect_contains: "RENDER-COVERS-GIT-TOUCHED"
+    good:
+      git_fixture: rft_good
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
+
+  - id: UNPICTURED-STATE-IS-GAP
+    check: render-fidelity
+    kind: gate
+    clause: "a touched screen covered in required_rows at a content_state absent from the hash-bound lock's pictured_states rejected — PBF-PROP-020 Rule 7 — PBF-PROP-021 F17 systemic scar: proven only in tests/run.py's TestPBFPROP020GitTouchedScope, never in this static contract-bite harness"
+    source: PBF-PROP-020 Rule 7 (F17 fold)
+    git_fixture: rft_bad_unpictured
+    bad:
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
+      expect_severity: P0
+      expect_contains: "UNPICTURED-STATE-IS-GAP"
+    good:
+      git_fixture: rft_good
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
+
+  - id: GOLDEN-DRIFT-BLOCKS-TOUCHED
+    check: render-fidelity
+    kind: gate
+    clause: "a golden_drift over tolerance on a git-touched CEO-visible screen is BLOCKING (P1), not advisory WARN — PBF-PROP-020 Rule 2 flips drift on touched screens from advisory to a finding — PBF-PROP-021 F17 systemic scar: proven only in tests/run.py's TestPBFPROP020GitTouchedScope, never in this static contract-bite harness"
+    source: PBF-PROP-020 Rule 2 (F17 fold)
+    git_fixture: rft_bad_drift
+    bad:
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
+      expect_severity: P1
+      expect_contains: "GOLDEN-DRIFT-BLOCKS-TOUCHED"
+    good:
+      git_fixture: rft_good
+      args: ["{REPO}/bundle.yaml", "--repo-root", "{REPO}", "--packet-dir", "packet", "--repo-head", "{STATE}"]
 
   # ──────────────────────────────────────────────────────────────
   # check: card / close-turn / drift  — BF-PROP-007 lock-fidelity continuity (fold v1.15)
@@ -4353,6 +4565,18 @@ clauses:
     good:
       args: ["tests/fixtures/blueprint_good_packet", "--module", "rounding", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
 
+  - id: BLUEPRINT-MODULES-NONEMPTY
+    check: blueprint
+    kind: gate
+    clause: "cx check blueprint --all on an emptied blueprint-manifest (modules: []) fails CLOSED — a truncated/emptied manifest never vacuously reports '0 module(s) BLUEPRINT-READY' (PBF-PROP-021 hole #8)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-035 / P-PROP-005 §3.1"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_empty_modules_packet", "--all", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_bad_empty_modules_packet_approval.yaml"]
+      expect_severity: P0
+      expect_contains: "BLUEPRINT-MODULES-NONEMPTY"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--all", "--state", "tests/fixtures/blueprint_good_state.yaml", "--approval", "tests/fixtures/blueprint_good_approval.yaml"]
+
   # ──────────────────────────────────────────────────────────────
   # check: blueprint-page  (P-PROP-007 v1.22.2 — the projection-views render-faithfulness gate)
   # Sibling of `cx check blueprint` (UNCHANGED). Each clause = a pinned BAD fixture page rejected
@@ -4416,6 +4640,18 @@ clauses:
       args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_bad_page_anchor_invented.html", "--all"]
       expect_severity: P1
       expect_contains: "BLUEPRINT-ANCHOR-ID-VISIBLE"
+    good:
+      args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
+
+  - id: BLUEPRINT-PAGE-MODULES-NONEMPTY
+    check: blueprint-page
+    kind: gate
+    clause: "cx check blueprint-page --all on an emptied blueprint-manifest (modules: []) fails CLOSED — a truncated/emptied manifest never vacuously reports '0 module(s) page projections' rendered (PBF-PROP-021 hole #8, sibling of BLUEPRINT-MODULES-NONEMPTY)"
+    source: "MASTER-BLUEPRINT.md / EVALS.md EVAL-046 / P-PROP-007"
+    bad:
+      args: ["tests/fixtures/blueprint_bad_empty_modules_packet", "--page", "tests/fixtures/blueprint_bad_page_empty.html", "--all"]
+      expect_severity: P0
+      expect_contains: "BLUEPRINT-MODULES-NONEMPTY"
     good:
       args: ["tests/fixtures/blueprint_good_packet", "--page", "tests/fixtures/blueprint_good_page.html", "--all"]
 
@@ -4708,6 +4944,42 @@ clauses:
       expect_contains: "KAIZEN-JUDGMENT-LIMIT-SHAPE"
     good:
       args: ["tests/fixtures/kaizen_good_judgment_limit.md"]
+
+  - id: KAIZEN-FENCE-TRAILING-SPACE-TOLERATED
+    check: kaizen
+    kind: gate
+    clause: "a ```yaml fence with a trailing space/tab before the newline (```yaml<space>\\n) is still parsed as a real PROP block — a behavioural APPLIED PROP with zero enforcement inside such a fence still fires KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT, it does not silently vanish (PBF-PROP-021 group-2 hole #6)"
+    source: "PBF-PROP-021 group-2 (cx-audit-2026-07-07 finding #6)"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_fence_trailing_space.md"]
+      expect_severity: P0
+      expect_contains: "KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE
+    check: kaizen
+    kind: gate
+    clause: "a fence NOT recognized as a yaml PROP fence (exotic language tag, e.g. ```YAML uppercase) but whose raw text is PROP-shaped (id: ...PROP-NNN) fires a LOUD P1 finding instead of silently vanishing from every KAIZEN-* clause (PBF-PROP-021 group-2 hole #6, backstop leg)"
+    source: "PBF-PROP-021 group-2 (cx-audit-2026-07-07 finding #6)"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_fence_exotic_tag_prop_shaped.md"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
+
+  - id: KAIZEN-STATUS-ENUM-VALID
+    check: kaizen
+    kind: gate
+    clause: "status is enum-validated against {QUEUED, APPLIED, MERGED-INTO-008, CLOSED-REJECTED} — a case/typo drift of APPLIED (e.g. 'applied') fires KAIZEN-STATUS-ENUM-VALID AND is still treated as APPLIED (fail closed) for the downstream behavioural/enforcement clauses, it does not silently exempt the PROP from them (PBF-PROP-021 group-2 hole #7)"
+    source: "PBF-PROP-021 group-2 (cx-audit-2026-07-07 finding #7)"
+    bad:
+      args: ["tests/fixtures/kaizen_bad_status_case_drift.md"]
+      expect_severity: P1
+      expect_contains: "KAIZEN-STATUS-ENUM-VALID"
+    good:
+      args: ["tests/fixtures/kaizen_good.md"]
 
   # ── PBF-PROP-014 — no-ambiguity / conflict_scan clauses ─────────────────────────
 
@@ -5439,6 +5711,78 @@ clauses:
     good:
       args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
 
+  - id: AUDIT-STAGE-EXPECTED-SET-UNKNOWN-SUBITEM
+    check: audit
+    kind: gate
+    clause: "an angle-D item (layer_id, subitem) that matches no sub-item in the SOP layer registry is not a real disposition of a real ship-gate item — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "PBAF-PROP-001 Rule 2 (X3)"
+    bad:
+      args: ["tests/fixtures/as_expected_unknown_subitem", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-UNKNOWN-SUBITEM"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-EXPECTED-SET-DUPLICATE
+    check: audit
+    kind: gate
+    clause: "an angle-D (layer_id, subitem) dispositioned more than once fails — a duplicate disposition is not honest single-pass coverage of the expected set — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "PBAF-PROP-001 Rule 2 (X3)"
+    bad:
+      args: ["tests/fixtures/as_expected_duplicate", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-DUPLICATE"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-EXPECTED-SET-NA-MISMATCH
+    check: audit
+    kind: gate
+    clause: "angle-D marks an expected-applicable sub-item N/A while the recorded facts say it IS applicable — an N/A that contradicts the derived facts — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "PBAF-PROP-001 Rule 1 (X3)"
+    bad:
+      args: ["tests/fixtures/as_expected_na_mismatch", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-NA-MISMATCH"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-EXPECTED-SET-NA-NO-FACT
+    check: audit
+    kind: gate
+    clause: "an angle-D item marked N/A with NO driving_fact recorded fails — an N/A disposition must be backed by a specifically named false build-fact, never an unbacked opinion — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "PBAF-PROP-001 Rule 1 (X3)"
+    bad:
+      args: ["tests/fixtures/as_expected_na_no_fact", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-NA-NO-FACT"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-EXPECTED-SET-NA-UNBACKED
+    check: audit
+    kind: gate
+    clause: "an angle-D item marked N/A with a driving_fact string that names no actually-false A1-A9 build-fact fails — a free-form opinion string is not a derivation — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "PBAF-PROP-001 Rule 1 (X3)"
+    bad:
+      args: ["tests/fixtures/as_expected_na_unbacked", "--state", "tests/fixtures/audit_state_good.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-EXPECTED-SET-NA-UNBACKED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
+  - id: AUDIT-STAGE-STATE-REQUIRED
+    check: audit
+    kind: gate
+    clause: "the review-ladder builder_family must be DERIVABLE from the loaded --state's active_build_engine — a state whose active_build_engine is not a recognized engine fails closed rather than silently leaving builder_family unbound — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: "A-PROP-001 §3 Lever D (X1)"
+    bad:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_bad_engine.yaml"]
+      expect_severity: P1
+      expect_contains: "AUDIT-STAGE-STATE-REQUIRED"
+    good:
+      args: ["tests/fixtures/audit_good", "--state", "tests/fixtures/audit_state_good.yaml"]
+
   - id: AUDIT-STAGE-DUPLICATE-YAML-KEY
     check: audit
     kind: gate
@@ -5635,6 +5979,34 @@ clauses:
       git_fixture: as_good
       args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
 
+  - id: ACCEPTED-SURFACE-INVENTORY-EXTRACTED
+    check: accepted-surface
+    kind: gate
+    clause: "the extractor-backed-recompute finding-tag itself, pinned by its own clause id — the underlying behavior is exercised via ACCEPTED-SURFACE-INVENTORY-INCOMPLETE/EXTRACTOR-VARIANTS/STALE-ACCEPTED-COMMIT, but PBF-PROP-021 F17 systemic scar: no contract entry ever asserted the literal ACCEPTED-SURFACE-INVENTORY-EXTRACTED tag by name — reuses the existing as_incomplete_inventory recipe, no new fixture needed"
+    source: PBF-PROP-018 built-code xfam P1-4 (F17 fold)
+    git_fixture: as_incomplete_inventory
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-INVENTORY-EXTRACTED"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
+  - id: ACCEPTED-SURFACE-MANIFEST-BINDING
+    check: accepted-surface
+    kind: gate
+    clause: "a legacy_freeze_baseline manifest whose freeze receipt frozen_commit DISAGREES with the manifest's own accepted_commit fails — the manifest's commit must come FROM the freeze receipt, never self-declared — PBF-PROP-021 F17 systemic scar: this blocking clause had NO pinned bad fixture anywhere in the harness"
+    source: PBF-PROP-018 built-code xfam P1-4 (F17 fold)
+    git_fixture: as_bad_binding
+    bad:
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+      expect_severity: P1
+      expect_contains: "ACCEPTED-SURFACE-MANIFEST-BINDING"
+    good:
+      git_fixture: as_good
+      args: ["{REPO}/card.yaml", "--repo-root", "{REPO}"]
+
   # ──────────────────────────────────────────────────────────────
   # PBF-PROP-020 — Mockup-First Change Rule (v2, fail-closed-by-default)
   # ──────────────────────────────────────────────────────────────
@@ -5650,6 +6022,30 @@ clauses:
       expect_contains: "LOCK-ACCEPTANCE-CITES-RENDERED"
     good:
       args: ["--manifest", "tests/fixtures/ui_lock_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--build-vocab", "tests/fixtures/build_vocab_good.yaml"]
+
+  - id: DESIGN-FIDELITY-MARKER-PARSED-NOT-SUBSTRING
+    check: design-fidelity
+    kind: gate
+    clause: "a dom_markers id present ONLY inside an HTML comment or a <script> string literal (never a real DOM element) is rejected as missing — markers are matched against a PARSED live DOM (stdlib html.parser), never a raw substring over the HTML source (PBF-PROP-021 hole #11)"
+    source: "GATES.md G3+G6 / B-PROP-003/004"
+    bad:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_comment_js_test.yaml", "--dom", "tests/fixtures/dom_bad_comment_js_only.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+      expect_severity: P2
+      expect_contains: "missing from live DOM"
+    good:
+      args: ["--manifest", "tests/fixtures/ui_lock_manifest_comment_js_test.yaml", "--dom", "tests/fixtures/dom_good_comment_js_test.html", "--screenshot", "tests/fixtures/screenshot_good.png"]
+
+  - id: DESIGN-FIDELITY-LABEL-NOT-SCRIPT-TEXT
+    check: design-fidelity
+    kind: gate
+    clause: "a required control whose ONLY 'text' is a <script> string literal (e.g. <button data-fn=\"add_income\" role=\"button\"><script>var s=\"Add income\"</script></button>) is rejected as lacking its locked label — script/style/template bodies are excluded from every ancestor's accumulated text, so they cannot spoof a control LABEL the way they could before this fix (PBF-PROP-021 P2-2, same class as hole #11's region-marker parse-vs-substring fix)"
+    source: "GATES.md G3+G6 / B-PROP-003/004"
+    bad:
+      args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_bad_script_label_spoof.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
+      expect_severity: P1
+      expect_contains: "lacks locked label"
+    good:
+      args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
 
   - id: MODULE-DEMO-PRESENTED-VISUAL-HAS-DIFF-RECEIPT
     check: module-demo

@@ -1,0 +1,7 @@
+--- a/orders.py
++++ b/orders.py
+@@ -1,2 +1,5 @@
+ import os
++ORDER_ID = "order 1234567890"
++SHIPPED_DATE_CODE = "2026070712"
++HASH_CHUNK = "1234567890abcdef"

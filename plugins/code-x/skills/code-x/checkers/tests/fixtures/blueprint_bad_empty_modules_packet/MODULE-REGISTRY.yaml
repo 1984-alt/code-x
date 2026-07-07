@@ -1,0 +1,30 @@
+module_registry:
+  frozen_packet_hash: bp-frozen
+  modules:
+  - module_id: home
+    screen_id: home
+    kind: screen
+    title: Home screen
+    requirement_ids:
+    - REQ-001
+    - REQ-002
+    risk_flags:
+    - money
+    dependency_modules: []
+  - module_id: rounding
+    kind: shared_logic
+    title: Shared rounding rule
+    requirement_ids:
+    - REQ-003
+    risk_flags:
+    - money
+    dependency_modules:
+    - home
+  - module_id: detail
+    screen_id: detail
+    kind: screen
+    title: Detail screen
+    requirement_ids: []
+    risk_flags: []
+    dependency_modules:
+    - home

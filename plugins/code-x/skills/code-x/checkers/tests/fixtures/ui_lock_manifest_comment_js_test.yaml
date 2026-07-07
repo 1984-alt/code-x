@@ -1,0 +1,9 @@
+# PBF-PROP-021 hole #11 test manifest: dom_markers ONLY (no controls/shell/vocab) so the
+# fixture isolates the region-marker parse-vs-substring behaviour with nothing else to bite.
+ui_lock_manifest:
+  screen_id: comment_js_test
+  audit_status: PASS
+  ceo_acceptance_ref: MEMORY/CEO-DECISION-LEDGER.md#TEST
+  dom_markers:
+    - id: top_tabs
+    - id: money_summary

@@ -1,0 +1,16 @@
+# BAD: loops_used is YAML-QUOTED ("9") — the roll-up `sum((e.get("loops_used") or 0) for e in
+# data ...)` previously crashed FATAL (exit 2, TypeError: unsupported operand type(s) for +:
+# 'int' and 'str') the moment this truthy string reached the accumulator. PBF-PROP-021 group-2
+# hole #5 (VERIFY F13 crash sibling).
+
+- card_id: BUILD-CRASH
+  stage: BUILDING
+  actor: codex
+  model_family: gpt
+  model_tier: standard
+  review_mode: DELTA
+  files_read: 5
+  files_changed: 3
+  loops_used: "9"
+  result: PASS
+  waste_flags: []

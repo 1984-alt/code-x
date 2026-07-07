@@ -1,0 +1,11 @@
+items:
+  - {layer_id: 5, subitem: https_padlock, applicable: true, disposition: pass}
+  - {layer_id: 8, subitem: https_padlock, applicable: true, disposition: pass}
+  - {layer_id: 10, subitem: static_asset_caching, applicable: true, disposition: pass}
+  - {layer_id: 13, subitem: backups_tested_restore, applicable: true, disposition: pass}
+  - {layer_id: 9, subitem: runaway_retry_backoff, applicable: true, disposition: pass}
+  - {layer_id: 7, subitem: version_control, applicable: true, disposition: pass}
+  - {layer_id: 1, subitem: __layer__, applicable: true, disposition: pass}
+  - {layer_id: 12, subitem: __layer__, applicable: true, disposition: pass}
+  - {layer_id: 13, subitem: uptime_rto_rpo, applicable: true, disposition: pass}
+  - {layer_id: 5, subitem: bogus_subitem, applicable: true, disposition: pass}

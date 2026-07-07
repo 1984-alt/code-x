@@ -1,0 +1,7 @@
+--- a/customers.py
++++ b/customers.py
+@@ -1,2 +1,5 @@
+ import os
++CUSTOMER_PHONE_DOTTED = '0812.3456.7890'
++CUSTOMER_PHONE_PARENS = '(0812) 3456 7890'
++CUSTOMER_PHONE_INTL_PARENS = '+62 (812) 3456-7890'

@@ -121,7 +121,7 @@ wip_continuation:     # OPTIONAL — set ONLY when a session legitimately ends w
   owner_card:         # REQUIRED when marked — the card the WIP belongs to (else P2)
   handoff_ref:        # REQUIRED when marked — the handoff describing the WIP (else P2)
 
-# Kaizen waste visibility — rolled-up proxy, NOT precise provider accounting (see WEEKLY-BURN.md)
+# Kaizen waste visibility — rolled-up proxy, NOT precise provider accounting
 cost_this_week:
   cards_run: 0
   top_model_cards: 0

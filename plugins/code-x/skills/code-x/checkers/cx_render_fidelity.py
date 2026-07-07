@@ -14,8 +14,11 @@
 #                                               a required matrix row with no otherwise-valid evidence
 #   RENDER-FIT-RECEIPT-FORGED            (P0) — non-machine generated_by / screenshot_hash mismatch /
 #                                               render_profile_hash mismatch / unsafe screenshot_path
-#   RENDER-FIT-COVERAGE-INCOMPLETE       (P0) — a required matrix row uncovered, or a ui_card with
-#                                               an empty matrix and no non_user_facing_decision_ref
+#   RENDER-FIT-COVERAGE-INCOMPLETE       (P0) — a required matrix row uncovered, or required_rows
+#                                               itself empty with no non_user_facing_decision_ref
+#                                               (coverage_matrix.ui_card is never an opt-in/opt-out
+#                                               escape hatch on this branch — evidence rows cannot
+#                                               substitute for a declared required_rows contract)
 #   RENDER-FIT-OVERFLOW                  (P1) — horizontal overflow / max_visible_right or
 #                                               content_width past the viewport (the layout defect)
 #   RENDER-FIT-CONTROL-OFFSCREEN         (P1) — a locked primary control not in frame
@@ -391,13 +394,25 @@ def cmd_render_fidelity(args) -> int:
     # 4.3 frozen coverage matrix: every required row must have an otherwise-valid evidence row.
     cm = raw.get("coverage_matrix") if isinstance(raw.get("coverage_matrix"), dict) else {}
     required_rows = cm.get("required_rows") if isinstance(cm.get("required_rows"), list) else []
-    ui_card = cm.get("ui_card") is True or str(cm.get("ui_card", "")).strip().lower() in ("true", "yes")
     non_user_facing = _str(cm, "non_user_facing_decision_ref")
 
-    if ui_card and not required_rows and not non_user_facing:
-        findings.append(("P0", loc, "RENDER-FIT-COVERAGE-INCOMPLETE — coverage_matrix.ui_card is true but "
-            "required_rows is empty and there is no non_user_facing_decision_ref; a card touching "
-            "templates/routes/static UI fails closed unless a typed CEO decision marks it non-user-facing"))
+    if not required_rows and not non_user_facing:
+        # PBF-PROP-021 P1-1 (GPT-5.5 xhigh built-code review, round 2): this branch is now
+        # UNCONDITIONAL on BOTH `ui_card` and `evidence` — round 1 only closed the exact
+        # zero-required/zero-evidence repro (`and not evidence`), so a bundle with ONE THROWAWAY
+        # evidence row (fully "valid" per _evidence_is_valid — fresh, machine-generated, hash-
+        # bound — for a screen nobody asked to cover) + required_rows: [] + ui_card omitted still
+        # dodged the P0, because SOME evidence existed. required_rows is the CONTRACT of what
+        # must be covered; render_evidence rows can only PROVE coverage of a required row, they
+        # can never DEFINE what was required — however many "valid" rows exist, they do not
+        # substitute for a declared required_rows list. coverage_matrix.ui_card (true, false, or
+        # omitted) is likewise never an opt-in/opt-out toggle on this branch; the only waiver is
+        # a typed non_user_facing_decision_ref.
+        findings.append(("P0", loc, "RENDER-FIT-COVERAGE-INCOMPLETE — required_rows is empty and there is "
+            "no non_user_facing_decision_ref; required_rows is the CONTRACT of what coverage is required — "
+            "render_evidence rows (however many, however individually 'valid') can only prove coverage of "
+            "required rows, they can never DEFINE what was required, and coverage_matrix.ui_card is never "
+            "an opt-in/opt-out escape hatch either way (true, false, or omitted)"))
 
     for row in required_rows:
         if not isinstance(row, dict):

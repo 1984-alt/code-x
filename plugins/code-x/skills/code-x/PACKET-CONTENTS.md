@@ -153,6 +153,23 @@ items, queue entries) points to a row id — **`cx check deck` verifies every re
 to a ledger row (BUILT, P1)**. Protocol-level decisions have their own ledger:
 `MEMORY/CEO-DECISION-LEDGER.md`.
 
+**New-project setup ask — risk_tier (PBF-PROP-022-C, explicit choice, never a silent
+default).** At new-project setup the AI MUST put ONE question to the CEO explicitly and
+record his answer as a CEO-DECISION-LEDGER row, exactly like every other packet-floor ask:
+*"What risk tier is this project — LITE, STANDARD, or STRICT?"* Recommendation to state
+plainly: **LITE for a non-money / non-auth project** (cuts the ceremony a low-stakes tool
+never needed); a **money or auth project → STRICT** (and the mechanical card-level force
+already makes any money/auth/secrets/PII/destructive card run the full ceremony regardless
+of the declared tier — EVAL-052/053, so the tier can never dial safety BELOW the floor).
+The chosen tier is written as the top-level `risk_tier` scalar in
+`requirements-manifest.yaml`; a LITE/STANDARD choice also carries a `risk_tier_decision_ref`
+pointing at the ledger row (`cx check packet` requires it — PACKET-RISK-TIER-WELL-FORMED).
+**The tier is a CEO decision, never the AI's silent default.** If the packet declares NO
+`risk_tier`, the fail-closed resolver runs the project under STRICT (safe by design) and
+`cx check packet` prints a **non-blocking** `PACKET-RISK-TIER-UNDECLARED` WARN nudge — it
+does NOT block the freeze (the STRICT default already protects); it only reminds setup that
+the explicit choice is owed to the CEO.
+
 ## Piece 4 — Production-readiness triggers (R1–R6 + S1–S4)
 
 Ported intact from v0.13 (CEO-approved 2026-06-02, freemium tool stack included).

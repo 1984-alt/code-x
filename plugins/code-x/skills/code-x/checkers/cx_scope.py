@@ -119,6 +119,19 @@ def _parse_touched_files(path: str) -> list[str] | None:
             f = m.group(1).strip()
             if f and f != "/dev/null":
                 files.add(f)
+            continue
+        # git rename/copy headers: 'rename from <path>' / 'rename to <path>' (also 'copy
+        # from'/'copy to'). A pure rename/copy (similarity 100%, no content hunk) emits ONLY
+        # these header lines — no +++/--- pair — so a forbidden file that was MOVED (not
+        # edited) was previously invisible to this parser even in a diff that also carries a
+        # real +++/--- hunk elsewhere. Both the old and new path are recorded: the old path
+        # lets forbidden_files catch a forbidden file renamed away; the new path lets
+        # allowed_files catch it landing somewhere out of scope.
+        m2 = re.match(r'^(?:rename|copy) (?:from|to) (.+)$', line)
+        if m2:
+            f = m2.group(1).strip()
+            if f:
+                files.add(f)
     if files:
         return sorted(files)
 

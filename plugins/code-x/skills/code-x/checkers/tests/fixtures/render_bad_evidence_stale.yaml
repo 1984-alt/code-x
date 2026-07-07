@@ -24,6 +24,10 @@ render_profile:
 coverage_matrix:
   ui_card: false
   required_rows: []
+  # PBF-PROP-021 P1-1 round 2: required_rows is now unconditionally required (or a typed
+  # waiver) — this isolation fixture is non-UI on purpose, so it declares the waiver
+  # instead of relying on 'some evidence exists' to dodge RENDER-FIT-COVERAGE-INCOMPLETE.
+  non_user_facing_decision_ref: CEO-D-FIXTURE-NON-UI
 
 render_evidence:
   - card_id: BUILD-RF-001

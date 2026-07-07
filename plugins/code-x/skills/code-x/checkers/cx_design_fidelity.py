@@ -16,7 +16,7 @@
 # Marker manifest + DOM = the deterministic gate; the screenshot is supporting
 # evidence (viewport / visible shell / no blank page) — pixel-AI is never the
 # primary gate. Missing screenshot = P1 (no visual support proof).
-import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 from cx_common import findings_report, load_yaml
@@ -24,24 +24,127 @@ from cx_module_acceptance import _sha12
 
 SCREENSHOT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
+# HTML void elements (no end tag, per WHATWG) — mirrors cx_blueprint_page._VOID_ELEMENTS:
+# closed immediately on the open tag so an unclosed stack entry never leaks trailing markup
+# into an unrelated element's descendant text.
+_VOID_ELEMENTS = frozenset({
+    "br", "img", "input", "hr", "meta", "link", "area", "base", "col", "embed", "source", "track", "wbr",
+})
 
-def _marker_in_dom(dom: str, marker_id: str) -> bool:
-    """A region/marker id counts as present via any of the stable attribute forms."""
-    return any(f'{attr}="{marker_id}"' in dom
-               for attr in ("id", "data-cx", "data-region"))
+# PBF-PROP-021 P2-2 (GPT-5.5 xhigh built-code review): elements whose text is never RENDERED
+# content — a browser never shows script/style/template bodies as visible text. hole #11
+# (round 1) already closed the region-MARKER spoof (an id inside a <script> string is text data,
+# never a parsed attribute, so _marker_in_dom never sees it). The residual gap was the control
+# LABEL check, which matches against el["text"] — and the OLD handle_data below fed a <script>'s
+# CDATA text to every currently-open ANCESTOR's text too, so `<button ...><script>var s="Add
+# expense"</script></button>` let the script string satisfy the button's locked label. Text
+# inside one of these tags must not reach ANY ancestor's text — not just its own.
+_NON_VISIBLE_TEXT_TAGS = frozenset({"script", "style", "template"})
 
 
-def _selector_in_dom(dom: str, selector: str) -> bool:
-    """Deterministic subset of CSS selector presence: #id, .class, [attr="v"],
-    or a literal substring for anything else."""
+class _DomIndex(HTMLParser):
+    """Parses the live DOM snapshot into real elements (tag + attrs + full descendant text),
+    using stdlib html.parser only (no new dependency — mirrors cx_blueprint_page._MarkerParser).
+    Every marker/selector/control check below matches against this PARSED element list, never a
+    raw substring over the HTML source: a marker id sitting inside an HTML comment
+    (handle_comment is a no-op here — the content is dropped, not indexed) or inside a <script>
+    string literal (script/style bodies are stdlib CDATA text delivered to handle_data, never
+    parsed into tags/attributes) is NOT a live DOM element and must not satisfy the gate
+    (PBF-PROP-021 hole #11 — the substring/naive-regex false-PASS). Text inside script/style/
+    template is likewise excluded from every ancestor's accumulated text, so it cannot spoof a
+    required control LABEL either (PBF-PROP-021 P2-2)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.elements: list[dict] = []   # each: {"tag": str, "attrs": {lower_name: value}, "text": [str, ...]}
+        self._stack: list[dict] = []      # currently open elements, innermost last
+
+    def _open(self, tag, attrs):
+        ad = {}
+        for k, v in attrs:
+            if k is None:
+                continue
+            ad[k.lower()] = v if v is not None else ""
+        el = {"tag": tag.lower(), "attrs": ad, "text": []}
+        self.elements.append(el)
+        self._stack.append(el)
+        return el
+
+    def handle_starttag(self, tag, attrs):
+        self._open(tag, attrs)
+        if tag.lower() in _VOID_ELEMENTS:
+            self._close()
+
+    def handle_startendtag(self, tag, attrs):
+        self._open(tag, attrs)
+        self._close()
+
+    def _close(self):
+        if self._stack:
+            self._stack.pop()
+
+    def handle_endtag(self, tag):
+        self._close()
+
+    def handle_data(self, data):
+        # every currently-open ancestor accumulates the text (full descendant textContent,
+        # matching how a browser reads it — a nested <span> inside a control still counts) —
+        # UNLESS the innermost open element is script/style/template, whose body is never
+        # rendered text and must not reach ANY ancestor (PBF-PROP-021 P2-2).
+        if self._stack and self._stack[-1]["tag"] in _NON_VISIBLE_TEXT_TAGS:
+            return
+        for el in self._stack:
+            el["text"].append(data)
+
+
+def parse_dom(dom_text: str) -> list[dict]:
+    """Parse a DOM snapshot into its element list. html.parser is lenient (never raises on
+    malformed markup); a belt-and-suspenders try/except keeps this fail-closed-safe like the
+    blueprint-page parser — on a genuine parse exception, the caller sees an EMPTY element list
+    (every marker/selector/control then correctly reads as missing, never as present)."""
+    idx = _DomIndex()
+    try:
+        idx.feed(dom_text)
+        idx.close()
+    except Exception:
+        return []
+    return idx.elements
+
+
+def _marker_in_dom(elements: list[dict], marker_id: str) -> bool:
+    """A region/marker id counts as present only on a REAL parsed element via any of the
+    stable attribute forms — never a raw substring over the HTML text."""
+    return any(el["attrs"].get(attr) == marker_id
+               for el in elements for attr in ("id", "data-cx", "data-region"))
+
+
+def _selector_in_dom(elements: list[dict], selector: str) -> bool:
+    """Deterministic subset of CSS selector presence, matched against PARSED elements:
+    #id, .class, [attr="v"] / [attr] (presence-only), or an attribute-name fallback for
+    anything else unsupported — never a raw substring over the HTML source."""
     sel = selector.strip()
     if sel.startswith("#"):
-        return f'id="{sel[1:]}"' in dom
+        target = sel[1:]
+        return any(el["attrs"].get("id") == target for el in elements)
     if sel.startswith(".") and " " not in sel:
-        return re.search(r'class="[^"]*\b' + re.escape(sel[1:]) + r'\b[^"]*"', dom) is not None
+        cls = sel[1:]
+        return any(cls in (el["attrs"].get("class") or "").split() for el in elements)
     if sel.startswith("[") and sel.endswith("]"):
-        return sel[1:-1].replace("'", '"') in dom
-    return sel in dom
+        inner = sel[1:-1].replace("'", '"')
+        if "=" in inner:
+            k, v = inner.split("=", 1)
+            return any(el["attrs"].get(k.strip().lower()) == v.strip().strip('"') for el in elements)
+        return any(inner.strip().lower() in el["attrs"] for el in elements)
+    # any other selector shape is not a supported deterministic form — fail closed (absent),
+    # never a substring guess over raw markup.
+    return False
+
+
+def _find_by_attr(elements: list[dict], attr: str, value: str) -> dict | None:
+    for el in elements:
+        if el["attrs"].get(attr) == value:
+            return el
+    return None
 
 
 def cmd_design_fidelity(args) -> int:
@@ -155,17 +258,18 @@ def cmd_design_fidelity(args) -> int:
             "nothing deterministic to compare; re-author the manifest at the locked reference"))
 
     try:
-        dom = Path(dom_path).read_text(encoding="utf-8", errors="replace")
+        dom_text = Path(dom_path).read_text(encoding="utf-8", errors="replace")
     except OSError as e:
         print(f"FIX-FIRST\n  [P0] {dom_path} — DOM snapshot unreadable: {e}")
         return 1
+    elements = parse_dom(dom_text)
 
     def _sev(marker: str) -> str:
         return "P1" if marker in forbidden_missing else "P2"
 
     for region in regions:
         rid = str(region.get("id", ""))
-        if rid and not _marker_in_dom(dom, rid):
+        if rid and not _marker_in_dom(elements, rid):
             findings.append((_sev(rid), loc,
                 f"required region '{rid}' missing from live DOM — the CEO-accepted shell "
                 "drifted (G3 fixture-purge semantics: replace data, preserve shell)"))
@@ -174,39 +278,39 @@ def cmd_design_fidelity(args) -> int:
         fn = str(control.get("data_fn", ""))
         if not fn:
             continue
-        idx = dom.find(f'data-fn="{fn}"')
-        if idx == -1:
+        el = _find_by_attr(elements, "data-fn", fn)
+        if el is None:
             findings.append((_sev(fn), loc,
                 f"required control data-fn=\"{fn}\" missing from live DOM — approved "
                 "controls must survive the engine wave"))
             continue
         # Marker-stuffing guard (GPT cross-review): the marker must sit on a real,
         # visible control with the locked role + label — a hidden stub on a generic
-        # template must not read green.
-        tag_start = dom.rfind("<", 0, idx)
-        tag_end = dom.find(">", idx)
-        tag = dom[tag_start:tag_end + 1] if tag_start != -1 and tag_end != -1 else ""
-        if re.search(r"\shidden[\s>=]", tag) or "display:none" in tag.replace(" ", ""):
+        # template must not read green. Matched against the PARSED element's own
+        # attrs/text — a marker inside a comment/JS string is not a real element and
+        # never reaches this point (PBF-PROP-021 hole #11).
+        attrs = el["attrs"]
+        style = (attrs.get("style") or "").replace(" ", "")
+        if "hidden" in attrs or "display:none" in style:
             findings.append((_sev(fn), loc,
                 f"control data-fn=\"{fn}\" is a hidden stub — marker present but the "
                 "control is not visible"))
         role = str(control.get("role", "") or "")
-        if role and f'role="{role}"' not in tag:
+        if role and attrs.get("role") != role:
             findings.append((_sev(fn), loc,
                 f"control data-fn=\"{fn}\" lacks locked role \"{role}\" in its element"))
         label = str(control.get("label", "") or "")
         if label:
-            text_end = dom.find("<", tag_end + 1) if tag_end != -1 else -1
-            inner = dom[tag_end + 1:text_end] if tag_end != -1 and text_end != -1 else ""
-            if (label not in inner and f'aria-label="{label}"' not in tag
-                    and f'value="{label}"' not in tag):
+            inner = "".join(el["text"])
+            if (label not in inner and attrs.get("aria-label") != label
+                    and attrs.get("value") != label):
                 findings.append((_sev(fn), loc,
                     f"control data-fn=\"{fn}\" lacks locked label \"{label}\" "
                     "(element text, aria-label, or value)"))
 
     for entry in shell:
         sel = str(entry.get("selector", ""))
-        if sel and not _selector_in_dom(dom, sel):
+        if sel and not _selector_in_dom(elements, sel):
             findings.append((_sev(sel), loc,
                 f"required shell selector '{sel}' missing from live DOM"))
 

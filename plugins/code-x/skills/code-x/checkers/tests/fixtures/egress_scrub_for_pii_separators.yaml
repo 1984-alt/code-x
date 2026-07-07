@@ -1,0 +1,12 @@
+# BAD — PBF-PROP-021 P1-3 (GPT-5.5 xhigh built-code review): scrub receipt is bound to the
+# separator-format PII diff (hash matches) + claims clean, but the three verified-slipping
+# formats (dotted, parenthesized, +62-with-parens) remain in the diff — the receipt is
+# contradicted (EGRESS-SCRUB-CONTRADICTED). Pre-fix, none of these three formats tripped
+# _ID_PHONE_RE, so this exact receipt would have PASSED clean; post-fix (normalize-then-match)
+# all three are caught.
+egress_scrub:
+  target: coderabbit
+  diff_hash: "6a55433e0e6a"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 1
+  produced_at: "2026-07-07T09:00:00Z"

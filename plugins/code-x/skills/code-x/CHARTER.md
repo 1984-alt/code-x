@@ -115,7 +115,7 @@ MEMORY  (lightweight files — never auto-mutating)
 
 **The Kaizen engine — continuous improvement of the *protocol itself* (not just tokens)**
 Kaizen is the soul of V1's self-improvement: one loop that makes the pipeline learn from every mistake and get leaner over time. **Three sensors** feed it:
-- **Waste sensor — the cost log → the WASTE ALARM.** Each card logs to `WORK-ORDER-COST-LOG` its model tier, review mode, files read/changed, loops, and **waste_flags** (over_read / wrong_model_tier / repeated_review / loop / unclear_card / missing_evidence). It is a *waste* alarm, not a *cost* meter — the action is *find the largest waste source → remove it → standardize the fix*, never "spend less" generically. (A live provider-limit meter is impossible → glanceable `WEEKLY-BURN.md` = manual provider status + Code-X proxy counts.) *(GPT reply-3 #6 + Opus #1 / CEO Toyota reframe.)*
+- **Waste sensor — the cost log → the WASTE ALARM.** Each card logs to `WORK-ORDER-COST-LOG` its model tier, review mode, files read/changed, loops, and **waste_flags** (over_read / wrong_model_tier / repeated_review / loop / unclear_card / missing_evidence). It is a *waste* alarm, not a *cost* meter — the action is *find the largest waste source → remove it → standardize the fix*, never "spend less" generically. *(GPT reply-3 #6 + Opus #1 / CEO Toyota reframe.)* *(WEEKLY-BURN.md retired PBF-PROP-022-A — zero consumer; the WORK-ORDER-COST-LOG check (`cx check cost`) is the live waste sensor.)*
 - **Mistake sensor — lessons + incidents.** Every pipeline/protocol failure becomes a `MEMORY/LESSONS` entry (seeded day-one from v0.13's scars). Lightweight files; only the Card Compiler pulls the relevant ones into a card.
 - **Verification sensor — evals (mistake-proofing / poka-yoke).** Tiny protocol self-tests that prove the protocol still enforces its rules and that a fixed failure-class cannot recur. Start small (5 seeded, 9 at V1 lock); the set grows SLOWLY (one eval per *new* failure-class, not per lesson), each tiny, run rarely (protocol change / V1 creation / before a first build / before calling V1 stable) — never per module. The anti-bloat ceiling applies to evals too: if they grow heavy, consolidate. See `EVALS.md`.
 - **The loop:** sensor signal → lesson → proposed protocol change (+ a new eval if it's a new failure-class) → cross-family review → **CEO approval** → active rule + a leaner protocol. **Never auto-mutating** — the CEO approves every protocol change.
@@ -148,7 +148,6 @@ first_proof_project: CEO_DEFERRED   # CEO sets after V1 lock (Sample | live-prod
 | `templates/WORK-ORDER.template.yaml` | the one-card-at-a-time work order | ✅ written |
 | `templates/MODULE-CAPSULE.template.yaml` | post-approval module summary | ✅ written |
 | `templates/FINAL-READY-CERTIFICATE.template.yaml` | ship certificate (auto-assembled) | ✅ written |
-| `templates/WEEKLY-BURN.template.md` | Kaizen cost log | ✅ written |
 | `GATES.md` | card-compilation gate, security tripwire, capsule anti-staleness, review modes, one-and-done loop, Mode A | ✅ written |
 | `SEVERITY.md` | P0–P3 ladder + final-ready rule | ✅ written |
 | `ROUTING.md` | model routing + per-family "personality notes" | ✅ written |
@@ -160,7 +159,6 @@ first_proof_project: CEO_DEFERRED   # CEO sets after V1 lock (Sample | live-prod
 | `templates/BUSINESS-LOGIC-VALIDATION.template.md` | CEO signs money/business rules by worked example (ported v0.13) | ✅ written |
 | `templates/CEO-PROVISIONING-MANIFEST.template.yaml` | external accounts/secrets/human setup closed before build (ported v0.13) | ✅ written |
 | `templates/STOP-ACTION-CARD.template.yaml` | the typed STOP output (handoff/decision/safety/escalation) | ✅ written |
-| `templates/DEAD-ENDS-LEDGER.template.md` | what was tried & failed, carried across handoffs (ported v0.13) | ✅ written |
 | `templates/BUILDER-QUESTIONS-LOG.template.md` | builder's open questions → CEO/planner answers (ported v0.13) | ✅ written |
 | `templates/EVIDENCE-INDEX.template.md` | light index of evidence paths per card/module | ✅ written |
 | `templates/GOLDEN-SKELETON-CERTIFICATE.template.yaml` | the starter-kit certificate Charter §4 requires | ✅ written |

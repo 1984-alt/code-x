@@ -1,6 +1,7 @@
 # Code-X V1 — GATES
 
 > Load-on-demand (NOT read every session). The kernel points here when a gate fires. Read only the gate you're at. Each gate = a rule + how it's mechanically checked.
+> **Before proposing a NEW hardening round on any gate below:** check the hardening moratorium in `KAIZEN.md` — a gate with zero in-anger fires stays frozen as-is until it fires for real or earns a pinned eval (PBF-PROP-022-E, 2026-07-07).
 
 ## G1 · Card Compilation Gate — the most important safety gate
 Because a builder reads only ONE card, the card must be correct or the whole small-context system is unsafe (a bad card is more dangerous than a long packet — it looks clean while silently omitting an invariant).

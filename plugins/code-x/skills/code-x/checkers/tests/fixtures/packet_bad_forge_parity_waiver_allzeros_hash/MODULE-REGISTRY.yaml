@@ -1,0 +1,10 @@
+# PBF-PROP-021 P1-2 round 2: a VALIDLY-SHAPED 64-char hex (all zeros) — a real sha256 shape —
+# still must NOT waive the forge-parity marker requirement. The old shape-check leg treated
+# this as proof; it is self-authored inside the very packet claiming the waiver, so it proves
+# nothing. The registry-hash leg is now removed entirely (cx_packet.py _legacy_migration_proven).
+module_registry:
+  frozen_packet_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+  modules:
+    - module_id: m1
+      kind: shared_logic
+      requirement_ids: [REQ-001]

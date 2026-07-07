@@ -73,7 +73,7 @@ dependencies:
     plugin_id: "code-x@code-x"
     plugin_name: "code-x"
     pin_policy: "same-release-as-self"
-    release_tag: "v1.22.5"
+    release_tag: "v1.22.6"
     # install.sh verifies two things: (1) `claude plugin marketplace add
     # https://github.com/1984-alt/code-x.git#v1.22.4` clones this exact tag —
     # never the default branch; (2) the cloned marketplace.json's own

@@ -38,11 +38,11 @@ to constituent checks is no longer an allowed substitute.*
 
 Read the frozen packet slice your card names, this standard, then check the target codebase
 for existing style, boundaries, helpers, tests, and naming conventions. On a self-heal
-continuation or builder handover, also read the wave's DEAD-ENDS-LEDGER first — never repeat
-a proven-failed approach; append each attempt's result so the ledger travels with the next
-handover. If you cannot tell how to implement the card without guessing, write the question
-or blocker and STOP — never invent product, data, UX, security, privacy, money, legal,
-release, or architecture decisions.
+continuation or builder handover, check the handoff for any proven-failed approaches already
+noted there — never repeat one. If you cannot tell how to implement the card without guessing,
+write the question or blocker and STOP — never invent product, data, UX, security, privacy,
+money, legal, release, or architecture decisions.
+*(DEAD-ENDS-LEDGER retired PBF-PROP-022-A — zero consumer; the handoff doc is the surviving carrier for this note.)*
 
 **Touching an approved screen? The extracted inventory is your must-keep list (PBF-PROP-018).**
 Before you delete, re-parent, or rewrite any file, check whether it belongs to a CEO-accepted

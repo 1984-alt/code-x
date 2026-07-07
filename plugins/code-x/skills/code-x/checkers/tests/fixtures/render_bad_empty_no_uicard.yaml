@@ -1,0 +1,28 @@
+# RENDER-FIT-COVERAGE-INCOMPLETE (P0) — PBF-PROP-021 hole #10: coverage_matrix.ui_card is
+# omitted (falsy) — the OLD code gated the empty-coverage P0 on ui_card being self-declared
+# true, so this exact shape (valid pinned profile, zero required_rows, zero render_evidence,
+# no non_user_facing_decision_ref) passed clean, "certifying" that nothing was rendered.
+# Run with: --repo-head aaaaaaaaaaaa.
+current_repo_head: aaaaaaaaaaaa
+
+render_profile:
+  chromium_revision: "1234.5"
+  device_pixel_ratio: 2
+  viewport: "390x844"
+  viewports:
+    - viewport_id: phone
+      width: 390
+  color_schemes: [light, dark]
+  reduced_motion: true
+  locale: en-US
+  timezone: UTC
+  fonts: bundled
+  animations: disabled
+  network: blocked
+  fixture: DESIGN_FIXTURE
+  profile_hash: c7c416dfa9b0
+
+coverage_matrix:
+  required_rows: []
+
+render_evidence: []

@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.6]
+
+Syncs the public release up to protocol **v1.22.6** — an audit fold (patch class). 588 self-tests, 487 gate clauses, 33 `cx check` subcommands.
+
+### Added
+- **Audit hole-closing (PBF-PROP-021).** A read-only audit of the checker itself confirmed 13 reachable "false-PASS" holes — inputs that SHOULD fail a fail-closed gate but returned exit 0 — and closed every one fixture-first (the failing input is pinned as a permanent regression test before the fix lands). On top of that, 11 blocking clauses that had never been *proven* to bite got their own pinned bad fixtures. Highlights: the `--legacy-migration` self-authored registry-hash waiver leg is removed entirely (a packet cannot author proof of its own freezing — only a `--migration-ref` resolving to a real protocol-ledger row waives); the egress PII tripwire is widened from a blanket 12+-digit rule to structured phone-number and 10-digit bank-account detection (separator-normalized, context-gated, with negative controls so benign order ids / dates / hashes stay quiet); kaizen status/fence parsing hardened against case-drift and exotic-tag dodges. EVAL-056 registered.
+- **Gate-ROI ceremony slim (PBF-PROP-022).** Honest keeps and drops: two zero-consumer ledger templates (dead-ends, weekly-burn) are cut while the cost log stays live; `EVALS.md` is slimmed to a 1-line-per-eval index (no checker ever parsed its prose — the enforcement lives in the contract clauses, which are untouched); a new non-blocking advisory (`PACKET-RISK-TIER-UNDECLARED`) nudges new projects to put the risk-tier choice to the project owner explicitly instead of silently riding the fail-closed STRICT default — advisory only, it never blocks a freeze.
+- **Installer re-stamped to v1.22.6** via `installer/restamp-release.sh`.
+
+---
+
 ## [1.22.5]
 
 Syncs the public release up to protocol **v1.22.5** — a bundle of 5 folds (patch class, no version-scheme change). 566 self-tests, 456 gate clauses, 33 `cx check` subcommands.

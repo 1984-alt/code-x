@@ -1,0 +1,5 @@
+id: BUILD-001
+source_map:
+  locked_packet_hash: 3ad9aaebb472700048e978e034433eaf8738e1ba03fa4b7c032cfadd337d9caa
+  source_sections:
+    - requirement_ids: [REQ-001]

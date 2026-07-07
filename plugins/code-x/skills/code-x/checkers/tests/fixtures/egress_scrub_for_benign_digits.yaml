@@ -1,0 +1,10 @@
+# GOOD — negative-control proof: the diff carries only benign long digit runs (a dotted
+# version string, a hex build hash, an ISO timestamp, a 13-digit epoch-millis value) — none of
+# them are Indonesian-phone- or 10-digit-account-shaped, so the tripwire stays QUIET and this
+# scrub receipt is NOT contradicted (PBF-PROP-021 hole #12 negative control).
+egress_scrub:
+  target: coderabbit
+  diff_hash: "88a806de1940"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 1
+  produced_at: "2026-07-07T09:00:00Z"

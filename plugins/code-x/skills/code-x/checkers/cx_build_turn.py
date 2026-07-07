@@ -11,7 +11,8 @@
 # card/state — it never decides tests, routes actors, calls model review, creates
 # evidence, or edits source. A missing project test command = FAIL "card incomplete",
 # never a guess. Without --diff, the touched-file list is derived deterministically
-# from `git diff --name-only HEAD` + untracked files under --repo-root.
+# from `git diff --name-status --find-renames HEAD` (both old+new path on a rename) +
+# untracked files under --repo-root.
 import glob as globmod
 import shlex
 import subprocess
@@ -50,14 +51,36 @@ def _sub(label: str, rc: int, out: str, findings: list) -> None:
 
 
 def _derived_file_list(repo_root: str) -> tuple[list[str] | None, str]:
-    """Deterministic touched-file list: tracked changes vs HEAD + untracked files."""
+    """Deterministic touched-file list: tracked changes vs HEAD + untracked files.
+
+    Uses `--name-status --find-renames` (not `--name-only`) so a renamed file surfaces
+    under BOTH its old and new path — `--name-only` reports only the new name, so a pure
+    rename of a forbidden file (no content hunk) would otherwise vanish from this
+    rail-derived list and never reach the scope check's forbidden_files match at all
+    (PBF-PROP-021 group-1: scope rename-blindness)."""
     files = []
-    for cmd in (["git", "-C", repo_root, "diff", "--name-only", "HEAD"],
-                ["git", "-C", repo_root, "ls-files", "--others", "--exclude-standard"]):
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            return None, result.stderr.strip()
-        files.extend(line for line in result.stdout.splitlines() if line.strip())
+    result = subprocess.run(
+        ["git", "-C", repo_root, "diff", "--name-status", "--find-renames", "HEAD"],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        return None, result.stderr.strip()
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        status = parts[0]
+        if status.startswith(("R", "C")) and len(parts) >= 3:
+            files.append(parts[1])   # old path (renamed/copied FROM)
+            files.append(parts[2])   # new path (renamed/copied TO)
+        elif len(parts) >= 2:
+            files.append(parts[1])
+
+    result2 = subprocess.run(
+        ["git", "-C", repo_root, "ls-files", "--others", "--exclude-standard"],
+        capture_output=True, text=True)
+    if result2.returncode != 0:
+        return None, result2.stderr.strip()
+    files.extend(line for line in result2.stdout.splitlines() if line.strip())
     return files, ""
 
 

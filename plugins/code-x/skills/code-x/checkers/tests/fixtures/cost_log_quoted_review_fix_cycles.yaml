@@ -1,0 +1,16 @@
+# BAD: review_fix_cycles is YAML-QUOTED ("4") — a real one-and-done violation (>1) that
+# previously bypassed the isinstance(rfc, int) gate SILENTLY (str fails isinstance, no finding
+# at all). PBF-PROP-021 group-2 hole #4.
+
+- card_id: BUILD-QUOTED
+  stage: BUILDING
+  actor: codex
+  model_family: gpt
+  model_tier: standard
+  review_mode: DELTA
+  files_read: 5
+  files_changed: 3
+  loops_used: 2
+  result: PASS
+  waste_flags: []
+  review_fix_cycles: "4"

@@ -1,0 +1,12 @@
+# GOOD — negative-control proof: PBF-PROP-021 P2-1 (GPT-5.5 xhigh built-code review). The diff
+# carries three benign 10-digit-shaped strings (an order id, a datelike code, a numeric-leading
+# hex/alnum chunk) with NO account/bank context nearby — none of them trip the bank-account tripwire, so
+# this scrub receipt is NOT contradicted. Pre-fix, the bare (?<!\d)\d{10}(?!\d) shape would have
+# false-tripped the order id and the datelike code (the hash-leading chunk was already excluded
+# by the digit-boundary, but the other two were dead-tripwire false positives).
+egress_scrub:
+  target: coderabbit
+  diff_hash: "e0e60a96cd34"
+  scrub_command: "scripts/scrub-egress.sh"
+  positive_control_exit: 1
+  produced_at: "2026-07-07T09:00:00Z"

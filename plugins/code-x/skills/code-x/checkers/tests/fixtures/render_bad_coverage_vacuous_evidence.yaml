@@ -1,0 +1,55 @@
+# RENDER-FIT-COVERAGE-INCOMPLETE (P0) — PBF-PROP-021 P1-1 (GPT-5.5 xhigh built-code review,
+# round 2): a single THROWAWAY evidence row — fully "valid" per _evidence_is_valid (fresh,
+# machine-generated, hash-bound, profile-pinned; it would legitimately COVER a required row IF
+# one existed) — is not a substitute for a declared required_rows contract. Round 1 only closed
+# the exact zero-required/zero-evidence repro (render_bad_empty_no_uicard.yaml); this bundle has
+# ui_card omitted, required_rows: [], but ONE otherwise-valid evidence row for a screen nobody
+# asked to cover — the old code's `and not evidence` clause let this dodge the P0 by having SOME
+# evidence, however irrelevant. required_rows is the CONTRACT; evidence proves rows, it never
+# defines them. Run with: --repo-head aaaaaaaaaaaa.
+current_repo_head: aaaaaaaaaaaa
+
+render_profile:
+  chromium_revision: "1234.5"
+  device_pixel_ratio: 2
+  viewport: "390x844"
+  viewports:
+    - viewport_id: phone
+      width: 390
+  color_schemes: [light, dark]
+  reduced_motion: true
+  locale: en-US
+  timezone: UTC
+  fonts: bundled
+  animations: disabled
+  network: blocked
+  fixture: DESIGN_FIXTURE
+  profile_hash: c7c416dfa9b0
+
+coverage_matrix:
+  required_rows: []
+
+render_evidence:
+  - card_id: BUILD-RF-THROWAWAY
+    screen_id: unrelated_screen
+    viewport_id: phone
+    theme: light
+    content_state: populated
+    route: /unrelated
+    repo_head: aaaaaaaaaaaa
+    state_sha12: state00aabbcc
+    locked_packet_hash: pkt00112233aa
+    render_profile_hash: c7c416dfa9b0
+    tool_version: "cx-render/1.0.0"
+    command: "cx render collect --screen unrelated_screen"
+    generated_by: cx render collect
+    screenshot_path: render_shot.txt
+    screenshot_hash: 3e4f45cb0a7d
+    measured_metrics:
+      viewport_width: 390
+      content_width: 390
+      has_horizontal_overflow: false
+      max_visible_right: 389.4
+      nonblank: true
+      app_ready: true
+    produced_at: "2026-06-22T09:00:00Z"

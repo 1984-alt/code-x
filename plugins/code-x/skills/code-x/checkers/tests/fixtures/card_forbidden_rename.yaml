@@ -1,0 +1,17 @@
+# Fixture for PBF-PROP-021 group-1 hole #1 (scope rename-blindness).
+# When used with diff_bad_forbidden_rename.txt (a mixed diff: pure rename of the
+# forbidden config/prod.env + a real edit to the allowed src/app.py), scope must FAIL —
+# the rename moves a forbidden file, it does not exempt it from forbidden_files.
+
+id: BUILD-RENAME-001
+mode: MODULE_BUILD
+allowed_files: [src/app.py]
+forbidden_files: [config/prod.env]
+security_tripwire:
+  touches_auth: no
+  touches_secrets: no
+  touches_money_or_balances: no
+  touches_bank_or_pii: no
+  touches_upload_restore_import: no
+  touches_network_or_public_surface: no
+  touches_logs_or_error_output: no

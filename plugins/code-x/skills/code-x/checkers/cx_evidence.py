@@ -4,7 +4,7 @@
 import re
 from pathlib import Path
 
-from cx_common import findings_report, load_yaml, scan_faked_pass
+from cx_common import findings_report, load_yaml, scan_faked_pass, safe_repo_ref
 from cx_scope import _parse_touched_files, _file_matches
 
 # B-PROP-004: claim types whose green run REQUIRES a demonstrated red run
@@ -222,15 +222,23 @@ def cmd_evidence(args) -> int:
 
     # Check each evidence path exists and is non-empty
     for ev_path in ev_required:
-        p = Path(str(ev_path))
-        if not p.is_absolute():
-            card_relative = card_dir / p
-            repo_relative = (repo_root / p) if repo_root is not None else None
-            if card_relative.exists() or repo_relative is None:
-                p = card_relative
-            else:
-                p = repo_relative
-        p = p.resolve()
+        raw = str(ev_path)
+        # PBF-PROP-021 group-1 hole #3: evidence_required had NO path-safety at all — an
+        # absolute path (or a symlink to one) satisfied the gate verbatim, then the
+        # faked-pass scan read the external file clean. Route every ref through the SHARED
+        # cx_common.safe_repo_ref guard (same class as build-turn's every other ref read),
+        # tried against card_dir first then repo_root — mirrors the original fallback order,
+        # now with each candidate re-validated for absolute/'..'/symlink-escape.
+        card_relative = card_dir / raw
+        repo_relative = (repo_root / raw) if repo_root is not None else None
+        if card_relative.exists() or repo_relative is None:
+            chosen_root = card_dir
+        else:
+            chosen_root = repo_root
+        p, safe_err = safe_repo_ref(raw, chosen_root)
+        if safe_err:
+            findings.append(("P0", loc, f"evidence_required path '{raw}' {safe_err}"))
+            continue
         if not p.exists():
             findings.append(("P0", loc, f"evidence_required path missing: {ev_path}"))
         elif p.is_file() and p.stat().st_size == 0:
@@ -239,11 +247,19 @@ def cmd_evidence(args) -> int:
             # Scan for faked-pass patterns
             try:
                 content = p.read_text(encoding="utf-8", errors="replace")
+            except Exception as e:
+                # PBF-PROP-021 group-1 hole #4: an unreadable evidence file (e.g. chmod 000)
+                # previously swallowed the read error and skipped the honesty scan with NO
+                # finding — a faked-pass file made unreadable defeated the anti-cheat scan
+                # entirely. Fail closed: an evidence file the checker cannot read is itself
+                # a finding, never a silent skip.
+                findings.append(("P0", loc,
+                    f"evidence_required path '{ev_path}' could not be read ({e}) — an unreadable "
+                    "evidence file fails closed, it must not silently skip the faked-pass honesty scan"))
+            else:
                 hits = scan_faked_pass(content)
                 for h in hits:
                     findings.append(("P0", loc, f"faked-pass pattern in {ev_path}: {h}"))
-            except Exception:
-                pass
 
     # B-PROP-004: proof-card honesty — typed evidence_claims re-read against their logs
     _check_evidence_claims(card, card_dir, loc, findings)

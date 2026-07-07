@@ -7,7 +7,7 @@
 ## Toyota → Code-X mapping
 | Toyota | Code-X equivalent |
 |---|---|
-| Make waste visible | `WORK-ORDER-COST-LOG` + `WEEKLY-BURN.md` (the **WASTE ALARM**) |
+| Make waste visible | `WORK-ORDER-COST-LOG` (the **WASTE ALARM** — `cx check cost`) |
 | Stop the line (jidoka) | CEO reject button · STOP card · no next module until accepted |
 | Standardized work | work-order template · module capsule · golden skeleton |
 | Continuous improvement (kaizen) | `MEMORY/LESSONS.yaml` + `MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md` |
@@ -33,5 +33,15 @@
 Read the cost log and ask: Where did tokens go? Which cards over-read? Which reviews should have been DELTA not FULL? Which model was too expensive for the task? Which card caused a loop? Which artifact was too vague and caused rework? **What ONE rule should change so it doesn't repeat?** → log the lesson, queue the change. *Find the largest waste source → remove it → standardize the fix.*
 
 **Catch-rate guard:** the `caught_by` / `should_have_been_caught_by` sensors OBSERVE first — **no gate is pruned on catch-rate data before 2–3 real projects** (or a clear repeated pattern). Loop- and token-reduction must never lower catch-rate.
+
+**Hardening moratorium (PBF-PROP-022-E, 2026-07-07):** the mirror image of the catch-rate guard —
+no NEW hardening round on any gate that has ZERO in-anger fires on a real project, until it either
+fires for real or earns a pinned real-world eval. Applies to the whole UNTESTED-22 set from the
+2026-07-07 gate-ROI audit (`design-history/cx-audit-2026-07-07-findings-summary.md`), named
+examples: module-start forge-proofing, fix-escalation/engine-epoch, lock-fidelity. Standing walls
+stay FROZEN as-is — not removed, not extended — until they earn a reason to change. A round of
+extra edge-case coverage on an already-zero-fire gate is ceremony, not safety; the CEO's eye and
+cross-family review are the sensors that have actually caught real defects (see EARNING list,
+same audit) — spend effort there, not on hardening walls nothing has hit yet.
 
 > Keep this file short. Kaizen is a habit + a log template, not a philosophy binder.

@@ -1,0 +1,15 @@
+<!doctype html><html><body>
+<!-- PBF-PROP-021 P2-2 (GPT-5.5 xhigh built-code review): the button's ONLY "text" is inside a
+     <script> string literal — a real browser never renders this as the button's label. Before
+     the fix, _DomIndex.handle_data fed script CDATA to every open ancestor (incl. this button),
+     so "Add income" satisfied the locked label check even though nothing visible says it. -->
+<div id="app-shell">
+  <nav id="top_tabs"><a data-fn="month_picker" role="combobox">Month</a></nav>
+  <main id="primary_content">
+    <button data-fn="add_income" role="button">
+      <script>var s = "Add income";</script>
+    </button>
+  </main>
+  <footer id="bottom_nav"></footer>
+</div>
+</body></html>

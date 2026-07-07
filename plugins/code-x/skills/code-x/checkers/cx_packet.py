@@ -381,6 +381,30 @@ def _check_risk_tier(packet_dir: Path, findings: list) -> None:
                 "(PACKET-RISK-TIER-WELL-FORMED, PBF-PROP-019)"))
 
 
+def _advise_risk_tier_undeclared(packet_dir: Path) -> str | None:
+    """PBF-PROP-022-C: non-blocking WARN nudge when the frozen packet declares NO risk_tier.
+    Returns the advisory line (starting 'WARN:') on GENUINE absence, else None.
+
+    It is DELIBERATELY not a finding: cx_common.findings_report returns exit 1 for ANY finding
+    (P2 included), so routing this through the findings list would BLOCK the freeze — the exact
+    ceremony PBF-PROP-022-C removes. The fail-closed resolver (cx_common.resolve_risk_tier) already
+    runs an undeclared project under STRICT, which is safe by design, so this is advisory-only and
+    rc-neutral. Fires ONLY on genuine absence: a present-but-invalid value is _check_risk_tier's P0
+    (PACKET-RISK-TIER-WELL-FORMED) and a declared tier is quiet — mirrors the STATE-SESSION-BEHIND
+    WARN advisory convention (non-blocking, rc 0, greppable marker)."""
+    manifest_path = packet_dir / MANIFEST_FILE
+    data, err = load_yaml(str(manifest_path))
+    if err or not isinstance(data, dict):
+        return None  # missing/malformed manifest is a blocking finding elsewhere in cmd_packet
+    if "risk_tier" in data and data.get("risk_tier") is not None:
+        return None  # a tier IS declared — quiet (invalid values are _check_risk_tier's P0, not here)
+    return ("WARN: PACKET-RISK-TIER-UNDECLARED — this packet declares no risk_tier; new-project "
+            "setup must put the explicit tier choice to the CEO as a CEO-DECISION-LEDGER row "
+            "(LITE recommended for non-money/non-auth; money/auth -> STRICT). Running under "
+            "fail-closed STRICT until declared — advisory only, does NOT block the freeze "
+            "(PBF-PROP-022-C)")
+
+
 # CX-PB003-002 FIX-FIRST (xfam finding 2, P1): the PB-PROP-003 §R5 capability marker — mirrors
 # cx_module_acceptance._PB_PROP_003_MARKER_FIELD (same field, same manifest, checked at the OTHER
 # end of its lifecycle: freeze-time here vs acceptance-time there).
@@ -423,16 +447,24 @@ FORGE_PARITY_MARKER_FIELD = "b_prop_013_forge_parity"
 # FIX-FIRST (B-PROP-013 xfam P1): --legacy-migration used to be a BLANKET self-waiver — any NEW
 # packet could pass the bare flag and skip the required-true marker forever, defeating the
 # ships-dark closer §4 was built to close. It must now carry a TYPED, resolvable proof:
-#   (a) --migration-ref <CEO-D-NNN> resolving to a REAL row in the PROTOCOL-level
-#       MEMORY/CEO-DECISION-LEDGER.md (repo-root, NOT the packet's own ledger — a migration
-#       waiver is a protocol-level decision) — a ref that merely LOOKS like an id but names no
-#       real row does not count (mirrors _check_clarification_sweep's ledger-resolution
-#       precedent), or
-#   (b) the packet already carries a pre-existing frozen MODULE-REGISTRY.yaml with a non-empty
-#       module_registry.frozen_packet_hash — proof the packet was ALREADY frozen (genuinely
-#       in-flight), not merely asserted by the flag.
-# A bare --legacy-migration with neither proof does NOT waive — it falls through to the same
-# marker-required check a packet with no flag at all gets.
+#   --migration-ref <CEO-D-NNN> resolving to a REAL row in the PROTOCOL-level
+#   MEMORY/CEO-DECISION-LEDGER.md (repo-root, NOT the packet's own ledger — a migration
+#   waiver is a protocol-level decision) — a ref that merely LOOKS like an id but names no
+#   real row does not count (mirrors _check_clarification_sweep's ledger-resolution precedent).
+# A bare --legacy-migration with no --migration-ref does NOT waive — it falls through to the
+# same marker-required check a packet with no flag at all gets.
+#
+# PBF-PROP-021 P1-2 round 2 (GPT-5.5 xhigh built-code review): a SECOND leg used to exist here —
+# a pre-existing frozen MODULE-REGISTRY.yaml with a non-empty module_registry.frozen_packet_hash,
+# shape-checked as a genuine sha256 hex digest. That leg is REMOVED. It was never real proof: the
+# field is SELF-AUTHORED inside the very packet claiming the waiver, and a true recompute-and-
+# compare is impossible for it (module_registry.frozen_packet_hash lives INSIDE the file
+# cx_deck._compute_packet_hash hashes — cx_module_start.py ~L126-134 already documents this exact
+# self-reference as impossible for the SAME field, at the other end of its lifecycle). Shape-
+# checking only proves the string LOOKS like a hash — 64 hex zeros (or any other self-authored
+# hex) shape-passes trivially, which is exactly the forge-parity closer §4 exists to stop. The
+# only proof this checker can trust is one that lives OUTSIDE the packet: a real protocol-ledger
+# decision row.
 _THIS_DIR = Path(__file__).resolve().parent
 
 
@@ -446,19 +478,13 @@ def _protocol_ledger_row_ids() -> set:
 
 
 def _legacy_migration_proven(packet_dir: Path, migration_ref: str) -> bool:
-    """FIX-FIRST (B-PROP-013 §4): True only when --legacy-migration carries one of the two typed
-    proofs documented above. See module-level comment for the full rationale."""
+    """FIX-FIRST (B-PROP-013 §4, PBF-PROP-021 P1-2 round 2): True only when --legacy-migration
+    carries a --migration-ref that resolves to a real row in the PROTOCOL-level
+    MEMORY/CEO-DECISION-LEDGER.md. `packet_dir` is accepted for call-site stability but is no
+    longer consulted — see the module-level comment for why the registry-hash leg was removed
+    (a packet cannot author proof of its own freezing)."""
     ref = str(migration_ref or "").strip()
-    if ref and _LEDGER_ROW_ID_RE.fullmatch(ref) and ref in _protocol_ledger_row_ids():
-        return True
-    reg_path = packet_dir / REGISTRY_FILE
-    if reg_path.is_file():
-        rdata, rerr = load_yaml(str(reg_path))
-        mr = rdata.get("module_registry") if isinstance(rdata, dict) else None
-        fph = str(mr.get("frozen_packet_hash", "") or "").strip() if isinstance(mr, dict) else ""
-        if not rerr and fph:
-            return True
-    return False
+    return bool(ref and _LEDGER_ROW_ID_RE.fullmatch(ref) and ref in _protocol_ledger_row_ids())
 
 
 def _check_forge_parity_marker_required(packet_dir: Path, findings: list, legacy_migration: bool,
@@ -467,9 +493,10 @@ def _check_forge_parity_marker_required(packet_dir: Path, findings: list, legacy
     declare b_prop_013_forge_parity: true (a real boolean true) — absence OR a botched value
     (quoted "true"/"yes", 1, etc.) both fail here for a new packet. --legacy-migration exempts a
     genuinely in-flight, already-frozen project ONLY when it carries a typed, resolvable proof
-    (--migration-ref resolving to a real protocol ledger row, OR a pre-existing frozen
-    MODULE-REGISTRY.yaml hash) — a bare --legacy-migration with no proof does NOT waive (FIX-FIRST:
-    was previously an unconditional self-waiver, closed per xfam P1)."""
+    (--migration-ref resolving to a real protocol ledger row) — a bare --legacy-migration, or one
+    backed only by a self-authored MODULE-REGISTRY.yaml hash, does NOT waive (FIX-FIRST: was
+    previously an unconditional self-waiver, closed per xfam P1; the registry-hash leg itself was
+    later removed per PBF-PROP-021 P1-2 round 2 — an unverifiable self-authored hex is not proof)."""
     if legacy_migration and _legacy_migration_proven(packet_dir, migration_ref):
         return  # grandfathered in-flight packet WITH resolvable proof — exempt
     manifest_path = packet_dir / MANIFEST_FILE
@@ -478,10 +505,11 @@ def _check_forge_parity_marker_required(packet_dir: Path, findings: list, legacy
         return  # manifest missing/malformed is already flagged elsewhere in cmd_packet
     if data.get(FORGE_PARITY_MARKER_FIELD) is not True:
         proof_note = (
-            " (--legacy-migration was passed but carries NO resolvable proof — a bare flag is "
-            "not a waiver; supply --migration-ref <CEO-D-NNN> resolving to a real MEMORY/"
-            "CEO-DECISION-LEDGER.md row, or freeze the packet with a pre-existing MODULE-"
-            "REGISTRY.yaml frozen_packet_hash)"
+            " (--legacy-migration was passed but carries NO resolvable proof — a bare flag, and a "
+            "self-authored MODULE-REGISTRY.yaml frozen_packet_hash (even a validly-shaped sha256 "
+            "hex digest), are NOT a waiver; supply --migration-ref <CEO-D-NNN> resolving to a real "
+            "MEMORY/CEO-DECISION-LEDGER.md row — the packet cannot author proof of its own "
+            "freezing, PBF-PROP-021 P1-2 round 2)"
         ) if legacy_migration else ""
         findings.append(("P1", str(manifest_path),
             f"{FORGE_PARITY_MARKER_FIELD} is not declared as a real boolean true{proof_note} — "
@@ -1126,6 +1154,12 @@ def cmd_packet(args) -> int:
     _check_visual_provenance(packet_dir, findings)
     _check_module_registry_coverage(packet_dir, findings)
     _check_sop_coverage_map(packet_dir, findings)
+
+    # PBF-PROP-022-C: non-blocking risk_tier nudge — printed OUTSIDE the findings list so it never
+    # flips the exit code (findings_report returns 1 for any finding); the STRICT default is safe.
+    advisory = _advise_risk_tier_undeclared(packet_dir)
+    if advisory:
+        print(advisory)
 
     if findings:
         return findings_report(findings)

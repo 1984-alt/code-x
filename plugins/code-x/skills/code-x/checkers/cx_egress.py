@@ -20,13 +20,85 @@ from cx_common import findings_report, load_yaml, field_present, resolve_risk_ti
 
 # A conservative tripwire: a hit means "potential sensitive content" and (since a receipt /
 # carve-out is mandatory anyway) is used mainly to catch a scrub receipt that did NOT scrub.
+#
+# PBF-PROP-021 hole #12 (round 1): the old sole PII shape was a blanket `\b\d{12,}\b` (any bare
+# run of 12+ digits) — it MISSED the two money-app-real shapes (an 11-digit raw Indonesian
+# mobile number, and a 10-digit bank account number both fall under 12) while ALSO being a "dead
+# tripwire" residual risk (any long benign digit run would trip it with zero PII signal).
+# Replaced with two STRUCTURED patterns: an Indonesian mobile number, and a bounded bare
+# 10-digit run (bank-account-style number).
+#
+# PBF-PROP-021 P1-3 (GPT-5.5 xhigh built-code review, round 2): the hand-grown separator class
+# (`[-\s]?`) still missed dot and parenthesis formats — `0812.3456.7890`, `(0812) 3456 7890`,
+# `+62 (812) 3456-7890` all slipped it. Fix (the reviewer's own prescription): normalize FIRST —
+# collapse space/NBSP/hyphen/dot/paren separators OUT of every digit run in the diff text, then
+# match a bare-digit pattern against the normalized text. Only digit runs (an optional leading
+# '+') are touched; all other diff text is left byte-for-byte untouched, so this cannot merge
+# unrelated content across a non-digit boundary.
+_DIGIT_RUN_RE = re.compile(r"\+?\d(?:[ \t\xa0\-.()]*\d)+")
+
+
+def _normalize_digit_runs(text: str) -> str:
+    """Collapse separators out of every digit-and-separator run so a phone/account number
+    formatted with space, NBSP, hyphen, dot, OR parentheses matches the same bare-digit pattern —
+    the separator class no longer needs to be grown by hand for the next format."""
+    return _DIGIT_RUN_RE.sub(lambda m: re.sub(r"[^\d+]", "", m.group(0)), text)
+
+
+# Matched against the NORMALIZED text (see above): +62 / 62 / 0 trunk prefix + the mobile block
+# '8' + 8-10 more digits (the same 9-13 total digit span the old separator-aware regex covered).
+_ID_PHONE_RE = re.compile(r"(?<!\d)(?:\+62|62|0)8\d{8,10}(?!\d)")
+
+# PBF-PROP-021 P2-1 (GPT-5.5 xhigh built-code review): the bare 10-digit bank-account pattern false-tripped
+# benign ids — an order id, a datelike number (2026070712), a numeric-leading chunk of a longer
+# hex/alnum token (1234567890abcdef). A negative control that fires on every long benign number
+# is a dead tripwire. Fixed two ways, WITHOUT weakening the real catch:
+#   - the digit run must sit at a hard alnum boundary (excludes a hex/id chunk embedded in a
+#     longer token — (?!\d) alone let a trailing letter through);
+#   - it must have account/bank CONTEXT nearby (excludes a bare order id or date with no money
+#     signal — shape alone is not evidence of a real account number).
+_BANK_ACCOUNT_RE = re.compile(r"(?<![A-Za-z0-9_])\d{10}(?![A-Za-z0-9_])")
+# No \b word-boundary here (deliberately): a real-world context marker is as likely to be
+# embedded in an identifier (BANK_ACCOUNT, norek_pelanggan) as standalone prose — a boundary
+# would silently blind the context check to the exact identifier shape money code actually uses.
+_ACCOUNT_CONTEXT_RE = re.compile(
+    r"(?i:bni|bri|mandiri|rekening|no\.?\s*rek|norek|account|acct|bank)")
+_ACCOUNT_CONTEXT_WINDOW = 40
+
+
+def _bank_account_hit(text: str) -> bool:
+    """True only when a bare 10-digit run has account/bank context within
+    _ACCOUNT_CONTEXT_WINDOW chars on either side — shape alone (an order id, a bare date) is not
+    treated as evidence of a real account number (PBF-PROP-021 P2-1)."""
+    for m in _BANK_ACCOUNT_RE.finditer(text):
+        lo, hi = max(0, m.start() - _ACCOUNT_CONTEXT_WINDOW), m.end() + _ACCOUNT_CONTEXT_WINDOW
+        if _ACCOUNT_CONTEXT_RE.search(text[lo:hi]):
+            return True
+    return False
+
+
 SENSITIVE_PATTERNS = [
     ("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
     ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("hardcoded secret assignment",
      re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token|bearer)\s*[:=]\s*['\"]?[A-Za-z0-9_\-\.]{12,}")),
-    ("long digit run (account/PII)", re.compile(r"\b\d{12,}\b")),
 ]
+
+
+def _sensitive_hits(diff_text: str) -> list:
+    """Every SENSITIVE_PATTERNS name that hits the raw diff, plus the two normalize-then-match
+    PII detectors (Indonesian phone / bank account) — kept OUT of the generic list because both
+    need special handling the others don't (separator-normalized text; the account leg also needs
+    account-context, PBF-PROP-021 P1-3/P2-1)."""
+    hits = [name for name, rx in SENSITIVE_PATTERNS if rx.search(diff_text)]
+    normalized = _normalize_digit_runs(diff_text)
+    if _ID_PHONE_RE.search(normalized):
+        hits.append("Indonesian phone number (PII)")
+    if _bank_account_hit(normalized):
+        hits.append("10-digit account number (bank/PII)")
+    return hits
+
+
 SCRUB_REQUIRED_KEYS = ("target", "diff_hash", "scrub_command", "positive_control_exit", "produced_at")
 # PBF-PROP-019: the money/PII subset of cx_lock_fidelity.card_high_risk's security_tripwire
 # classes (money/auth/secrets/PII/destructive) — egress ties specifically to money/PII per the
@@ -85,7 +157,7 @@ def cmd_egress(args) -> int:
         print(f"FIX-FIRST\n  [P0] {diff_path} — cannot read the diff to be egressed: {e}")
         return 1
     diff_hash = hashlib.sha256(diff_text.encode()).hexdigest()[:12]
-    hits = [name for name, rx in SENSITIVE_PATTERNS if rx.search(diff_text)]
+    hits = _sensitive_hits(diff_text)
 
     receipt = None
     if receipt_ref:

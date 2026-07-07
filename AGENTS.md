@@ -11,7 +11,7 @@ A machine-readable index is in [llms.txt](llms.txt).
 ## Layout
 
 - `plugins/code-x/skills/code-x/` — the protocol (START-HERE.md routes everything) and the checker
-- `plugins/code-x/skills/code-x/checkers/` — `cx` CLI, `check-contracts.yaml` (456 clauses), `tests/`
+- `plugins/code-x/skills/code-x/checkers/` — `cx` CLI, `check-contracts.yaml` (487 clauses), `tests/`
 - `examples/tip-split/` — runnable worked example
 - `.github/workflows/tests.yml` — public CI, runs the full eval gate
 
@@ -21,8 +21,8 @@ Requires Python ≥3.10 and PyYAML (`pip3 install pyyaml`).
 
 ```bash
 cd plugins/code-x/skills/code-x
-python3 checkers/tests/run.py             # 566 unit self-tests
-python3 checkers/tests/run_contracts.py   # 456 gate clauses each proven to bite
+python3 checkers/tests/run.py             # 588 unit self-tests
+python3 checkers/tests/run_contracts.py   # 487 gate clauses each proven to bite
 python3 checkers/cx check evals           # full four-leg gate (what CI runs)
 ```
 

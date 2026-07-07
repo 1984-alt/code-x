@@ -379,9 +379,20 @@ def cmd_deck(args) -> int:
     # Legacy-silent if registry absent (only screen/module-first packets carry a registry).
     _reg_path = packet_dir / _REG_FILE
     if _reg_path.is_file():
-        _rdata, _ = load_yaml(str(_reg_path))
-        _mr = _rdata.get("module_registry") if isinstance(_rdata, dict) else None
-        _mod_rows = (_mr.get("modules") if isinstance(_mr, dict) else None) or []
+        _rdata, _rerr = load_yaml(str(_reg_path))
+        if _rerr:
+            # An unparseable registry must FAIL CLOSED, not silently degrade to zero rows —
+            # a garbage/corrupt MODULE-REGISTRY.yaml previously made `_mod_rows` = [] so the
+            # loop below ran zero times and printed PASS on the very gate whose job is
+            # proving every module names real cards (PBF-PROP-021 group-1 hole #2).
+            findings.append(("P0", str(_reg_path),
+                f"MODULE-REGISTRY.yaml could not be parsed: {_rerr} — a corrupt/unparseable "
+                "registry fails closed, it does not silently void the module->card binding gate "
+                "(DECK-MODULE-REGISTRY-CARD-IDS-MATCH, PB-PROP-002)"))
+            _mod_rows = []
+        else:
+            _mr = _rdata.get("module_registry") if isinstance(_rdata, dict) else None
+            _mod_rows = (_mr.get("modules") if isinstance(_mr, dict) else None) or []
         # compiled card ids from the id: field of each compiled card YAML
         compiled_ids: set = set()
         for _f in sorted(cards_dir.glob("*.yaml")):

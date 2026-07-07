@@ -28,7 +28,7 @@ from pathlib import Path
 
 import yaml
 
-from cx_common import findings_report, load_yaml
+from cx_common import findings_report, load_yaml, safe_repo_ref
 
 VALID_DELTA_STATUS = {"OPEN", "CLOSED", "DISCONFIRMED"}
 VALID_SEVERITIES = {"P0", "P1", "P2", "P3"}
@@ -271,8 +271,16 @@ def cmd_close_turn(args) -> int:
         findings.append(("P1", loc,
             "close_turn.evidence_paths missing or empty — every turn ends with evidence paths"))
     else:
+        # PBF-PROP-021 group-1 hole #5: `(Path(repo_root) / str(ev)).exists()` silently drops the
+        # left operand when `ev` is absolute (pathlib join semantics), so an absolute evidence path
+        # resolved OUTSIDE the repo and counted as durable in-repo proof — masking a turn that
+        # committed nothing. Route through the SHARED safe_repo_ref guard (same class rejected
+        # everywhere else: absolute / '..' / symlink-escape).
         for ev in ev_paths:
-            if not (Path(repo_root) / str(ev)).exists():
+            safe_ev, ev_err = safe_repo_ref(str(ev), repo_root)
+            if ev_err:
+                findings.append(("P1", loc, f"evidence path '{ev}' {ev_err}"))
+            elif not safe_ev.exists():
                 findings.append(("P1", loc, f"evidence path missing under {repo_root}: {ev}"))
 
     # --- next prompt ---
@@ -282,7 +290,11 @@ def cmd_close_turn(args) -> int:
             "close_turn.next_prompt missing — no actor ends useful work without a "
             "paste-ready next prompt (the single rule)"))
     elif next_prompt.endswith(".md") and "\n" not in next_prompt:
-        if not (Path(repo_root) / next_prompt).is_file():
+        # Same class as evidence_paths above — next_prompt is also a model/handoff-authored ref.
+        safe_np, np_err = safe_repo_ref(next_prompt, repo_root)
+        if np_err:
+            findings.append(("P1", loc, f"next_prompt '{next_prompt}' {np_err}"))
+        elif not safe_np.is_file():
             findings.append(("P1", loc, f"next_prompt points at a missing file: {next_prompt}"))
 
     # --- provenance trailer on HEAD ---

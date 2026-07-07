@@ -1,0 +1,6 @@
+module_registry:
+  frozen_packet_hash: "totally-forged-not-a-hash"
+  modules:
+    - module_id: m1
+      kind: shared_logic
+      requirement_ids: [REQ-001]

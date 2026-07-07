@@ -69,7 +69,12 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 # Asks Register') and the marker is scanned ONLY against the decision-text cell (index 2 after the
 # id/date cells), never the whole row.
 _DECISION_ID_RE = re.compile(r"^\|\s*(CEO-D-\d+)\s*\|")
-_FENCE_RE = re.compile(r"```yaml\n(.*?)```", re.DOTALL)
+# PBF-PROP-021 group-2 hole #6: the fence-open token was the literal ```yaml + newline — a
+# trailing space/tab (```yaml ) or CRLF line ending (```yaml\r\n) never matched, so the WHOLE
+# fence (and any ledger entry inside it) vanished with zero finding instead of hitting the
+# _is_ledger_shaped WALL below. Tolerate the trailing whitespace + CRLF variant (mirrors the
+# identical widen in cx_kaizen._YAML_FENCE_OPEN_RE — same idiom, not imported, per R1.5 above).
+_FENCE_RE = re.compile(r"```yaml[ \t]*\r?\n(.*?)```", re.DOTALL)
 # R2.4: a ```yaml fence carrying ANY of these ledger-entry-shaped keys but lacking `project_id`
 # is a WALL (`_unparseable`), never a silent vanish — see _parse_ledger_entries.
 _LEDGER_SHAPE_KEYS = ("ship_commit", "criteria", "ship_date", "ship_timestamp_utc")

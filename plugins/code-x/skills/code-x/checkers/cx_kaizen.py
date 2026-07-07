@@ -43,6 +43,12 @@ _NEW_ID_RE = re.compile(r"^(P|B|F|PB|PF|BF|PBF)-PROP-\d{3}$")
 _OLD_ID_RE = re.compile(r"^PROP-\d{3}$")
 # Retired legacy ids are EXEMPT from KAIZEN-ID-FORMAT (MERGED / CLOSED-REJECTED entries).
 _RETIRED_STATUSES = {"MERGED-INTO-008", "CLOSED-REJECTED"}
+# PBF-PROP-021 group-2 hole #7: the full enum of `status` values the live queue actually uses.
+# Any OTHER string (a case/typo drift of APPLIED — "Applied", "APPLED", "applied", etc.) is not
+# a legitimate status and must be flagged, never silently treated as "not applied" (that silent
+# read is exactly how a genuinely-applied behavioural PROP with zero enforcement skipped every
+# APPLIED-only clause and greened the closure safeguard).
+_VALID_KAIZEN_STATUSES = {"QUEUED", "APPLIED"} | _RETIRED_STATUSES
 # Sub-part ids (PBF-PROP-012-C etc.) are EXEMPT from CROSSWALK-COMPLETE and ID-FORMAT.
 _SUBPART_ID_RE = re.compile(r"^(P|B|F|PB|PF|BF|PBF)-PROP-\d+-\w+$")
 # Template entry is EXEMPT.
@@ -52,6 +58,19 @@ _EXEMPT_ID_PREFIXES = ("PROP-TEST-", "PROP-DEMO-")
 # Semantic PROP fields — a fence carrying any of these that has a malformed id
 # is silently invisible to all KAIZEN-* clauses (KAIZEN-PROP-ID-PARSEABLE target).
 _SEMANTIC_PROP_FIELDS = frozenset({"status", "behavioural", "conflict_scan"})
+# PBF-PROP-021 group-2 hole #6: the fence-open token was the literal ```yaml + newline —
+# a trailing space/tab (```yaml ) or CRLF line ending (```yaml\r\n) never matched, so the
+# WHOLE fence vanished from every KAIZEN-* clause with zero finding. Tolerate the trailing
+# whitespace + CRLF variant (still requires the "yaml" language tag itself, unlike the
+# generic backstop scanner below).
+_YAML_FENCE_OPEN_RE = r"```yaml[ \t]*\r?\n(.*?)```"
+# Generic backstop: ANY fenced block regardless of language tag (or none/garbled), used only
+# to detect a fence the tolerant regex above STILL missed (e.g. ```YAML, ```yml, an attribute
+# after the tag) that is nonetheless PROP-shaped — see _check_unrecognized_prop_shaped_fences.
+_ANY_FENCE_RE = re.compile(r"```([^\n]*)\r?\n(.*?)```", re.DOTALL)
+# A fence the parser didn't recognize as a yaml PROP fence is still flagged loud when its raw
+# text looks like it was authoring a PROP entry — `id: ...PROP-NNN` (quoted or not).
+_PROP_SHAPED_TEXT_RE = re.compile(r"id:\s*[\"']?[\w-]*PROP-\d+")
 # Valid stage values (PBF-PROP-013).
 _VALID_STAGES = {"planning", "building", "fixing"}
 # Stage letter encoding (canonical order P→B→F).
@@ -302,7 +321,7 @@ def _check_malformed_prop_ids(queue_text: str) -> list[tuple[str, str, str]]:
     KAIZEN-* clause. A malformed id is almost always a typo that needs fixing.
     """
     findings: list[tuple[str, str, str]] = []
-    for fence in re.finditer(r"```yaml\n(.*?)```", queue_text, re.DOTALL):
+    for fence in re.finditer(_YAML_FENCE_OPEN_RE, queue_text, re.DOTALL):
         fragment = fence.group(1)
         try:
             parsed = yaml.safe_load(fragment)
@@ -348,6 +367,41 @@ def _check_malformed_prop_ids(queue_text: str) -> list[tuple[str, str, str]]:
     return findings
 
 
+def _check_unrecognized_prop_shaped_fences(queue_text: str) -> list[tuple[str, str, str]]:
+    """KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE (P1, PBF-PROP-021 group-2 hole #6): a fence
+    that _YAML_FENCE_OPEN_RE still does not recognize (an exotic language tag like ```YAML /
+    ```yml, or any other fence shape the tolerant regex above does not cover) but whose raw
+    text looks like it was authoring a PROP entry (`id: ...PROP-NNN`) must be a LOUD finding,
+    never a silent vanish — that PROP block's constraints would otherwise be invisible to
+    every KAIZEN-* clause with zero trace anywhere.
+
+    Runs over the WHOLE queue text using a generic any-fence scan, then reports only the
+    fences NOT already covered by the tolerant yaml-fence regex (recognized fences are handled,
+    parsed or sentinel-flagged, by _parse_prop_blocks/_check_malformed_prop_ids already).
+    """
+    findings: list[tuple[str, str, str]] = []
+    recognized_spans = [m.span() for m in re.finditer(_YAML_FENCE_OPEN_RE, queue_text, re.DOTALL)]
+
+    def _covered(span: tuple) -> bool:
+        return any(rs[0] <= span[0] and span[1] <= rs[1] for rs in recognized_spans)
+
+    for fence in _ANY_FENCE_RE.finditer(queue_text):
+        span = fence.span()
+        if _covered(span):
+            continue
+        content = fence.group(2)
+        m = _PROP_SHAPED_TEXT_RE.search(content)
+        if not m:
+            continue
+        preview = content.strip()[:80].replace("\n", " ")
+        findings.append(("P1", "<unknown>",
+            f"KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE: a fence not recognized as a yaml PROP fence "
+            f"(language tag {fence.group(1)!r}) carries PROP-shaped text ({m.group(0)!r}) — "
+            f"{preview!r} — a fence the parser skips must never silently hide a PROP block from "
+            f"every KAIZEN-* clause; fix the fence to a real ```yaml block"))
+    return findings
+
+
 def _is_prop_block(mapping: dict) -> bool:
     """G1 (PBF-PROP-014): return True iff the mapping's `id` matches the PROP id pattern.
 
@@ -367,7 +421,7 @@ def _parse_prop_blocks(queue_text: str) -> list[dict]:
     Unparseable fences → sentinel so the caller can flag them.
     """
     blocks: list[dict] = []
-    for fence in re.finditer(r"```yaml\n(.*?)```", queue_text, re.DOTALL):
+    for fence in re.finditer(_YAML_FENCE_OPEN_RE, queue_text, re.DOTALL):
         fragment = fence.group(1)
         try:
             parsed = yaml.safe_load(fragment)
@@ -762,6 +816,10 @@ def cmd_kaizen(args) -> int:
     # KAIZEN-PROP-ID-PARSEABLE: detect semantic fences with malformed ids (always active).
     findings.extend(_check_malformed_prop_ids(queue_text))
 
+    # KAIZEN-FENCE-PROP-SHAPED-UNPARSEABLE: a fence variant the tolerant regex still misses,
+    # but which is PROP-shaped text, must be a loud finding (always active).
+    findings.extend(_check_unrecognized_prop_shaped_fences(queue_text))
+
     # PBF-PROP-013 stage-rename clauses — run once over all blocks when --conflict-scan active.
     if conflict_scan_active:
         findings.extend(_check_stage_rename(blocks, cx_root))
@@ -794,7 +852,23 @@ def cmd_kaizen(args) -> int:
                         f"conflict-scan step and record its marker here"))
 
         status = _status_value(block)
-        if status != "APPLIED":
+        # KAIZEN-STATUS-ENUM-VALID (P1, PBF-PROP-021 group-2 hole #7): `status` was previously
+        # compared with a bare `!= "APPLIED"` — any case/typo drift ("applied", "APPLED", ...)
+        # silently read as "not applied" and skipped every APPLIED-only clause below, exempting a
+        # genuinely-applied behavioural PROP from its own enforcement requirement. Enum-validate
+        # first; an unrecognized value is flagged AND, fail-closed, still treated as APPLIED for
+        # the checks below — it might BE a typo'd APPLIED, and treating it as "not applied" is
+        # exactly the hole this closes.
+        if status and status not in _VALID_KAIZEN_STATUSES:
+            findings.append(("P1", prop_id,
+                f"KAIZEN-STATUS-ENUM-VALID: status={status!r} is not a valid enum value "
+                f"{sorted(_VALID_KAIZEN_STATUSES)} — a case/typo drift of APPLIED must not "
+                f"silently exempt this PROP from the APPLIED-only clauses; treating it as "
+                f"APPLIED (fail closed) until the status is corrected"))
+            is_applied = True
+        else:
+            is_applied = (status == "APPLIED")
+        if not is_applied:
             continue
 
         # KAIZEN-BEHAVIOURAL-FIELD-PRESENT — every APPLIED PROP must have a behavioural field

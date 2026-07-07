@@ -32,7 +32,7 @@ A lean, file-based system that turns a non-coder CEO's intent into shipped, work
 - `BUILDER-STANDARD.md` — the 12 coding rules + stop-instead-of-guessing. **A build session reads it ONCE at session start** and records the ack in state (`session_start.builder_standard_read`, checked by `cx check state --session-start`); cards carry only the injected `builder-standard` invariant token.
 - `KAIZEN.md` — continuous-improvement engine (waste + lessons + evals).
 - `EVALS.md` — the protocol self-tests.
-- `templates/` — STATE · WORK-ORDER · MODULE-CAPSULE · FINAL-READY-CERTIFICATE · WEEKLY-BURN · WORK-ORDER-COST-LOG · PRODUCT-TASTE-LOCK · DESIGN-GOLDEN-MASTER · BUSINESS-LOGIC-VALIDATION · CEO-PROVISIONING-MANIFEST · STOP-ACTION-CARD · DEAD-ENDS-LEDGER · BUILDER-QUESTIONS-LOG · EVIDENCE-INDEX · GOLDEN-SKELETON-CERTIFICATE · COVERAGE-MAP · CEO-DECISION-LEDGER. *(All load-on-demand — none sit in the every-turn read path.)*
+- `templates/` — STATE · WORK-ORDER · MODULE-CAPSULE · FINAL-READY-CERTIFICATE · WORK-ORDER-COST-LOG · PRODUCT-TASTE-LOCK · DESIGN-GOLDEN-MASTER · BUSINESS-LOGIC-VALIDATION · CEO-PROVISIONING-MANIFEST · STOP-ACTION-CARD · BUILDER-QUESTIONS-LOG · EVIDENCE-INDEX · GOLDEN-SKELETON-CERTIFICATE · COVERAGE-MAP · CEO-DECISION-LEDGER. *(All load-on-demand — none sit in the every-turn read path. WEEKLY-BURN + DEAD-ENDS-LEDGER retired PBF-PROP-022-A — zero consumer.)*
 - `MEMORY/` — LESSONS.yaml (seeded) · PROTOCOL-IMPROVEMENT-QUEUE.md · CEO-DECISION-LEDGER.md (protocol-level decisions; project packets carry their own).
 - `checkers/` — `cx check` (Level-B mechanical checkers) + ported v0.13 checkers. `CX-CHECK-SPEC.md` describes them.
 - `design-history/` — how V1 was designed (the 3-way council). Reference only.

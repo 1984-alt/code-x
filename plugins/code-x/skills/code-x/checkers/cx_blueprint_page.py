@@ -149,9 +149,13 @@ def _parse_page(page_path: str) -> tuple["_MarkerParser | None", str | None]:
 
 
 def _select_modules(bp_modules: list, do_all) -> tuple[list, str | None]:
-    if do_all:
-        return bp_modules, None
-    return [], "--all required for cx check blueprint-page (whole-page only, xfam X2/CEO-D-040)"
+    if not do_all:
+        return [], "--all required for cx check blueprint-page (whole-page only, xfam X2/CEO-D-040)"
+    if not bp_modules:
+        return [], ("blueprint-manifest has an EMPTY modules list — --all cannot certify zero module "
+                     "projections as rendered; an emptied/truncated manifest fails CLOSED, it is never "
+                     "a vacuous PASS (BLUEPRINT-MODULES-NONEMPTY, P-PROP-007)")
+    return bp_modules, None
 
 
 def cmd_blueprint_page(args) -> int:
@@ -192,7 +196,8 @@ def cmd_blueprint_page(args) -> int:
     all_modules = [m for m in bp.get("modules") if isinstance(m, dict)]
     targets, serr = _select_modules(all_modules, do_all)
     if serr:
-        print(f"FIX-FIRST\n  [P0] {serr} ({FRAMES_CLAUSE})")
+        tag = "" if "(BLUEPRINT-" in serr else f" ({FRAMES_CLAUSE})"
+        print(f"FIX-FIRST\n  [P0] {serr}{tag}")
         return 1
 
     reg_index = _registry_index(packet_dir, findings)
