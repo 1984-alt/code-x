@@ -128,27 +128,35 @@ jobs:
           # prove — install it so the ONLY remaining failure reason is the
           # corrupted tag, making this a true negative test of that path.
           python3 -m pip install --no-binary :all: --require-hashes -r <(printf '%s --hash=sha256:%s\n' "pyyaml==6.0.3" "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f")
-      - name: Corrupt the pinned release tag and expect a fail-closed exit
+      - name: Corrupt the pinned bootstrap release tag and expect a fail-closed exit
         run: |
-          # A marketplace source can only be pinned to a branch/tag ref (see
-          # ensure_marketplace_and_plugin's "<url>.git#<release_tag>" add
-          # source) — there is no commit-sha pin to corrupt anymore (fold
-          # v1.22.4). The equivalent real-world negative case is a release_tag
-          # that does not exist upstream: `claude plugin marketplace add
-          # <url>.git#<tag>` must fail rather than silently falling back to the
-          # default branch.
+          # install.sh has exactly ONE manifest trust root (council trust-model
+          # rebuild, INV-1): the hardcoded INSTALLER_RELEASE_TAG constant near
+          # the top of the script. It ALWAYS fetches installer-manifest.yaml
+          # fresh from https://.../<INSTALLER_RELEASE_TAG>/installer/
+          # installer-manifest.yaml and never reads a manifest sitting on disk
+          # (cwd or beside the script). Editing the checked-out
+          # installer/installer-manifest.yaml (the old version of this test)
+          # is therefore a no-op — install.sh ignores it and re-fetches the
+          # real manifest from the real pinned release regardless. The only
+          # way to genuinely exercise "pinned release tag does not exist
+          # upstream" is to corrupt install.sh's own INSTALLER_RELEASE_TAG
+          # constant — there is no supported env var/flag override for it (by
+          # design: INV-1 makes this the one thing a caller must never set).
           chmod +x installer/install.sh
-          cp installer/installer-manifest.yaml /tmp/installer-manifest.yaml.bak
-          sed -i '0,/release_tag: "v[0-9.]*"/{s/release_tag: "v[0-9.]*"/release_tag: "v0.0.1-does-not-exist"/}' installer/installer-manifest.yaml
+          cp installer/install.sh /tmp/install.sh.bak
+          sed -i 's/INSTALLER_RELEASE_TAG="v[0-9.]*"/INSTALLER_RELEASE_TAG="v0.0.1-does-not-exist"/' installer/install.sh
           set +e
-          ./installer/install.sh
+          ./installer/install.sh > /tmp/negative-tag-out.log 2>&1
           status=$?
           set -e
-          cp /tmp/installer-manifest.yaml.bak installer/installer-manifest.yaml
+          cp /tmp/install.sh.bak installer/install.sh
+          cat /tmp/negative-tag-out.log
           if [ "$status" -eq 0 ]; then
             echo "installer should have FAILED on a nonexistent pinned release tag but exited 0"
             exit 1
           fi
+          grep -qi "could not fetch installer-manifest.yaml from the pinned release" /tmp/negative-tag-out.log
           echo "confirmed: a pinned release tag that does not exist upstream fails closed (exit $status)"
 
   negative-missing-python:
