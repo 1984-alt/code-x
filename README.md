@@ -31,10 +31,14 @@ AI tools you already use.
 
 ### Who Code-X is NOT for
 
-**If you want a fast MVP, a prototype, or a small throwaway tool — don't use Code-X.**
-It is deliberately heavyweight; on a weekend experiment the process costs more than the
-bugs would. Use Claude Code, Codex, Cursor, or any capable AI builder directly. That is
-the right tool for that job.
+**If you want a throwaway one-off with nothing to lose — reach for a plain AI builder
+first.** Code-X trades speed for evidence, and on a five-minute scratch script that
+trade isn't worth it. But the "it's too heavy for small projects" objection is no longer
+all-or-nothing: since v1.22.5 you pick a **risk tier** per project (see below), and a
+**LITE** project drops most of the ceremony while keeping the safety spine. The heavy
+machine is reserved for what actually carries risk — money, logins, anything you'll rely
+on. If even LITE is more than your throwaway needs, use Claude Code, Codex, Cursor, or
+any capable AI builder directly; that's the right tool for that job.
 
 ### The honest trade
 
@@ -49,6 +53,39 @@ One honest limit, stated up front: Code-X proves the **process** was followed �
 locked, coverage complete, reviews real, evidence hash-bound. It cannot prove the
 software is perfect. No process can. What it removes is the failure mode where nobody
 could have known.
+
+---
+
+## Right-sizing the ceremony: risk tiers
+
+**The #1 complaint about Code-X was that it's too heavy for small things** — the full
+stack applied identically to a throwaway prototype and a real-money app. Since **v1.22.5**
+that's fixed the honest way: you declare a **risk tier** once per project, and the tier
+sets how much ceremony you pay — *without ever touching the safety floor.*
+
+| Tier | For | What changes |
+|---|---|---|
+| **LITE** | throwaway prototypes, spikes, low-risk / non-money tools | one light audit pass, leaner reviews and blueprint — the ceremony gets out of your way |
+| **STANDARD** | the normal case — today's full process, unchanged | the anchor; nothing is added or removed |
+| **STRICT** | real-money, logins/auth, anything you'll truly rely on | STANDARD plus always-maximal ceremony — fullest review, a privacy/leak scrub on every module, deepest audit |
+
+Three rules keep LITE from becoming a loophole — all mechanical, none up to argument:
+
+- **The safety spine runs in *every* tier, LITE included.** Dropped-requirement
+  coverage, the frozen-plan lock, the safe-file-path check, the "no open defect ships"
+  gate, the supply-chain dependency scan, and the security baseline do **not** read the
+  tier — they always run. A tier only lowers *ceremony depth*, never the floor.
+- **Anything risky re-escalates itself.** A single screen that touches money, logins,
+  secrets, or shared data pulls a full opposite-family review **regardless of the
+  project's tier** — so a LITE project with one money screen still gets that screen
+  checked at full rigor.
+- **Missing or invalid fails closed to the strictest setting.** Leave the tier out
+  (e.g. an older project) and Code-X treats it as **STRICT**, never LITE. Write an
+  unrecognized value and the checker hard-fails at plan time rather than quietly
+  guessing. Choosing anything lighter than STRICT is itself a recorded decision.
+
+In plain terms: **you no longer pay real-money-app overhead to build a weekend tool — but
+you can't accidentally (or conveniently) turn the safety off on the parts that matter.**
 
 ---
 
@@ -122,7 +159,7 @@ The Master Blueprint is the planning stage made reviewable by a non-coder. From 
 
 - **One generated page from the locked plan** — never hand-typed or hand-edited (🔒 *render, never re-type*). You request changes in plain language *on* the page; the source plan changes; the page regenerates.
 - **It embeds the real, locked screen designs** — so you actually *see* what the finished software will look like, screen by screen, before any of it is built.
-- **You approve what you can see** — each screen's look, what every control does, how the screens connect, and a plain "done" test for every feature.
+- **You approve what you can see** — each screen's look, what every control does, how the screens connect, and a plain "done" test for every feature (each thing you're building carries at least one concrete *Given / When / Then* example — "given I'm logged out, when I submit valid credentials, then I land on the dashboard" — pinned in the frozen plan so "done" means the same thing to you and to the checker).
 - **`cx check blueprint` recomputes readiness from the source** — a module can't be built until its blueprint is complete and approved. A pretty page can't hide a gap.
 - **Change the plan and your approval is void** — sign-off is pinned to a fingerprint of the plan; edit it later and that module un-approves itself until you re-approve.
 
@@ -320,7 +357,7 @@ No single layer is forge-proof. The protection is the **stack**, where each laye
 
 **What `cx` can't prove:** that the requirement was *right*, that the product judgment is sound, that the security model holds, or that a test is meaningful rather than tautological. Those need the fresh reader, the cross-family review, and the human. *Green ≠ enforcing* applies to `cx` itself — it checks shape and existence, not meaning.
 
-**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 456 gate clauses), cross-family review of the tests, and the Audit stage's whole-app check that the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One known-open gap: a couple of acceptance-receipt fields are presence-checked, not yet recomputed end-to-end (a future `/cx-accept` runner closes this — see [HELP-WANTED.md](HELP-WANTED.md)).
+**Test circularity** is the same shape: the same AI can write both the code and its tests, so passing tests can be hollow. Code-X fights that with contract-bite tests (the 456 gate clauses), cross-family review of the tests, and the Audit stage's whole-app check that the app is actually wired and running — *built + green ≠ wired*. Residual risk remains, and it's named here on purpose rather than hidden. One gap that used to sit here — acceptance receipts being presence-checked rather than recomputed — is now closed: `/cx-accept` machine-stamps each acceptance and its identity is recomputed against the exact commit the human signed off on, so a hand-edited receipt can't pass (forge-parity acceptance recompute, shipped in v1.22.5).
 
 **Security runs the same fail-closed shape:** dependencies are scanned before build (zero high/critical findings, or an explicit human waiver on record), every card answers a security tripwire that is checked against the actual diff — not self-attested — and anything that leaves the machine passes a PII/egress scrub first.
 
@@ -382,7 +419,7 @@ I'm an Indonesian vibe-coder. I can't read a single line of code — I didn't bu
 
 ## Roadmap & help wanted
 
-The headline open item is an **Autonomous Build/Session Loop**. Today a human still babysits context windows and session handoffs; the missing piece is a policy layer that drives the build hands-off *across sessions* and stops only when human input is genuinely required — a real gate failure, or a decision the locked plan didn't pre-decide. Other valuable work: independent reproductions, stronger example projects, the future `/cx-accept` runner, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
+The headline open item is an **Autonomous Build/Session Loop**. Today a human still babysits context windows and session handoffs; the missing piece is a policy layer that drives the build hands-off *across sessions* and stops only when human input is genuinely required — a real gate failure, or a decision the locked plan didn't pre-decide. Other valuable work: independent reproductions, stronger example projects, and hard reviews of the trust boundary. See [HELP-WANTED.md](HELP-WANTED.md).
 
 ---
 
