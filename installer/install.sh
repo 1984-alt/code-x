@@ -31,8 +31,8 @@
 # current directory (that would let a manifest planted next to a downloaded
 # install.sh, e.g. in ~/Downloads, be trusted silently). Re-stamped together
 # by installer/restamp-release.sh at every release cut — never edit by hand.
-INSTALLER_RELEASE_TAG="v1.22.7"
-INSTALLER_MANIFEST_SHA256="1b57fd8a096e064c39dfcc2be8cc61e2bccca5fe1e384b6f4070ba214588e75e"
+INSTALLER_RELEASE_TAG="v1.22.8"
+INSTALLER_MANIFEST_SHA256="6d3163be7000b25e00a419a133bff49c66c5659c6347e2776b7c5027d38736c1"
 DEFAULT_REMOTE_BASE="https://raw.githubusercontent.com/1984-alt/code-x"
 # Test-only override (offline fixtures point this at a file:// tree); never
 # set this yourself for a real install.

@@ -3747,20 +3747,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_7_folded(self):
-        """The checker reports v1.22.7 (CEO-D-053 fold 2026-07-08) as the protocol version."""
+    def test_protocol_version_constant_marks_1_22_8_folded(self):
+        """The checker reports v1.22.8 (CEO-D-054 fold 2026-07-08) as the protocol version."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.7")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.8")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_7_folded(self):
-        """`cx --version` reports the v1.22.7 (CEO-D-053) canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_8_folded(self):
+        """`cx --version` reports the v1.22.8 (CEO-D-054) canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.7(?!\d)")
+        self.assertRegex(out, r"V1\.22\.8(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -6923,6 +6923,48 @@ class TestGraduationLiteStreakExclusion(unittest.TestCase):
         ]
         streak, userfacing, per_project = cx_graduation._recompute_streak(statuses, Path("."), n=3, m=3)
         self.assertEqual(streak, 3, per_project)
+
+
+# ---------------------------------------------------------------------------
+# F-PROP-002: kaizen live-queue leg test-only override (CX_KAIZEN_QUEUE)
+# ---------------------------------------------------------------------------
+class TestResolveKaizenQueuePath(unittest.TestCase):
+    """cx_common.resolve_kaizen_queue_path — mirrors resolve_profiles_path's fail-loud
+    posture: CX_KAIZEN_QUEUE is honored ONLY under CODE_X_TEST_MODE=1; production always
+    gets the real default path back, with a P1-worthy error message when the env was set
+    outside test mode (the caller turns that into a finding, not a silent redirect)."""
+
+    def setUp(self):
+        self._saved = {k: os.environ.get(k) for k in ("CX_KAIZEN_QUEUE", "CODE_X_TEST_MODE")}
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_no_env_returns_default(self):
+        os.environ.pop("CX_KAIZEN_QUEUE", None)
+        path, err = cx_common.resolve_kaizen_queue_path("/some/default/queue.md")
+        self.assertEqual(path, "/some/default/queue.md")
+        self.assertIsNone(err)
+
+    def test_env_set_with_test_mode_is_honored(self):
+        os.environ["CODE_X_TEST_MODE"] = "1"
+        os.environ["CX_KAIZEN_QUEUE"] = "tests/fixtures/kaizen_bad_no_enforcement.md"
+        path, err = cx_common.resolve_kaizen_queue_path("/some/default/queue.md")
+        self.assertEqual(path, "tests/fixtures/kaizen_bad_no_enforcement.md")
+        self.assertIsNone(err)
+
+    def test_env_set_without_test_mode_fails_loud(self):
+        os.environ.pop("CODE_X_TEST_MODE", None)
+        os.environ["CX_KAIZEN_QUEUE"] = "tests/fixtures/kaizen_bad_no_enforcement.md"
+        path, err = cx_common.resolve_kaizen_queue_path("/some/default/queue.md")
+        # Untrusted env is NOT honored — the real default path is still returned.
+        self.assertEqual(path, "/some/default/queue.md")
+        self.assertIsNotNone(err)
+        self.assertIn("CODE_X_TEST_MODE != 1", err)
 
 
 if __name__ == "__main__":

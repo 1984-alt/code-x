@@ -5237,11 +5237,26 @@ clauses:
   - id: EVALS-KAIZEN-LIVE-QUEUE-WIRED
     check: evals
     kind: gate
-    clause: "cx check evals runs the live kaizen-queue closure check (PBF-PROP-012 Part C A2 line) — a failing kaizen queue turns cx check evals red"
-    source: "GATES.md Build-session rails / PBF-PROP-012 Part C §4"
+    clause: "cx check evals runs the live kaizen-queue closure check (PBF-PROP-012 Part C A2 line) — a failing kaizen queue turns cx check evals red (F-PROP-002: proven in isolation from the other 3 legs via the CX_KAIZEN_QUEUE test-only override, not by a shared wrong-reason fixture)"
+    source: "GATES.md Build-session rails / PBF-PROP-012 Part C §4 / F-PROP-002"
     bad:
-      args: ["--checkers-dir", "tests/fixtures/evals_bad"]
+      args: ["--checkers-dir", "tests/fixtures/evals_good_kaizen_leg"]
+      env: { CX_KAIZEN_QUEUE: "{CHECKERS_DIR}/tests/fixtures/kaizen_bad_no_enforcement.md" }
       expect_severity: P1
+      expect_contains: "KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT"
+    good:
+      args: ["--checkers-dir", "tests/fixtures/evals_good"]
+
+  - id: EVALS-KAIZEN-QUEUE-ENV-TEST-ONLY
+    check: evals
+    kind: gate
+    clause: "CX_KAIZEN_QUEUE env without CODE_X_TEST_MODE=1 is REFUSED in production (fail-loud P1, real live queue still audited — no silent redirect; mirrors CARD-PROFILES-ENV-TEST-ONLY / PBF-PROP-008)"
+    source: "F-PROP-002 / GATES.md Build-session rails"
+    bad:
+      args: ["--checkers-dir", "tests/fixtures/evals_good"]
+      env: { CODE_X_TEST_MODE: null, CX_KAIZEN_QUEUE: "{CHECKERS_DIR}/tests/fixtures/kaizen_bad_no_enforcement.md" }
+      expect_severity: P1
+      expect_contains: "CX_KAIZEN_QUEUE is set but CODE_X_TEST_MODE != 1"
     good:
       args: ["--checkers-dir", "tests/fixtures/evals_good"]
 

@@ -14,7 +14,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-PROTOCOL_VERSION = "1.22.7"          # v1.22.7 (CEO-D-053) PBF-PROP-023 version-floor base anchor + PROP-021 expect_contains backlog sweep (95 pins) (fold 2026-07-08). Prior: v1.22.6 (CEO-D-051) PBF-PROP-021 audit hole-closing + PBF-PROP-022 gate ROI slimming (fold 2026-07-07). Prior: v1.22.5 (CEO-D-050) BUNDLE, 5 folds: PBF-PROP-015 (cx_state arity) · PBF-PROP-020 (mockup-first) · PBF-PROP-019 (risk tiers) · PB-PROP-003 (G/W/T wiring) · B-PROP-013 (forge-parity acceptance recompute). Prior: v1.22.4 (CEO-D-042) PBF-PROP-017 one-line installer (patch). Prior: v1.22.3 (CEO-D-041) PBF-PROP-018 accepted-surface preserve posture; v1.22.2 (CEO-D-040) P-PROP-007 blueprint visual parity; v1.22.1 (CEO-D-039) PBF-PROP-016 public CI runs the full eval gate; v1.22 (CEO-D-038) A-PROP-001 Audit Stage + PBAF-PROP-001 SOP asset bind; v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
+PROTOCOL_VERSION = "1.22.8"          # v1.22.8 (CEO-D-054) F-PROP-002 kaizen-leg test wiring — CX_KAIZEN_QUEUE test-only override + real bad fixture proving the cx check evals kaizen leg bites for its own reason (fold 2026-07-08). Prior: v1.22.7 (CEO-D-053) PBF-PROP-023 version-floor base anchor + PROP-021 expect_contains backlog sweep (95 pins) (fold 2026-07-08). Prior: v1.22.6 (CEO-D-051) PBF-PROP-021 audit hole-closing + PBF-PROP-022 gate ROI slimming (fold 2026-07-07). Prior: v1.22.5 (CEO-D-050) BUNDLE, 5 folds: PBF-PROP-015 (cx_state arity) · PBF-PROP-020 (mockup-first) · PBF-PROP-019 (risk tiers) · PB-PROP-003 (G/W/T wiring) · B-PROP-013 (forge-parity acceptance recompute). Prior: v1.22.4 (CEO-D-042) PBF-PROP-017 one-line installer (patch). Prior: v1.22.3 (CEO-D-041) PBF-PROP-018 accepted-surface preserve posture; v1.22.2 (CEO-D-040) P-PROP-007 blueprint visual parity; v1.22.1 (CEO-D-039) PBF-PROP-016 public CI runs the full eval gate; v1.22 (CEO-D-038) A-PROP-001 Audit Stage + PBAF-PROP-001 SOP asset bind; v1.21.4 (CEO-D-037) canon-hygiene; v1.21.3 (CEO-D-036) EVAL-041; v1.21.2 (CEO-D-035) EVAL-040; v1.21.1 (CEO-D-034) CSFIX; v1.21 (CEO-D-033) PROP-042/043/044.
 READ_BUDGET_TOKENS = 4000   # kernel cap: allowed_files token budget per card
 CARD_TOKEN_BUDGET = 1800    # max card size in tokens (per spec)
 VALID_MODEL_TIERS = {"cheap", "standard", "top"}
@@ -67,6 +67,24 @@ def resolve_profiles_path(args) -> tuple[str, str | None]:
                      "against a redirected profiles file in production; unset CX_PROFILES "
                      "or pass --profiles explicitly")
     return str(DEFAULT_PROFILES_PATH), None
+
+
+def resolve_kaizen_queue_path(default_path) -> tuple[str, str | None]:
+    """Kaizen live-queue path for `cx check evals`'s 4th leg (F-PROP-002): CX_KAIZEN_QUEUE
+    env (TEST-ONLY) > canonical live queue. Honored ONLY when CODE_X_TEST_MODE=1 — production
+    always audits the real live PROTOCOL-IMPROVEMENT-QUEUE.md. Mirrors resolve_profiles_path
+    (PBF-PROP-008) fail-loud posture: a stale/malicious env var must never silently redirect
+    the live-queue leg away from real canon. Returns (path, error): error is a P1 finding
+    message when the env is set outside test mode; callers must emit it and still run the
+    leg against the real default_path (the env is untrusted, not honored)."""
+    env = os.environ.get("CX_KAIZEN_QUEUE")
+    if env:
+        if os.environ.get("CODE_X_TEST_MODE") == "1":
+            return env, None
+        return str(default_path), ("CX_KAIZEN_QUEUE is set but CODE_X_TEST_MODE != 1 — "
+                     "refusing to redirect the kaizen live-queue leg away from real canon "
+                     "in production; unset CX_KAIZEN_QUEUE")
+    return str(default_path), None
 
 
 def profiles_sha12(path: str) -> str | None:

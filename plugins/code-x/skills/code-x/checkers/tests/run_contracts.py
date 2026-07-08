@@ -3149,7 +3149,11 @@ _RECIPES = {
 
 def run_cx(*args, env_overrides: dict | None = None):
     """env_overrides: {VAR: value} applied over os.environ; value None = unset VAR
-    (lets a clause test production env behavior, e.g. CX_PROFILES without test mode)."""
+    (lets a clause test production env behavior, e.g. CX_PROFILES without test mode).
+    F-PROP-002 fix: a `{CHECKERS_DIR}` token in an env VALUE is expanded to the absolute
+    checkers dir — env values are NOT cwd-relative-resolved like args are (resolve_args),
+    so a clause carrying a fixture path in env MUST use the token or the path silently
+    resolves against whatever cwd the harness was launched from (the wrong-reason class)."""
     env = None
     if env_overrides:
         env = dict(os.environ)
@@ -3157,7 +3161,7 @@ def run_cx(*args, env_overrides: dict | None = None):
             if v is None:
                 env = {ek: ev for ek, ev in env.items() if ek != k}
             else:
-                env[k] = str(v)
+                env[k] = str(v).replace("{CHECKERS_DIR}", str(CHECKERS_DIR))
     result = subprocess.run(
         [sys.executable, CX] + list(args),
         capture_output=True, text=True, env=env,

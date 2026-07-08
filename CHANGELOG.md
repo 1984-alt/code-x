@@ -10,6 +10,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.8]
+
+Syncs the public release up to protocol **v1.22.8** — kaizen-leg test wiring (patch class). 597 self-tests, 488 gate clauses, 33 `cx check` subcommands.
+
+### Added
+- **Kaizen-leg test wiring (F-PROP-002).** `cx check evals` runs four legs; the 4th (the live kaizen-queue closure check) always shelled to the real live `MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md`, ignoring `--checkers-dir` — so its contract clause `EVALS-KAIZEN-LIVE-QUEUE-WIRED` shared a byte-identical bad fixture with the suite-failure clause and never proved the kaizen leg bites for its OWN reason (the wrong-reason fixture class). Now `cx_common.resolve_kaizen_queue_path` adds a `CX_KAIZEN_QUEUE` test-only env override, honored ONLY under `CODE_X_TEST_MODE=1` (mirroring the `CX_PROFILES` fail-loud posture): set outside test mode it is REFUSED — a P1 finding fires AND the real live queue is still audited, never silently redirected. A new `evals_good_kaizen_leg` fixture pair plus a real bad kaizen queue fixture prove the leg fails on `KAIZEN-BEHAVIOURAL-APPLIED-NEEDS-ENFORCEMENT` while the other three legs stay green. New gate clause `EVALS-KAIZEN-QUEUE-ENV-TEST-ONLY` pins the fail-loud path; the harness now expands a `{CHECKERS_DIR}` token in clause env values (env values are not cwd-relative-resolved like args, so a fixture path carried in env must use the token). 3 new unit tests cover the override gating. EVAL-059 registered.
+- **Installer re-stamped to v1.22.8** via `installer/restamp-release.sh`.
+
+---
+
 ## [1.22.7]
 
 Syncs the public release up to protocol **v1.22.7** — version-floor base anchor + contract-pin backlog (patch class). 594 self-tests, 487 gate clauses, 33 `cx check` subcommands.

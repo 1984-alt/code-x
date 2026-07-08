@@ -13,11 +13,17 @@
 # --checkers-dir points the two suites at a different checkers tree (TEST-ONLY —
 # the contract harness uses it to prove this command bites without recursing into
 # the real run_contracts.py from inside itself).
+#
+# CX_KAIZEN_QUEUE (F-PROP-002, TEST-ONLY, honored only under CODE_X_TEST_MODE=1) points the
+# 4th leg (live kaizen queue) at a fixture queue file instead of the real live
+# MEMORY/PROTOCOL-IMPROVEMENT-QUEUE.md — this is what lets the contract harness prove the
+# kaizen leg itself bites, in isolation from the other 3 legs. Production always audits the
+# real live queue (see cx_common.resolve_kaizen_queue_path).
 import subprocess
 import sys
 from pathlib import Path
 
-from cx_common import findings_report
+from cx_common import findings_report, resolve_kaizen_queue_path
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -51,10 +57,16 @@ def cmd_evals(args) -> int:
 
     # live kaizen-queue closure — every APPLIED behavioural PROP must carry real enforcement
     # (PBF-PROP-012 Part C wires the A2-deferred line; the real queue must be closure-clean).
+    # F-PROP-002: queue_path resolves CX_KAIZEN_QUEUE (TEST-ONLY, gated on CODE_X_TEST_MODE=1)
+    # so a real bad fixture can exercise this leg in isolation; queue_err (env set outside test
+    # mode) is a P1 finding on its own and the real live queue still runs, untouched.
+    default_queue = THIS_DIR.parent / "MEMORY" / "PROTOCOL-IMPROVEMENT-QUEUE.md"
+    queue_path, queue_err = resolve_kaizen_queue_path(default_queue)
+    if queue_err:
+        findings.append(("P1", "kaizen (live queue)", queue_err))
     _run("kaizen (live queue)",
          [sys.executable, str(THIS_DIR / "cx"), "check", "kaizen",
-          "--conflict-scan",
-          str(THIS_DIR.parent / "MEMORY" / "PROTOCOL-IMPROVEMENT-QUEUE.md")],
+          "--conflict-scan", str(queue_path)],
          findings)
 
     return findings_report(findings)
