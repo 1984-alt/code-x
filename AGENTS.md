@@ -21,7 +21,7 @@ Requires Python ≥3.10 and PyYAML (`pip3 install pyyaml`).
 
 ```bash
 cd plugins/code-x/skills/code-x
-python3 checkers/tests/run.py             # 588 unit self-tests
+python3 checkers/tests/run.py             # 594 unit self-tests
 python3 checkers/tests/run_contracts.py   # 487 gate clauses each proven to bite
 python3 checkers/cx check evals           # full four-leg gate (what CI runs)
 ```

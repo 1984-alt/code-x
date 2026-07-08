@@ -1,7 +1,7 @@
 {
   "name": "code-x",
   "description": "Code-X: a structured AI development methodology for non-coders. Four-stage enforced workflow (plan, build, audit, fix), built-in cx checker, cross-family review gates, and session continuity — so AI agents plan before they build and catch the corners they quietly cut.",
-  "version": "1.22.6",
+  "version": "1.22.7",
   "author": {
     "name": "Awie",
     "email": "259842342+1984-alt@users.noreply.github.com"

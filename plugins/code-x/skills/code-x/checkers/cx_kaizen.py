@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -508,43 +509,55 @@ def _is_ancestor(commit: str, ref: str, cx_root: Path) -> bool:
         return False
 
 
-def _git_blame_line_sha(path: Path, line_no: int, cx_root: Path) -> str | None:
-    """Return the commit sha that last touched `path`'s `line_no` (1-based)."""
-    try:
-        result = subprocess.run(
-            ["git", "blame", "-L", f"{line_no},{line_no}", "--porcelain", str(path)],
-            capture_output=True, text=True, timeout=10, cwd=cx_root,
-        )
-        token = result.stdout.split()[0] if result.stdout.strip() else ""
-        if len(token) >= 7 and all(c in "0123456789abcdef" for c in token):
-            return token
-    except Exception:
-        pass
-    return None
+class _FloorBase(NamedTuple):
+    """Structured result of resolving the current version's declared conflict-scan floor.
+
+    sha: the resolved 40-hex commit, or None on any failure.
+    error_code: None on success, else one of ROW_MISSING / BASE_MISSING / BASE_DUPLICATE /
+        BASE_UNRESOLVABLE — lets the caller render a per-cause message (PBF-PROP-023).
+    detail: human fragment for the finding message ("" on success).
+    """
+    sha: str | None
+    error_code: str | None
+    detail: str
 
 
-def _lock_commit_for_version(version: str, cx_root: Path) -> str | None:
-    """Return the commit sha that locked protocol `version`, per VERSION-HISTORY.md.
+def _version_floor_base_for_version(version: str, cx_root: Path) -> _FloorBase:
+    """Resolve the DECLARED version-floor base for protocol `version`, per VERSION-HISTORY.md.
 
-    Prefers a backtick-quoted sha in the row's commits column; falls back to blaming
-    the row line itself (covers rows like v1.21's "this lock commit" self-reference,
-    since VERSION-HISTORY.md's own edit IS the lock commit).
+    PBF-PROP-023: the base is deliberately NOT the lock commit (e.g. v1.22.6's floor is the
+    carried v1.22.5 base, not its own close commit) — it is a structured `` base=`<40-hex>` ``
+    token the current version's row MUST declare, matched row-level (not cell-scoped; a stray
+    `|` in prose must not shift cell boundaries — see PBF-PROP-023 §2.1). Fail-closed: exactly
+    one match required; zero or two+ matches, or a sha that doesn't resolve to a real commit,
+    are each their own distinct cause. No first-backtick-sha fallback, no git-blame fallback —
+    both were the fragile positional convention this PROP retires. Only ever called with the
+    CURRENT `PROTOCOL_VERSION`; historical rows are never queried (append-only, untouched).
     """
     vh_path = cx_root / "VERSION-HISTORY.md"
     if not vh_path.is_file():
-        return None
+        return _FloorBase(None, "ROW_MISSING", f"VERSION-HISTORY.md not found at {vh_path}")
     try:
         lines = vh_path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return None
+        return _FloorBase(None, "ROW_MISSING", "VERSION-HISTORY.md unreadable")
     prefix = f"| v{version} |"
-    for idx, line in enumerate(lines):
+    for line in lines:
         if line.startswith(prefix):
-            m = re.search(r"`([0-9a-f]{7,40})`", line)
-            if m:
-                return m.group(1)
-            return _git_blame_line_sha(vh_path, idx + 1, cx_root)
-    return None
+            matches = re.findall(r"base=`([0-9a-f]{40})`", line)
+            if len(matches) == 1:
+                sha = matches[0]
+                result = subprocess.run(
+                    ["git", "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"],
+                    capture_output=True, text=True, timeout=10, cwd=cx_root,
+                )
+                if result.returncode != 0:
+                    return _FloorBase(None, "BASE_UNRESOLVABLE", sha)
+                return _FloorBase(sha, None, "")
+            if len(matches) == 0:
+                return _FloorBase(None, "BASE_MISSING", "")
+            return _FloorBase(None, "BASE_DUPLICATE", ", ".join(repr(m) for m in matches))
+    return _FloorBase(None, "ROW_MISSING", f"no v{version} row found in VERSION-HISTORY.md")
 
 
 def _cx_root(this_dir: Path) -> Path:
@@ -722,15 +735,29 @@ def _check_conflict_scan(prop_id: str, block: dict, queue_path: Path) -> list[tu
                         basis_errors.append(
                             f"basis.scan_commit {scan_commit!r} is not an ancestor of HEAD")
 
-                    lock_commit = _lock_commit_for_version(PROTOCOL_VERSION, cx_root)
-                    if lock_commit is None:
-                        basis_errors.append(
-                            f"cannot resolve the v{PROTOCOL_VERSION} lock commit from "
-                            f"VERSION-HISTORY.md — version floor unverifiable")
-                    elif not _is_ancestor(lock_commit, scan_commit, cx_root):
+                    floor = _version_floor_base_for_version(PROTOCOL_VERSION, cx_root)
+                    if floor.sha is None:
+                        if floor.error_code == "ROW_MISSING":
+                            basis_errors.append(
+                                f"version floor unverifiable — no v{PROTOCOL_VERSION} row "
+                                f"found in VERSION-HISTORY.md")
+                        elif floor.error_code == "BASE_MISSING":
+                            basis_errors.append(
+                                f"version floor unverifiable — the v{PROTOCOL_VERSION} row must "
+                                f"declare exactly one base=`<40-hex sha>` token (none found)")
+                        elif floor.error_code == "BASE_DUPLICATE":
+                            basis_errors.append(
+                                f"version floor unverifiable — the v{PROTOCOL_VERSION} row "
+                                f"declares multiple base= tokens ({floor.detail}) — exactly one "
+                                f"required")
+                        else:  # BASE_UNRESOLVABLE
+                            basis_errors.append(
+                                f"version floor unverifiable — base=`{floor.detail}` does not "
+                                f"resolve to a commit in this repo")
+                    elif not _is_ancestor(floor.sha, scan_commit, cx_root):
                         basis_errors.append(
                             f"basis.scan_commit {scan_commit!r} predates the v{PROTOCOL_VERSION} "
-                            f"lock commit {lock_commit!r} — scanned against pre-lock history")
+                            f"version-floor base {floor.sha!r} — scanned against pre-base history")
 
                     if declared_q_sha != live_q_sha:
                         basis_errors.append(

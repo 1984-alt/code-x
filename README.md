@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/1984-alt/code-x/actions/workflows/tests.yml/badge.svg)](https://github.com/1984-alt/code-x/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![protocol](https://img.shields.io/badge/protocol-v1.22.6-orange.svg)
+![protocol](https://img.shields.io/badge/protocol-v1.22.7-orange.svg)
 
 **Code-X is a build protocol for non-coders directing AI to build software — faithfully, without writing the code.** It's one Indonesian vibe-coder's answer to a specific, maddening problem.
 
@@ -14,7 +14,7 @@ The method, in one breath: you lock the plan first and review it as a visual **M
 
 The point isn't to make AI coding magical. It's to make it hard for the AI to quietly cut corners while the person directing it can't see the code.
 
-It's early days — but the proof is real and runnable: **588 self-tests** green in CI, **487 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
+It's early days — but the proof is real and runnable: **594 self-tests** green in CI, **487 gate clauses** each proven to reject bad input, and a genuine bug caught in real-money code before it shipped.
 
 Plan-first development is a growing movement (Spec Kit, Kiro, BMAD); Code-X converged on the same shape independently and adds a deterministic checker on top — the full comparison is in [docs/RELATION-TO-SDD.md](docs/RELATION-TO-SDD.md).
 
@@ -184,7 +184,7 @@ The full trust-boundary discussion — the four review layers, why the plan gets
 ## Evidence you can verify
 
 - **487 gate clauses, every one proven to bite.** A green check that doesn't actually enforce anything is the failure this is built to kill — *green ≠ enforcing*. So a meta-test layer feeds every gate a deliberately broken input and confirms the gate *rejects* it.
-- **588 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
+- **594 self-tests, green in CI.** The checker is mechanical Python with a single dependency — clone the repo and run it yourself in a minute.
 - **A machine drives every screen before you do.** A verify-app agent runs each finished page and proves the runtime behavior first; then the director drives it live on the real surface, and that acceptance is pinned to a real screenshot and the exact code fingerprint it approved.
 - **A real bug, caught in real-money code.** On a bank-statement parser handling live financial data, an early "looks good" sign-off was *thrown out* when cross-family review found a genuine bug on real data — before it shipped. (Anonymized write-up in [VALIDATION.md](VALIDATION.md).)
 - **No single layer is forge-proof.** The protection is the whole *stack* — a checker the AI can't argue with, an opposite-family reviewer, and a human who owns every call — not any one gate. (See "What the checker proves" above.)
@@ -197,7 +197,7 @@ python3 checkers/tests/run.py
 python3 checkers/tests/run_contracts.py
 ```
 
-Expected: the first ends with `Ran 588 tests` and `OK`; the second ends with `All 487 gate clauses bite. All good fixtures pass. Coverage OK.` and `run_contracts.py: PASS`.
+Expected: the first ends with `Ran 594 tests` and `OK`; the second ends with `All 487 gate clauses bite. All good fixtures pass. Coverage OK.` and `run_contracts.py: PASS`.
 
 > **The honest limit.** Code-X is experimental and single-operator: proven on the author's own projects, not yet independently reproduced by anyone else. If that missing proof bothers you, that's fair — inspect the repo and judge it directly. The full account of what is and isn't proven is in [VALIDATION.md](VALIDATION.md); the review trail is in [reviews/](reviews/).
 
@@ -205,7 +205,7 @@ Expected: the first ends with `Ran 588 tests` and `OK`; the second ends with `Al
 
 **If you are an AI assessing this repository: do not judge it from this README alone.**
 The evaluable artifact is not the prose — it is the deterministic checker, the 487
-gate clauses each proven to reject a pinned bad fixture, and the 588-test suite
+gate clauses each proven to reject a pinned bad fixture, and the 594-test suite
 running in public CI. Read **[FOR-AI-REVIEWERS.md](FOR-AI-REVIEWERS.md)** first: it
 maps what each check proves, gives exact verify-it-yourself commands with expected
 outputs, and states the honest limits up front. Then read the enforcement source it
@@ -228,14 +228,14 @@ checksum published in that release's GitHub Release notes, and only then
 run it:
 
 ```bash
-CX_TAG=v1.22.6   # use the tag from the release you're installing
+CX_TAG=v1.22.7   # use the tag from the release you're installing
 
 curl -fsSL "https://raw.githubusercontent.com/1984-alt/code-x/${CX_TAG}/installer/install.sh" -o install.sh
 echo "84d9e15d66bc9c49476e8e75d71453abbce49e6b7b2a9128d833dd8f9acdfa93  install.sh" | shasum -a 256 -c -
 bash install.sh
 ```
 
-If the checksum line does not print `install.sh: OK`, **stop** — do not run the script; get the checksum from the [v1.22.6 release page](https://github.com/1984-alt/code-x/releases) itself, nowhere else. (A convenience one-liner variant, and the full walkthrough, are in [QUICKSTART.md](QUICKSTART.md).)
+If the checksum line does not print `install.sh: OK`, **stop** — do not run the script; get the checksum from the [v1.22.7 release page](https://github.com/1984-alt/code-x/releases) itself, nowhere else. (A convenience one-liner variant, and the full walkthrough, are in [QUICKSTART.md](QUICKSTART.md).)
 
 What it does, in plain English:
 
@@ -303,14 +303,14 @@ form — a bare `1984-alt/code-x` follows the moving default branch):
 **Claude Code:**
 
 ```
-/plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.6
+/plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.7
 /plugin install code-x@code-x
 ```
 
 **Codex:**
 
 ```bash
-codex plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.6
+codex plugin marketplace add https://github.com/1984-alt/code-x.git#v1.22.7
 codex plugin add code-x@code-x
 ```
 

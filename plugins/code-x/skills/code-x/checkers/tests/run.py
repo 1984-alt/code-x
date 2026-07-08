@@ -3747,20 +3747,20 @@ class TestSubstantiveSourceHash(unittest.TestCase):
 
 
 class TestProtocolVersionIdentity(unittest.TestCase):
-    def test_protocol_version_constant_marks_1_22_6_folded(self):
-        """The checker reports v1.22.6 (CEO-D-051 fold 2026-07-07; lock-onto-main pending CEO "lock") as the protocol version."""
+    def test_protocol_version_constant_marks_1_22_7_folded(self):
+        """The checker reports v1.22.7 (CEO-D-053 fold 2026-07-08) as the protocol version."""
         sys.path.insert(0, str(CHECKERS_DIR))
         try:
             import cx_common
-            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.6")
+            self.assertEqual(cx_common.PROTOCOL_VERSION, "1.22.7")
         finally:
             sys.path.pop(0)
 
-    def test_cx_version_reports_1_22_6_folded(self):
-        """`cx --version` reports the v1.22.6 (CEO-D-051) canonical version (not candidate)."""
+    def test_cx_version_reports_1_22_7_folded(self):
+        """`cx --version` reports the v1.22.7 (CEO-D-053) canonical version (not candidate)."""
         rc, out = run_cx("--version")
         self.assertEqual(rc, 0, f"Expected exit 0 from --version, got {rc}.\n{out}")
-        self.assertRegex(out, r"V1\.22\.6(?!\d)")
+        self.assertRegex(out, r"V1\.22\.7(?!\d)")
         self.assertNotIn("candidate", out)
 
     def test_entrypoints_guard_old_python(self):
@@ -5743,9 +5743,11 @@ class ConflictScanResolution(unittest.TestCase):
         self._git("commit", "-q", "-m", "c2")
         self.sha2 = self._git("rev-parse", "HEAD")
 
-        # commit3 (HEAD): the version-lock row now points at sha2 -> lock_commit resolves to sha2.
-        self.vh.write_text(f"| v{self.version} | 2026-07-01 | test | `{self.sha2}` | CEO-D-x |\n",
-                           encoding="utf-8")
+        # commit3 (HEAD): the row now declares a base= token pointing at sha2 (PBF-PROP-023) ->
+        # the version-floor base resolves to sha2.
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 | test | base=`{self.sha2}` | CEO-D-x |\n",
+            encoding="utf-8")
         self._git("add", "-A")
         self._git("commit", "-q", "-m", "c3")
 
@@ -5788,11 +5790,12 @@ class ConflictScanResolution(unittest.TestCase):
         self.assertIn("queue_sha stale", msgs[0])
 
     def test_resolution_below_version_floor_bites(self):
-        """(c) scan_commit before the version-lock commit -> tighter floor BITES P1."""
+        """(c) scan_commit before the version-floor base -> tighter floor BITES P1 (t1)."""
         findings = self._run(self._block(self.sha1))
         msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
         self.assertTrue(msgs, "Expected a BASIS-CURRENT P1")
         self.assertIn("predates", msgs[0])
+        self.assertIn("version-floor base", msgs[0])
 
     def test_resolution_unresolvable_commit_fails_closed(self):
         """P0-2: a well-formed but non-existent scan_commit fails CLOSED, not SHAPE-only."""
@@ -5802,6 +5805,84 @@ class ConflictScanResolution(unittest.TestCase):
         msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
         self.assertTrue(msgs, "Expected a fail-closed P1")
         self.assertIn("does not resolve to a committed blob", msgs[0])
+
+    # -----------------------------------------------------------------------
+    # PBF-PROP-023 — declared version-floor base=`<sha>` token (t2-t7)
+    # -----------------------------------------------------------------------
+    def test_resolution_hijack_prose_sha_ignored(self):
+        """(t2) HIJACK: a prose backtick sha appearing BEFORE base= in the row must NOT become
+        the floor — only the base= token is honored, position no longer carries meaning."""
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 | test `{self.sha1}` prose | "
+            f"base=`{self.sha2}` | CEO-D-x |\n", encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        basis_hits = [f for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertEqual(basis_hits, [],
+            f"Expected the base= token (sha2) to win over the earlier prose sha1, got: {basis_hits}")
+        # If the parser had wrongly picked the earlier prose sha1 as the floor, scanning AT
+        # sha1 would silently PASS (ancestor-or-equal of itself). It must still bite.
+        findings_below = self._run(self._block(self.sha1))
+        msgs = [f[2] for f in findings_below if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected floor breach against the base= sha, not the prose sha")
+        self.assertIn("version-floor base", msgs[0])
+
+    def test_resolution_missing_base_token_fails_closed(self):
+        """(t3) MISSING: no base= token at all -> BASE_MISSING, no silent blame fallback."""
+        self.vh.write_text(f"| v{self.version} | 2026-07-01 | test | `{self.sha2}` | CEO-D-x |\n",
+                           encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected version floor unverifiable (BASE_MISSING)")
+        self.assertIn("exactly one base=", msgs[0])
+        self.assertIn("(none found)", msgs[0])
+
+    def test_resolution_duplicate_base_token_fails_closed(self):
+        """(t4) DUPLICATE: two base= tokens -> BASE_DUPLICATE, message names both shas."""
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 | test | base=`{self.sha1}` base=`{self.sha2}` | "
+            f"CEO-D-x |\n", encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected version floor unverifiable (BASE_DUPLICATE)")
+        self.assertIn("multiple base= tokens", msgs[0])
+        self.assertIn(self.sha1, msgs[0])
+        self.assertIn(self.sha2, msgs[0])
+
+    def test_resolution_non_commit_base_fails_closed(self):
+        """(t5) NON-COMMIT: well-formed 40-hex base= that is not a real commit -> BASE_UNRESOLVABLE,
+        its own message (not a misleading mass-"predates")."""
+        fake_sha = "c" * 40
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 | test | base=`{fake_sha}` | CEO-D-x |\n",
+            encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected version floor unverifiable (BASE_UNRESOLVABLE)")
+        self.assertIn("does not resolve to a commit", msgs[0])
+        self.assertIn(fake_sha, msgs[0])
+
+    def test_resolution_legacy_row_shape_no_base_fails(self):
+        """(t6) LEGACY: the pre-PBF-PROP-023 row shape (first-backtick-sha convention, v1.00..
+        v1.22.6 style) has no base= token -> now fails BASE_MISSING, pinning that the deleted
+        first-sha-scan fallback stays deleted."""
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 · 12:00 | legacy-shape row | "
+            f"`{self.sha2}` + this lock commit | CEO-D-x |\n", encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected the legacy first-sha shape to fail (fallback deleted)")
+        self.assertIn("exactly one base=", msgs[0])
+
+    def test_resolution_malformed_short_base_fails(self):
+        """(t7) MALFORMED: an 8-hex `` base=`5242bbdc` `` and an unbackticked `base=<sha>` are
+        both treated as no declaration -> BASE_MISSING."""
+        self.vh.write_text(
+            f"| v{self.version} | 2026-07-01 | test | base=`5242bbdc` base={self.sha2} | "
+            f"CEO-D-x |\n", encoding="utf-8")
+        findings = self._run(self._block(self.sha2))
+        msgs = [f[2] for f in findings if "BASIS-CURRENT" in f[2]]
+        self.assertTrue(msgs, "Expected malformed/short base= to be treated as absent")
+        self.assertIn("exactly one base=", msgs[0])
 
 
 # StageRenameChecks (PBF-PROP-013 — stage-prefix id format + crosswalk clauses)

@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.7]
+
+Syncs the public release up to protocol **v1.22.7** — version-floor base anchor + contract-pin backlog (patch class). 594 self-tests, 487 gate clauses, 33 `cx check` subcommands.
+
+### Added
+- **Version-floor base anchor (PBF-PROP-023).** The kaizen conflict-scan's "version floor" (the commit a queued PROP's scan must not predate) used to resolve from the FIRST backtick-quoted sha found anywhere in the current version's VERSION-HISTORY row — a positional prose convention: an innocent citation reorder, or a hex-looking non-commit in prose, could silently move the floor or produce misleading mass-"predates" failures. Now the current version's row must declare exactly one structured row-level `` base=`<40-hex sha>` `` token; the parser (`_lock_commit_for_version` renamed `_version_floor_base_for_version`) returns a per-cause result (row missing / token missing / duplicate token / sha not a real commit — each with its own plain-English failure message) and fails CLOSED — both legacy fallbacks (first-sha scan and git-blame) are deleted. Proven by 6 new `ConflictScanResolution` tests covering hijack, missing, duplicate, non-commit, legacy-row and malformed-token cases. EVAL-058 registered.
+- **`expect_contains` backlog closed (PBF-PROP-021 remainder).** 95 pre-existing contract clauses that proved only "the gate fails on the bad fixture" now also pin WHY it fails: each clause's `expect_contains` substring is verified against the real failure output, so a gate that starts failing for the wrong reason turns the meta-suite red. EVAL-057 registered.
+- **Installer re-stamped to v1.22.7** via `installer/restamp-release.sh`.
+
+---
+
 ## [1.22.6]
 
 Syncs the public release up to protocol **v1.22.6** — an audit fold (patch class). 588 self-tests, 487 gate clauses, 33 `cx check` subcommands.

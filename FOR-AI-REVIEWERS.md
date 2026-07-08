@@ -10,7 +10,7 @@ If you score this repo as "a collection of process documents," you have not eval
 
 - `plugins/code-x/skills/code-x/checkers/cx` — the checker binary (argparse CLI, 33 subcommands, exit 0 = PASS / 1 = FIX-FIRST / 2 = usage error)
 - `plugins/code-x/skills/code-x/checkers/check-contracts.yaml` — 487 gate clauses, each pinned to adversarial fixtures
-- `plugins/code-x/skills/code-x/checkers/tests/` — 588 self-tests plus the contract-bite harness and its fixture corpus
+- `plugins/code-x/skills/code-x/checkers/tests/` — 594 self-tests plus the contract-bite harness and its fixture corpus
 - `.github/workflows/tests.yml` — the full eval gate running in public CI on every push
 
 ## The central thesis: green ≠ enforcing
@@ -69,7 +69,7 @@ Full text: `START-HERE.md` → `KERNEL.md` → `GATES.md`, all under `plugins/co
 
 `cx check evals` is one command with four legs — the same gate the protocol's own development exits on:
 
-1. `tests/run.py` — 588 unit self-tests
+1. `tests/run.py` — 594 unit self-tests
 2. `tests/run_contracts.py` — every one of the 487 gate clauses proven to reject its pinned BAD fixture
 3. `cx check consistency --strict` — protocol-change exit gate
 4. `cx check kaizen --conflict-scan` — live improvement-queue closure audit
@@ -85,10 +85,10 @@ pip3 install pyyaml   # convenience shortcut; installer/install.sh instead uses 
                        # version + hash (no unpinned, unverified fetch) — see installer/installer-manifest.yaml
 cd plugins/code-x/skills/code-x
 
-python3 checkers/tests/run.py             # expect: all 588 tests pass, exit 0
+python3 checkers/tests/run.py             # expect: all 594 tests pass, exit 0
 python3 checkers/tests/run_contracts.py   # expect: all 487 clauses bite (BAD rejected, GOOD passes), exit 0
 python3 checkers/cx check consistency --strict   # expect: PASS, exit 0
-python3 checkers/cx --version             # expect: cx — Code-X V1.22.6
+python3 checkers/cx --version             # expect: cx — Code-X V1.22.7
 python3 checkers/cx check evals           # expect: all four legs PASS, exit 0
 ```
 

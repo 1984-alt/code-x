@@ -62,6 +62,8 @@
 | PROP-053 | PBF-PROP-020 | Mockup-first change rule — no unrendered visuals anywhere in the loop |
 | PROP-054 | PBF-PROP-021 | Audit hole-closing bundle (CX-AUDIT 2026-07-07: 15 confirmed P1 false-PASS holes) |
 | PROP-055 | PBF-PROP-022 | Gate ROI slimming bundle (ceremony-cut, catch-rate preserved) |
+| PROP-056 | PBF-PROP-023 | Version-floor base anchor — declared `base=` token replaces positional first-sha convention |
+| PROP-057 | F-PROP-002 | Kaizen eval sub-check needs a test-only --checkers-dir override (wrong-reason fixture gap) |
 
 ## Retired (no new id)
 

@@ -17,6 +17,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_missing_field.yaml"]
       expect_severity: P0
+      expect_contains: "missing required field: model_tier"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -40,6 +41,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_unnamed_model_tier.yaml"]
       expect_severity: P1
+      expect_contains: "model_tier 'medium' not in ['cheap', 'standard', 'top']"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -51,6 +53,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_missing_source_map.yaml"]
       expect_severity: P0
+      expect_contains: "missing source_map — card must be traceable to a frozen packet"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -62,6 +65,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_source_sections_not_list.yaml"]
       expect_severity: P1
+      expect_contains: "source_map.source_sections must be a non-empty list of packet-slice mappings"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -73,6 +77,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_empty_source_sections.yaml"]
       expect_severity: P1
+      expect_contains: "source_map.source_sections must be a non-empty list of packet-slice mappings"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -84,6 +89,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_audit_status_pending.yaml"]
       expect_severity: P0
+      expect_contains: "card_compilation.audit_status='PENDING' — must be PASS"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -95,6 +101,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_same_family.yaml"]
       expect_severity: P0
+      expect_contains: "cross_review.family == executor.family — same-family cross-review REJECTED"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -106,6 +113,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_foundation_checkpoint_no_reason.yaml"]
       expect_severity: P1
+      expect_contains: "foundation_checkpoint_required: yes but foundation_checkpoint_reason is empty"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -118,6 +126,7 @@ clauses:
       args: ["tests/fixtures/card_dependent_unmet_checkpoint.yaml",
              "--state", "tests/fixtures/state_foundation_unmet.yaml"]
       expect_severity: P1
+      expect_contains: "requires a foundation checkpoint that is NOT recorded in foundation_checkpoints_passed"
     good:
       args: ["tests/fixtures/card_dependent_unmet_checkpoint.yaml",
              "--state", "tests/fixtures/state_foundation_met.yaml"]
@@ -130,6 +139,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_dependent_unmet_checkpoint.yaml"]
       expect_severity: P1
+      expect_contains: "--state was not supplied — card check must FAIL CLOSED"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -141,6 +151,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_missing_security_tripwire.yaml"]
       expect_severity: P0
+      expect_contains: "security_tripwire missing — must be set by the compiler"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -152,6 +163,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_over_budget_read.yaml"]
       expect_severity: P1
+      expect_contains: "read.required has 30 files — likely over the kernel read budget"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -163,6 +175,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_estimate_tokens_over_ceiling.yaml"]
       expect_severity: P1
+      expect_contains: "read.estimate_tokens=9999 exceeds kernel ceiling 4000"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -174,6 +187,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_missing_workorder_fields.yaml"]
       expect_severity: P1
+      expect_contains: "relevant_invariants missing or empty — required work-order field per CHARTER"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -185,6 +199,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_review_fix_cycles.yaml"]
       expect_severity: P1
+      expect_contains: "loop_budget.review_fix_cycles must be <= 1 under one-and-done review discipline"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1002,6 +1017,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P2
+      expect_contains: "session_start.module_demo_mode missing — a BUILD/FIXING session must declare demo_every_user_facing_module"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1305,6 +1321,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_multi_sentence_objective.yaml"]
       expect_severity: P2
+      expect_contains: "objective appears to be multiple sentences — keep to one"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1322,6 +1339,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_missing_execution.yaml"]
       expect_severity: P0
+      expect_contains: "execution block missing — must be injected by the Card Compiler"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1333,6 +1351,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_profiles_hash_stale.yaml"]
       expect_severity: P1
+      expect_contains: "!= current BUILD-ENGINE-PROFILES hash"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1344,6 +1363,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_exec_seat_drift.yaml"]
       expect_severity: P1
+      expect_contains: "seat 'fable medium' not found in BUILD-ENGINE-PROFILES roles.implementer"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1355,6 +1375,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_mechanical_implementer.yaml"]
       expect_severity: P0
+      expect_contains: "puts mechanical-class model 'haiku' in an implementer (app-code) seat — code_writing_floor violation"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1366,6 +1387,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_exec_limits_exceeded.yaml"]
       expect_severity: P1
+      expect_contains: "execution.limits.max_parallel_subagents=8 exceeds BUILD-ENGINE-PROFILES cap 4"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1377,6 +1399,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_top_tier_no_reason.yaml"]
       expect_severity: P1
+      expect_contains: "without top_allowed_reason — name the ROUTING top-tier reason"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1388,6 +1411,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_coderabbit_cross_review.yaml"]
       expect_severity: P0
+      expect_contains: "CodeRabbit recorded as a SATISFIED cross-family checkpoint — REJECTED"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -1403,6 +1427,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_engine_missing.yaml"]
       expect_severity: P1
+      expect_contains: "active_build_engine 'None' missing or not in ['CLAUDE_CODE', 'CODEX_APP']"
     good:
       args: ["tests/fixtures/state_good.yaml"]
 
@@ -1414,6 +1439,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_orchestrator_exceeds.yaml"]
       expect_severity: P1
+      expect_contains: "orchestrator_model 'fable max' exceeds the BUILD-ENGINE-PROFILES seat 'opus max'"
     good:
       args: ["tests/fixtures/state_good.yaml"]
 
@@ -1425,6 +1451,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad.yaml"]
       expect_severity: P0
+      expect_contains: "protocol_stamp must be 'Code-X V1', got 'Code-X v0.13'"
     good:
       args: ["tests/fixtures/state_good.yaml"]
 
@@ -1436,6 +1463,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_last_commit_missing.yaml"]
       expect_severity: P1
+      expect_contains: "last_commit missing or empty — required as anti-chat-only-drift anchor"
     good:
       args: ["tests/fixtures/state_good.yaml"]
 
@@ -1447,6 +1475,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_counts_mismatch.yaml"]
       expect_severity: P1
+      expect_contains: "open_findings.counts.p1=0 but items list has 1 P1 findings"
     good:
       args: ["tests/fixtures/state_good.yaml"]
 
@@ -1462,6 +1491,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_bad_forbidden.txt"]
       expect_severity: P0
+      expect_contains: "diff touches forbidden_file: .env"
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
@@ -1474,6 +1504,7 @@ clauses:
       args: ["tests/fixtures/card_empty_allowed_files.yaml",
              "tests/fixtures/diff_bad_empty_allowed_files.txt"]
       expect_severity: P1
+      expect_contains: "allowed_files is empty but diff has real changes"
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
@@ -1485,6 +1516,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_money_tripwire_no.yaml", "tests/fixtures/diff_bad_money.txt"]
       expect_severity: P1
+      expect_contains: "security_tripwire.touches_money_or_balances=no but diff touches matching files"
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
@@ -1497,6 +1529,7 @@ clauses:
       args: ["tests/fixtures/card_all_tripwires_no.yaml",
              "tests/fixtures/diff_touches_network.txt"]
       expect_severity: P1
+      expect_contains: "security_tripwire.touches_network_or_public_surface=no but diff touches matching files"
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
@@ -1508,6 +1541,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_with_secret.txt"]
       expect_severity: P0
+      expect_contains: "diff contains secret pattern — refer by name only"
     good:
       args: ["tests/fixtures/card_good.yaml", "tests/fixtures/diff_good.txt"]
 
@@ -1535,6 +1569,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_missing_evidence.yaml"]
       expect_severity: P0
+      expect_contains: "evidence_required path missing: tests/fixtures/_does_not_exist.md"
     good:
       args: ["tests/fixtures/card_final_ready_relpath.yaml"]
 
@@ -1547,6 +1582,7 @@ clauses:
       args: ["tests/fixtures/card_fix_test_edits_not_allowed.yaml",
              "--diff", "tests/fixtures/diff_bad_test_unauthorized.txt"]
       expect_severity: P1
+      expect_contains: "diff touches test file 'tests/test_app.py' but fix_test_edits.allowed is not yes"
     good:
       args: ["tests/fixtures/card_final_ready_relpath.yaml"]
 
@@ -1601,6 +1637,7 @@ clauses:
     bad:
       args: ["tests/fixtures/cost_log_review_fix_cycles_over.yaml"]
       expect_severity: P1
+      expect_contains: "review_fix_cycles=2 > 1 violates one-and-done"
     good:
       args: ["tests/fixtures/cost_log_good.yaml"]
 
@@ -1612,6 +1649,7 @@ clauses:
     bad:
       args: ["tests/fixtures/cost_log_bad.yaml"]
       expect_severity: P1
+      expect_contains: "model_tier 'ultra' not in ['cheap', 'standard', 'top']"
     good:
       args: ["tests/fixtures/cost_log_good.yaml"]
 
@@ -1651,6 +1689,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_final_ready.yaml"]
       expect_severity: P0
+      expect_contains: "open_findings.counts.p0=1 — all findings must be zero for READY verdict"
     good:
       args: ["tests/fixtures/state_good_final_ready.yaml"]
 
@@ -1662,6 +1701,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_missing_gate_fields.yaml"]
       expect_severity: P0
+      expect_contains: "built_app_audit block missing from state"
     good:
       args: ["tests/fixtures/state_good_final_ready.yaml"]
 
@@ -1797,6 +1837,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_bad_dup_id.yaml"]
       expect_severity: P1
+      expect_contains: "duplicate id 'eval-count' in registry"
     good:
       args: []
 
@@ -1808,6 +1849,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_bad_missing_path.yaml"]
       expect_severity: P1
+      expect_contains: "appears_in path does not exist: DOES_NOT_EXIST/no-such-file.md"
     good:
       args: []
 
@@ -1819,6 +1861,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_path_escape.yaml"]
       expect_severity: P0
+      expect_contains: "appears_in path '../../etc/passwd' escapes the Code-X root via '..'"
     good:
       args: []
 
@@ -1830,6 +1873,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_drifted.yaml"]
       expect_severity: P1
+      expect_contains: "required phrase(s) absent: 'THIS CANONICAL TEXT WAS REWORDED AND DOES NOT APPEAR IN ANY FILE'"
     good:
       args: []
 
@@ -1841,6 +1885,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_meaning_flip.yaml"]
       expect_severity: P1
+      expect_contains: "required phrase(s) absent: 'weaken'"
     good:
       args: []
 
@@ -1892,6 +1937,7 @@ clauses:
     bad:
       args: ["tests/fixtures/deck_bad_missing_building_cards", "tests/fixtures/deck_bad_missing_building_packet"]
       expect_severity: P0
+      expect_contains: "requirement 'REQ-002' disposition=BUILDING but appears in NO card's requirement_ids"
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
 
@@ -1903,6 +1949,7 @@ clauses:
     bad:
       args: ["tests/fixtures/deck_bad_not_building_no_ref_cards", "tests/fixtures/deck_bad_not_building_no_ref_packet"]
       expect_severity: P1
+      expect_contains: "requirement 'REQ-002' disposition=NOT_BUILDING missing 'ceo_decision_ref'"
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
 
@@ -1914,6 +1961,7 @@ clauses:
     bad:
       args: ["tests/fixtures/deck_bad_ghost_cards", "tests/fixtures/deck_bad_ghost_packet"]
       expect_severity: P1
+      expect_contains: "card claims requirement 'REQ-999' which is not in the manifest — ghost requirement"
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
 
@@ -1925,6 +1973,7 @@ clauses:
     bad:
       args: ["tests/fixtures/deck_bad_hash_mismatch_cards", "tests/fixtures/deck_bad_hash_mismatch_packet"]
       expect_severity: P0
+      expect_contains: "frozen-hash mismatch: card has 'deadbeefdeadbeef"
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
 
@@ -1941,6 +1990,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "state points outside this branch's history — wrong worktree/branch or stale state"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1954,6 +2004,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "uncommitted work without WIP_CONTINUATION marker"
     good:
       git_fixture: wip_marked_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -1967,6 +2018,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P2
+      expect_contains: "WIP marked but unowned — add owner_card + handoff_ref"
 
   - id: STATE-SESSION-BEHIND-WARN
     check: state
@@ -1991,6 +2043,7 @@ clauses:
       args: ["tests/fixtures/card_good.yaml"]
       env: { CODE_X_TEST_MODE: null }
       expect_severity: P1
+      expect_contains: "CX_PROFILES is set but CODE_X_TEST_MODE != 1"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -2003,6 +2056,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P2
+      expect_contains: "session_start.builder_standard_read missing or not PASS (status+file+hash)"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2016,6 +2070,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P2
+      expect_contains: "session_start.orchestration_mode missing — a BUILD/FIXING session must declare dispatch_subagents"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2028,6 +2083,7 @@ clauses:
     bad:
       args: ["tests/fixtures/deck_bad_unresolved_ref_cards", "tests/fixtures/deck_bad_unresolved_ref_packet"]
       expect_severity: P1
+      expect_contains: "ceo_decision_ref 'CEO-D-099' does not resolve to a CEO-DECISION-LEDGER.md row id"
     good:
       args: ["tests/fixtures/deck_good_cards", "tests/fixtures/deck_good_packet"]
 
@@ -2075,6 +2131,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_no_coverage_map"]
       expect_severity: P1
+      expect_contains: "coverage-map.yaml missing — the packet floor starts with the coverage map"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2086,6 +2143,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_missing_category"]
       expect_severity: P1
+      expect_contains: "coverage map missing category ids [20]"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2097,6 +2155,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_row_file_missing"]
       expect_severity: P1
+      expect_contains: "category 4 DONE but file 'missing-TRD.md' does not exist in the packet"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2108,6 +2167,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_always_na"]
       expect_severity: P1
+      expect_contains: "category 10 is always-on and may never be N/A"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2119,6 +2179,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_ledger_missing_asks"]
       expect_severity: P1
+      expect_contains: "ledger missing required section '## CEO Asks Register'"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2130,6 +2191,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_open_asks"]
       expect_severity: P1
+      expect_contains: "ledger has open CEO asks (MISSING) — cannot freeze a packet with MISSING or PARTIAL asks"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2141,6 +2203,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_no_completeness"]
       expect_severity: P1
+      expect_contains: "completeness-audit.md missing — the completeness audit (fresh cold reader) must be appended"
     good:
       args: ["tests/fixtures/packet_good"]
 
@@ -2315,6 +2378,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_bad_missing_approach.yaml"]
       expect_severity: P1
+      expect_contains: "three_leg_ask.approach_improvement missing or placeholder ('')"
     good:
       args: ["tests/fixtures/card_review_good.yaml"]
 
@@ -2326,6 +2390,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_bad_placeholder.yaml"]
       expect_severity: P1
+      expect_contains: "three_leg_ask.approach_improvement missing or placeholder ('asked')"
     good:
       args: ["tests/fixtures/card_review_good.yaml"]
 
@@ -2337,6 +2402,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_bad_no_labels_no_ref.yaml"]
       expect_severity: P1
+      expect_contains: "three_leg_ask.continuity lacks the canonical label 'CONTINUITY' and the card has no prompt_ref"
     good:
       args: ["tests/fixtures/card_review_good.yaml"]
 
@@ -2348,6 +2414,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_bad_no_block.yaml"]
       expect_severity: P1
+      expect_contains: "mode REVIEW card without review_dispatch.required: yes"
     good:
       args: ["tests/fixtures/card_review_good.yaml"]
 
@@ -2359,6 +2426,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_bad_missing_approach.yaml"]
       expect_severity: P1
+      expect_contains: "three_leg_ask.approach_improvement missing or placeholder ('')"
     good:
       args: ["tests/fixtures/card_good.yaml"]
 
@@ -2374,6 +2442,7 @@ clauses:
     bad:
       args: ["tests/fixtures/packet_bad_style_direction_missing"]
       expect_severity: P1
+      expect_contains: "taste lock has no locked_style_direction block (P-PROP-002)"
     good:
       args: ["tests/fixtures/packet_good_style_locked"]
 
@@ -2429,6 +2498,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P2
+      expect_contains: "session_start.lessons_preload missing or not PASS (status+file+hash)"
     good:
       git_fixture: planning_lessons_ack_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2445,6 +2515,7 @@ clauses:
     bad:
       args: ["--registry", "tests/fixtures/consistency_registry_scoped.yaml", "--strict"]
       expect_severity: P1
+      expect_contains: "rule 'review-per-module': 2 key_phrases present in unlisted file"
     good:
       args: ["--registry", "tests/fixtures/consistency_registry_scoped.yaml"]
 
@@ -2462,6 +2533,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "session_start.protocol_boot_ack missing receipt+receipt_hash"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2475,6 +2547,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "!= live receipt hash '"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2488,6 +2561,7 @@ clauses:
     bad:
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "review_boundary block missing — a build session must declare reviewer taxonomy/timing as typed state"
     good:
       git_fixture: ancestor_ok
       args: ["{STATE}", "--session-start", "--repo-root", "{REPO}"]
@@ -2500,6 +2574,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_review_boundary_enum.yaml"]
       expect_severity: P1
+      expect_contains: "review_boundary.cross_family_boundary 'whenever convenient' not in ['ceo_deferred', 'final', 'foundation_checkpoint', 'module']"
     good:
       args: ["tests/fixtures/state_good_review_boundary.yaml"]
 
@@ -2547,6 +2622,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_ceo_deferred_no_ref.yaml"]
       expect_severity: P1
+      expect_contains: "cross_family_boundary: ceo_deferred REQUIRES ceo_decision_ref + deferred_review_blocks"
     good:
       args: ["tests/fixtures/state_good_ceo_deferred.yaml"]
 
@@ -2582,6 +2658,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_deviation_untyped.yaml"]
       expect_severity: P1
+      expect_contains: "protocol_deviations[0].ceo_decision_ref missing — a deviation without it is an unrecorded deviation"
     good:
       args: ["tests/fixtures/state_good_deviation.yaml"]
 
@@ -2593,6 +2670,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_incident_no_cause_repair.yaml"]
       expect_severity: P1
+      expect_contains: "stop_status PROTOCOL_INCIDENT without a protocol_incident block"
     good:
       args: ["tests/fixtures/state_good_incident_open.yaml"]
 
@@ -2608,6 +2686,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_ui_no_contract.yaml"]
       expect_severity: P1
+      expect_contains: "card touches UI files (templates/static/HTML) or purges Mode A fixtures WITHOUT ui_contract"
     good:
       args: ["tests/fixtures/card_good_ui_contract.yaml"]
 
@@ -2619,6 +2698,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_ui_contract_not_in_read.yaml"]
       expect_severity: P1
+      expect_contains: "ui_contract.taste_lock 'docs/design/PRODUCT-TASTE-LOCK.md' is not in read.required"
     good:
       args: ["tests/fixtures/card_good_ui_contract.yaml"]
 
@@ -2630,6 +2710,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_purge_no_replacement_map.yaml"]
       expect_severity: P1
+      expect_contains: "design_fixture_purge: yes without fixture_replacement_map rows"
     good:
       args: ["tests/fixtures/card_good_ui_contract.yaml"]
 
@@ -2641,6 +2722,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_ui_review_no_visual_context.yaml"]
       expect_severity: P1
+      expect_contains: "UI review dispatch without visual_contract_context"
     good:
       args: ["tests/fixtures/card_good_ui_review_visual_context.yaml"]
 
@@ -2652,6 +2734,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_good.yaml", "--state", "tests/fixtures/state_incident_open_other_repair.yaml"]
       expect_severity: P1
+      expect_contains: "PROTOCOL_INCIDENT open in state — new build cards are BLOCKED"
     good:
       args: ["tests/fixtures/card_good.yaml", "--state", "tests/fixtures/state_incident_repair_build001.yaml"]
 
@@ -2663,6 +2746,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_review_good.yaml", "--state", "tests/fixtures/state_incident_open_other_repair.yaml"]
       expect_severity: P1
+      expect_contains: "requesting cross-family review or final-ready is forbidden while the incident is open"
     good:
       args: ["tests/fixtures/card_review_good.yaml", "--state", "tests/fixtures/state_good.yaml"]
 
@@ -2680,6 +2764,7 @@ clauses:
     bad:
       args: ["--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "state points outside this branch's history — wrong worktree/branch or stale state"
     good:
       git_fixture: ancestor_ok
       args: ["--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -2693,6 +2778,7 @@ clauses:
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "card incomplete — no project test command named"
     good:
       git_fixture: build_turn_ok
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -2706,6 +2792,7 @@ clauses:
     bad:
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "named test command failed (rc=128): fatal: Needed a single revision"
     good:
       git_fixture: build_turn_ok
       args: ["{REPO}/card.yaml", "--state", "{STATE}", "--repo-root", "{REPO}"]
@@ -2733,6 +2820,7 @@ clauses:
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "handoff has no typed close_turn yaml block"
     good:
       git_fixture: close_turn_ok
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -2746,6 +2834,7 @@ clauses:
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "findings_delta row 'F-999' is OPEN in the handoff but 'F-999' is not an OPEN open_findings item in state"
     good:
       git_fixture: close_turn_ok
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -2759,6 +2848,7 @@ clauses:
     bad:
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
       expect_severity: P1
+      expect_contains: "vault_sync SKIPPED_WITH_REASON without reason + where_saved"
     good:
       git_fixture: close_turn_ok
       args: ["--state", "{STATE}", "--handoff", "{REPO}/handoff.md", "--repo-root", "{REPO}"]
@@ -2785,6 +2875,7 @@ clauses:
     bad:
       args: ["--checkers-dir", "tests/fixtures/evals_bad"]
       expect_severity: P1
+      expect_contains: "tests/run.py — suite failed"
     good:
       args: ["--checkers-dir", "tests/fixtures/evals_good"]
 
@@ -2796,6 +2887,7 @@ clauses:
     bad:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_bad_missing_marker.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
       expect_severity: P1
+      expect_contains: "required region 'top_tabs' missing from live DOM"
     good:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
 
@@ -2807,6 +2899,7 @@ clauses:
     bad:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_empty.png", "--legacy-migration"]
       expect_severity: P1
+      expect_contains: "screenshot missing or empty — visual support proof"
     good:
       args: ["--manifest", "tests/fixtures/ui_marker_manifest_good.yaml", "--dom", "tests/fixtures/dom_good.html", "--screenshot", "tests/fixtures/screenshot_good.png", "--legacy-migration"]
 
@@ -2886,6 +2979,7 @@ clauses:
     bad:
       args: ["tests/fixtures/state_bad_fix_cycle_fix3_not_escalated.yaml"]
       expect_severity: P1
+      expect_contains: "attempt 3 for finding F-001 seat 'claude-opus-4-8 high' is not above attempt 2 seat 'claude-opus-4-8 xhigh'"
     good:
       args: ["tests/fixtures/state_good_fix_cycles.yaml"]
 
@@ -2985,6 +3079,7 @@ clauses:
     bad:
       args: ["tests/fixtures/card_bad_claim_log_missing.yaml"]
       expect_severity: P0
+      expect_contains: "evidence_claims[0] (CLM-001) log missing: no_such_log.txt"
     good:
       args: ["tests/fixtures/card_evidence_claims_good.yaml"]
 
